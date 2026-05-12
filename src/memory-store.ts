@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
 import Database from "better-sqlite3";
@@ -266,12 +266,35 @@ export class MemoryStore {
   }
 
   async createBackup(input: CreateBackupInput): Promise<MemoryBackup> {
-    mkdirSync(path.dirname(input.backupPath), { recursive: true });
-    await this.db.backup(input.backupPath);
+    const backupPath = input.backupPath ?? this.defaultBackupPath();
+    mkdirSync(path.dirname(backupPath), { recursive: true });
+    await this.db.backup(backupPath);
     return {
-      backupPath: input.backupPath,
+      backupPath,
       createdAt: new Date()
     };
+  }
+
+  private defaultBackupPath(): string {
+    const stamp = new Date()
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.(\d{3})Z$/, "-$1")
+      .replace("T", "-");
+    const backupDir = path.join(path.dirname(this.databasePath), "backups");
+    const basePath = path.join(backupDir, `memory-${stamp}.sqlite`);
+    if (!existsSync(basePath)) {
+      return basePath;
+    }
+
+    for (let index = 1; index < 1000; index += 1) {
+      const candidate = path.join(backupDir, `memory-${stamp}-${index}.sqlite`);
+      if (!existsSync(candidate)) {
+        return candidate;
+      }
+    }
+
+    throw new Error("Could not allocate a unique backup path.");
   }
 
   private migrate(): void {

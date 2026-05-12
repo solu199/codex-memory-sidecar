@@ -153,6 +153,22 @@ describe("MCP tool handlers", () => {
     expect(existsSync(backupPath)).toBe(true);
   });
 
+  test("backup_memory creates a default backup when no path is provided", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "MCP default backup path should be available.",
+      layer: "recall",
+      tags: ["backup"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const result = await tools.backupMemory({});
+
+    expect(result.structuredContent.backupPath).toContain(path.join(tempDir, "backups"));
+    expect(existsSync(result.structuredContent.backupPath)).toBe(true);
+  });
+
   test("audit_memory returns recent audit events with optional memory filter", async () => {
     const tools = createToolHandlers(store);
     const first = await tools.writeMemory({
