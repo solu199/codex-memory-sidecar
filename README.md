@@ -50,6 +50,12 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run build
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" test
 ```
 
+Ollama と `embeddinggemma` の疎通を確認する smoke test も実行できます。この smoke test は一時 SQLite DB だけを使い、通常のメモリ DB は変更しません。
+
+```powershell
+node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:ollama
+```
+
 ## 設定
 
 デフォルト設定を上書きしたい場合は、`config/memory-sidecar.toml` を作成します。
