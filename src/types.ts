@@ -86,3 +86,8 @@ export interface MemoryBackup {
   backupPath: string;
   createdAt: Date;
 }
+
+export interface ListRecentEventsInput {
+  limit?: number;
+  memoryId?: number;
+}

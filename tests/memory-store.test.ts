@@ -220,4 +220,34 @@ describe("MemoryStore", () => {
     expect(backupStore.getMemory(created.id)?.content).toBe("Backups should preserve local memory records.");
     backupStore.close();
   });
+
+  test("lists recent audit events across memories", () => {
+    const first = store.createMemory({
+      content: "First audited memory.",
+      layer: "recall",
+      tags: ["audit"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8
+    });
+    const second = store.createMemory({
+      content: "Second audited memory.",
+      layer: "recall",
+      tags: ["audit"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8
+    });
+    store.forgetMemory({ memoryId: first.id, reason: "audit test" });
+
+    const events = store.listRecentEvents({ limit: 2 });
+
+    expect(events).toHaveLength(2);
+    expect(events[0]?.eventType).toBe("forgotten");
+    expect(events[0]?.memoryId).toBe(first.id);
+    expect(events[1]?.eventType).toBe("created");
+    expect(events[1]?.memoryId).toBe(second.id);
+  });
 });
