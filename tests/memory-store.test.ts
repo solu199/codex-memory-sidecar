@@ -221,6 +221,24 @@ describe("MemoryStore", () => {
     backupStore.close();
   });
 
+  test("creates a timestamped backup next to the database when no path is provided", async () => {
+    store.createMemory({
+      content: "Default backup path should be easy to use.",
+      layer: "recall",
+      tags: ["backup"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.6,
+      confidence: 0.9
+    });
+
+    const backup = await store.createBackup({});
+
+    expect(backup.backupPath).toContain(path.join(tempDir, "backups"));
+    expect(path.basename(backup.backupPath)).toMatch(/^memory-\d{8}-\d{6}\.sqlite$/);
+    expect(existsSync(backup.backupPath)).toBe(true);
+  });
+
   test("lists recent audit events across memories", () => {
     const first = store.createMemory({
       content: "First audited memory.",

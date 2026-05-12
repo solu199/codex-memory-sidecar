@@ -266,12 +266,22 @@ export class MemoryStore {
   }
 
   async createBackup(input: CreateBackupInput): Promise<MemoryBackup> {
-    mkdirSync(path.dirname(input.backupPath), { recursive: true });
-    await this.db.backup(input.backupPath);
+    const backupPath = input.backupPath ?? this.defaultBackupPath();
+    mkdirSync(path.dirname(backupPath), { recursive: true });
+    await this.db.backup(backupPath);
     return {
-      backupPath: input.backupPath,
+      backupPath,
       createdAt: new Date()
     };
+  }
+
+  private defaultBackupPath(): string {
+    const stamp = new Date()
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d{3}Z$/, "")
+      .replace("T", "-");
+    return path.join(path.dirname(this.databasePath), "backups", `memory-${stamp}.sqlite`);
   }
 
   private migrate(): void {

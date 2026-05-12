@@ -55,7 +55,7 @@ const memoryDigestSchema = {
 };
 
 const backupMemorySchema = {
-  backupPath: z.string().min(1)
+  backupPath: z.string().min(1).optional()
 };
 
 const auditMemorySchema = {
@@ -116,7 +116,7 @@ interface MemoryDigestToolInput {
 }
 
 interface BackupMemoryToolInput {
-  backupPath: string;
+  backupPath?: string;
 }
 
 interface AuditMemoryToolInput {

@@ -79,7 +79,7 @@ export interface SearchMemoryResult {
 }
 
 export interface CreateBackupInput {
-  backupPath: string;
+  backupPath?: string;
 }
 
 export interface MemoryBackup {
