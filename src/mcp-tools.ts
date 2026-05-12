@@ -37,7 +37,8 @@ const updateMemorySchema = {
 const forgetMemorySchema = {
   memoryId: z.number().int().positive(),
   reason: z.string().min(1),
-  hardDelete: z.boolean().default(false)
+  hardDelete: z.boolean().default(false),
+  confirmHardDelete: z.boolean().default(false)
 };
 
 const consolidateMemorySchema = {
@@ -51,6 +52,10 @@ const memoryDigestSchema = {
   taskDescription: z.string().min(1),
   projectPath: z.string().optional(),
   maxTokens: z.number().int().min(50).max(4000).default(800)
+};
+
+const backupMemorySchema = {
+  backupPath: z.string().min(1)
 };
 
 type ToolResult<T extends Record<string, unknown>> = {
@@ -89,6 +94,7 @@ interface ForgetMemoryToolInput {
   memoryId: number;
   reason: string;
   hardDelete?: boolean;
+  confirmHardDelete?: boolean;
 }
 
 interface ConsolidateMemoryToolInput {
@@ -102,6 +108,10 @@ interface MemoryDigestToolInput {
   taskDescription: string;
   projectPath?: string;
   maxTokens?: number;
+}
+
+interface BackupMemoryToolInput {
+  backupPath: string;
 }
 
 interface ToolHandlerOptions {
@@ -167,7 +177,8 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       const memory = store.forgetMemory({
         memoryId: input.memoryId,
         reason: input.reason,
-        hardDelete: input.hardDelete ?? false
+        hardDelete: input.hardDelete ?? false,
+        confirmHardDelete: input.confirmHardDelete ?? false
       });
 
       return toolResult({
@@ -200,6 +211,16 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         digest,
         memories: serialized,
         warnings: embedding.warning ? [embedding.warning] : []
+      });
+    },
+
+    async backupMemory(input: BackupMemoryToolInput) {
+      const backup = await store.createBackup({ backupPath: input.backupPath });
+
+      return toolResult({
+        backupPath: backup.backupPath,
+        createdAt: backup.createdAt.toISOString(),
+        warning: null
       });
     }
   };
@@ -260,6 +281,15 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
       inputSchema: memoryDigestSchema
     },
     handlers.memoryDigest
+  );
+
+  server.registerTool(
+    "backup_memory",
+    {
+      description: "Create an explicit SQLite backup of the local memory database.",
+      inputSchema: backupMemorySchema
+    },
+    handlers.backupMemory
   );
 }
 

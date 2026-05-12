@@ -1,6 +1,6 @@
 import os from "node:os";
 import path from "node:path";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
@@ -103,6 +103,28 @@ describe("MemoryStore", () => {
     expect(store.listEvents(created.id).at(-1)?.eventType).toBe("forgotten");
   });
 
+  test("refuses hard delete unless it is explicitly confirmed", () => {
+    const created = store.createMemory({
+      content: "Hard delete should require an explicit confirmation flag.",
+      layer: "recall",
+      tags: ["safety"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.4,
+      confidence: 0.8
+    });
+
+    expect(() =>
+      store.forgetMemory({
+        memoryId: created.id,
+        reason: "testing hard delete guard",
+        hardDelete: true
+      })
+    ).toThrow(/confirm/i);
+
+    expect(store.getMemory(created.id)?.status).toBe("active");
+  });
+
   test("searches active memories by keyword and excludes forgotten records", () => {
     const first = store.createMemory({
       content: "Ollama embeddings should use embeddinggemma first.",
@@ -175,5 +197,27 @@ describe("MemoryStore", () => {
         confidence: 0.9
       })
     ).toThrow(/secret/i);
+  });
+
+  test("creates a SQLite backup at the requested path", async () => {
+    const created = store.createMemory({
+      content: "Backups should preserve local memory records.",
+      layer: "recall",
+      tags: ["backup"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.6,
+      confidence: 0.9
+    });
+    const backupPath = path.join(tempDir, "backups", "memory-backup.sqlite");
+
+    const backup = await store.createBackup({ backupPath });
+
+    expect(backup.backupPath).toBe(backupPath);
+    expect(existsSync(backupPath)).toBe(true);
+
+    const backupStore = new MemoryStore(backupPath);
+    expect(backupStore.getMemory(created.id)?.content).toBe("Backups should preserve local memory records.");
+    backupStore.close();
   });
 });

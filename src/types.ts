@@ -55,6 +55,7 @@ export interface ForgetMemoryInput {
   memoryId: number;
   reason: string;
   hardDelete?: boolean;
+  confirmHardDelete?: boolean;
 }
 
 export interface SearchMemoryInput {
@@ -75,4 +76,13 @@ export interface SearchMemoryResult {
     importance: number;
     freshness: number;
   };
+}
+
+export interface CreateBackupInput {
+  backupPath: string;
+}
+
+export interface MemoryBackup {
+  backupPath: string;
+  createdAt: Date;
 }

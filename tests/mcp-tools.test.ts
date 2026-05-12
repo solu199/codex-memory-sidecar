@@ -1,6 +1,6 @@
 import os from "node:os";
 import path from "node:path";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -112,6 +112,45 @@ describe("MCP tool handlers", () => {
 
     expect(result.structuredContent.memory.embedding).toBeNull();
     expect(result.structuredContent.warnings).toEqual(["Embedding unavailable: Ollama offline"]);
+  });
+
+  test("forget_memory refuses hard delete without explicit confirmation", async () => {
+    const tools = createToolHandlers(store);
+    const created = await tools.writeMemory({
+      content: "MCP hard delete should require a confirmation flag.",
+      layer: "recall",
+      tags: ["safety"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    await expect(
+      tools.forgetMemory({
+        memoryId: created.structuredContent.memory.id,
+        reason: "testing MCP hard delete guard",
+        hardDelete: true
+      })
+    ).rejects.toThrow(/confirm/i);
+
+    expect(store.getMemory(created.structuredContent.memory.id)?.status).toBe("active");
+  });
+
+  test("backup_memory creates a database backup", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "MCP backup should preserve records.",
+      layer: "recall",
+      tags: ["backup"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const backupPath = path.join(tempDir, "backups", "mcp-backup.sqlite");
+
+    const result = await tools.backupMemory({ backupPath });
+
+    expect(result.structuredContent.backupPath).toBe(backupPath);
+    expect(result.structuredContent.warning).toBeNull();
+    expect(existsSync(backupPath)).toBe(true);
   });
 
   test("memory_digest returns compact relevant context", async () => {
