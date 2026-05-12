@@ -272,4 +272,30 @@ describe("MemoryStore", () => {
 
     expect(updatedEvent?.payload.updateNote).toBe("[REDACTED_SECRET]");
   });
+
+  test("lists active memories with optional layer filtering", () => {
+    const core = store.createMemory({
+      content: "Core memory for listing.",
+      layer: "core",
+      tags: ["list"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8
+    });
+    const recall = store.createMemory({
+      content: "Recall memory for listing.",
+      layer: "recall",
+      tags: ["list"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8
+    });
+    store.forgetMemory({ memoryId: recall.id, reason: "filter forgotten" });
+
+    const memories = store.listMemories({ layers: ["core"] });
+
+    expect(memories.map((memory) => memory.id)).toEqual([core.id]);
+  });
 });

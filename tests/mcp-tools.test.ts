@@ -185,6 +185,40 @@ describe("MCP tool handlers", () => {
     );
   });
 
+  test("consolidate_memory proposes duplicate records without applying changes", async () => {
+    const tools = createToolHandlers(store);
+    const first = await tools.writeMemory({
+      content: "Use logical delete before hard delete.",
+      layer: "core",
+      tags: ["safety"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const second = await tools.writeMemory({
+      content: " use logical delete before hard delete. ",
+      layer: "core",
+      tags: ["safety"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const result = await tools.consolidateMemory({
+      layers: ["core"],
+      dryRun: true,
+      maxCandidates: 10
+    });
+
+    expect(result.structuredContent.dryRun).toBe(true);
+    expect(result.structuredContent.proposedMerges).toEqual([
+      {
+        memoryIds: [first.structuredContent.memory.id, second.structuredContent.memory.id],
+        reason: "duplicate_content",
+        summary: "Use logical delete before hard delete."
+      }
+    ]);
+    expect(store.getMemory(second.structuredContent.memory.id)?.status).toBe("active");
+  });
+
   test("memory_digest returns compact relevant context", async () => {
     const tools = createToolHandlers(store);
     await tools.writeMemory({

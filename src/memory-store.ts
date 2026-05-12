@@ -10,6 +10,7 @@ import type {
   CreateBackupInput,
   ForgetMemoryInput,
   ListRecentEventsInput,
+  ListMemoriesInput,
   Memory,
   MemoryBackup,
   MemoryEvent,
@@ -239,6 +240,24 @@ export class MemoryStore {
       .prepare("SELECT * FROM memory_events ORDER BY id DESC LIMIT ?")
       .all(limit) as EventRow[];
     return rows.map(mapEvent);
+  }
+
+  listMemories(input: ListMemoriesInput = {}): Memory[] {
+    const limit = Math.max(1, Math.min(input.limit ?? 100, 500));
+    const clauses = [input.includeSuperseded ? "status != 'forgotten'" : "status = 'active'"];
+    const params: Record<string, unknown> = { limit };
+
+    if (input.layers?.length) {
+      clauses.push(`layer IN (${input.layers.map((_, index) => `@layer${index}`).join(", ")})`);
+      input.layers.forEach((layer, index) => {
+        params[`layer${index}`] = layer;
+      });
+    }
+
+    const rows = this.db
+      .prepare(`SELECT * FROM memories WHERE ${clauses.join(" AND ")} ORDER BY updated_at DESC, id DESC LIMIT @limit`)
+      .all(params) as MemoryRow[];
+    return rows.map(mapMemory);
   }
 
   async createBackup(input: CreateBackupInput): Promise<MemoryBackup> {

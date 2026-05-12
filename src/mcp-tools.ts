@@ -198,15 +198,22 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
     },
 
     async consolidateMemory(input: ConsolidateMemoryToolInput) {
+      const memories = store.listMemories({
+        layers: input.layers,
+        limit: input.maxCandidates ?? 20
+      });
+      const proposedMerges = findDuplicateMergeProposals(memories);
+
       return toolResult({
         dryRun: input.dryRun ?? true,
         layers: input.layers ?? ["core", "recall", "archival"],
         since: input.since ?? null,
         maxCandidates: input.maxCandidates ?? 20,
-        proposedMerges: [] as unknown[],
+        proposedMerges,
         proposedSummaries: [] as unknown[],
         proposedForgottenRecords: [] as unknown[],
-        contradictionWarnings: [] as unknown[]
+        contradictionWarnings: [] as unknown[],
+        warnings: input.dryRun === false ? ["Automatic consolidation is not implemented; no changes were applied."] : []
       });
     },
 
@@ -390,4 +397,30 @@ function compactDigest(memories: ReturnType<typeof serializeSearchResult>[], max
   const lines = memories.map((memory) => `- [${memory.layer}] ${memory.summary}`);
   const digest = lines.join("\n");
   return digest.length <= maxChars ? digest : `${digest.slice(0, Math.max(0, maxChars - 3))}...`;
+}
+
+function findDuplicateMergeProposals(memories: Memory[]) {
+  const groups = new Map<string, Memory[]>();
+
+  for (const memory of memories) {
+    const key = normalizeMemoryContent(memory.content);
+    const group = groups.get(key) ?? [];
+    group.push(memory);
+    groups.set(key, group);
+  }
+
+  return [...groups.values()]
+    .filter((group) => group.length > 1)
+    .map((group) => {
+      const ordered = [...group].sort((left, right) => left.id - right.id);
+      return {
+        memoryIds: ordered.map((memory) => memory.id),
+        reason: "duplicate_content",
+        summary: ordered[0]?.summary ?? ""
+      };
+    });
+}
+
+function normalizeMemoryContent(content: string): string {
+  return content.trim().replace(/\s+/g, " ").replace(/[.。]+$/u, "").toLowerCase();
 }

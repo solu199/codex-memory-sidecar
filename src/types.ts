@@ -91,3 +91,9 @@ export interface ListRecentEventsInput {
   limit?: number;
   memoryId?: number;
 }
+
+export interface ListMemoriesInput {
+  layers?: MemoryLayer[];
+  includeSuperseded?: boolean;
+  limit?: number;
+}
