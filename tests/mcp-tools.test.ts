@@ -219,6 +219,32 @@ describe("MCP tool handlers", () => {
     expect(store.getMemory(second.structuredContent.memory.id)?.status).toBe("active");
   });
 
+  test("consolidate_memory honors since when selecting candidates", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "Do not include older duplicates when since is in the future.",
+      layer: "recall",
+      tags: ["maintenance"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    await tools.writeMemory({
+      content: "do not include older duplicates when since is in the future",
+      layer: "recall",
+      tags: ["maintenance"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const result = await tools.consolidateMemory({
+      since: new Date(Date.now() + 60_000).toISOString(),
+      dryRun: true,
+      maxCandidates: 10
+    });
+
+    expect(result.structuredContent.proposedMerges).toEqual([]);
+  });
+
   test("memory_digest returns compact relevant context", async () => {
     const tools = createToolHandlers(store);
     await tools.writeMemory({

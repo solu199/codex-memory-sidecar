@@ -254,6 +254,11 @@ export class MemoryStore {
       });
     }
 
+    if (input.since) {
+      clauses.push("updated_at >= @since");
+      params.since = new Date(input.since).toISOString();
+    }
+
     const rows = this.db
       .prepare(`SELECT * FROM memories WHERE ${clauses.join(" AND ")} ORDER BY updated_at DESC, id DESC LIMIT @limit`)
       .all(params) as MemoryRow[];

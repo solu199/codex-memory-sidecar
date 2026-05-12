@@ -200,6 +200,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
     async consolidateMemory(input: ConsolidateMemoryToolInput) {
       const memories = store.listMemories({
         layers: input.layers,
+        since: input.since,
         limit: input.maxCandidates ?? 20
       });
       const proposedMerges = findDuplicateMergeProposals(memories);
@@ -302,7 +303,7 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
   server.registerTool(
     "consolidate_memory",
     {
-      description: "Return dry-run consolidation proposals. Phase 1 returns an empty proposal set.",
+      description: "Return dry-run consolidation proposals such as duplicate_content merge candidates.",
       inputSchema: consolidateMemorySchema
     },
     handlers.consolidateMemory
@@ -422,5 +423,5 @@ function findDuplicateMergeProposals(memories: Memory[]) {
 }
 
 function normalizeMemoryContent(content: string): string {
-  return content.trim().replace(/\s+/g, " ").replace(/[.。]+$/u, "").toLowerCase();
+  return content.trim().replace(/\s+/g, " ").replace(/[.]+$/, "").toLowerCase();
 }
