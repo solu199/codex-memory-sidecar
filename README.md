@@ -1,8 +1,8 @@
 # Codex Memory Sidecar
 
-Local MCP memory sidecar for Codex app.
+Codex app のためのローカル MCP メモリサイドカーです。
 
-The sidecar provides explicit tools for long-term working memory:
+このサイドカーは、長期的な作業記憶を明示的な MCP ツールとして扱います。
 
 - `search_memory`
 - `write_memory`
@@ -11,31 +11,31 @@ The sidecar provides explicit tools for long-term working memory:
 - `consolidate_memory`
 - `memory_digest`
 
-Memory is stored locally in SQLite. Keyword search uses SQLite FTS. If Ollama is running, writes and searches also use local embeddings for hybrid retrieval. If Ollama is unavailable, tools continue with keyword search and return a warning.
+メモリはローカルの SQLite に保存されます。キーワード検索には SQLite FTS を使います。Ollama が起動している場合は、書き込みと検索でローカル embedding も使い、ハイブリッド検索を行います。Ollama が使えない場合でも、ツールはキーワード検索にフォールバックし、warning を返します。
 
-## Setup
+## セットアップ
 
-Install dependencies:
+依存関係をインストールします。
 
 ```powershell
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" install
 ```
 
-Build:
+ビルドします。
 
 ```powershell
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run build
 ```
 
-Run tests:
+テストを実行します。
 
 ```powershell
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" test
 ```
 
-## Configuration
+## 設定
 
-Create `config/memory-sidecar.toml` if you want to override defaults:
+デフォルト設定を上書きしたい場合は、`config/memory-sidecar.toml` を作成します。
 
 ```toml
 ollama_base_url = "http://localhost:11434"
@@ -46,7 +46,7 @@ default_search_limit = 8
 consolidation_dry_run = true
 ```
 
-Environment variable overrides:
+環境変数でも上書きできます。
 
 - `CODEX_MEMORY_DB`
 - `OLLAMA_BASE_URL`
@@ -55,15 +55,15 @@ Environment variable overrides:
 - `CODEX_MEMORY_DEFAULT_SEARCH_LIMIT`
 - `CODEX_MEMORY_CONSOLIDATION_DRY_RUN`
 
-## Codex MCP Registration
+## Codex MCP 登録
 
-After building, register the stdio server with Codex using:
+ビルド後、Codex app には stdio server として次のコマンドを登録します。
 
 ```text
 node C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\index.js
 ```
 
-The default database path is:
+デフォルトのデータベースパスは次の通りです。
 
 ```text
 C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\data\memory.sqlite
@@ -71,16 +71,16 @@ C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\data\memory.sqlite
 
 ## Ollama
 
-Expected local endpoint:
+想定しているローカル endpoint は次の通りです。
 
 ```text
 http://localhost:11434
 ```
 
-Recommended first embedding model:
+最初に使う embedding model としては `embeddinggemma` を推奨します。
 
 ```powershell
 ollama pull embeddinggemma
 ```
 
-The sidecar uses Ollama only as a local memory librarian for embeddings. Codex remains responsible for final reasoning.
+このサイドカーにおける Ollama の役割は、embedding を作るローカルのメモリ司書です。最終的な推論は Codex が担当します。
