@@ -2,7 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { createToolHandlers } from "../src/mcp-tools.js";
 import { MemoryStore } from "../src/memory-store.js";
@@ -22,7 +22,8 @@ describe("MCP tool handlers", () => {
   });
 
   test("write_memory returns structured memory content", async () => {
-    const tools = createToolHandlers(store);
+    const embedder = { embed: vi.fn(async () => [1, 0]) };
+    const tools = createToolHandlers(store, { embeddingProvider: embedder });
 
     const result = await tools.writeMemory({
       content: "Prefer dry-run consolidation by default.",
@@ -35,6 +36,7 @@ describe("MCP tool handlers", () => {
     });
 
     expect(result.structuredContent.memory.status).toBe("active");
+    expect(result.structuredContent.memory.embedding).toEqual([1, 0]);
     expect(result.structuredContent.duplicateCandidates).toEqual([]);
     expect(result.content[0]?.type).toBe("text");
   });
@@ -59,6 +61,57 @@ describe("MCP tool handlers", () => {
 
     expect(result.structuredContent.memories).toHaveLength(1);
     expect(result.structuredContent.memories[0]?.summary).toContain("SQLite FTS");
+  });
+
+  test("search_memory uses embeddings when the provider is available", async () => {
+    const embedder = {
+      embed: vi
+        .fn()
+        .mockResolvedValueOnce([1, 0])
+        .mockResolvedValueOnce([0, 1])
+        .mockResolvedValueOnce([0.95, 0.05])
+    };
+    const tools = createToolHandlers(store, { embeddingProvider: embedder });
+
+    await tools.writeMemory({
+      content: "Use local embeddings for semantic retrieval.",
+      layer: "recall",
+      tags: ["ollama"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    await tools.writeMemory({
+      content: "Keep modules compact.",
+      layer: "core",
+      tags: ["style"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const result = await tools.searchMemory({
+      query: "meaning lookup",
+      limit: 1
+    });
+
+    expect(result.structuredContent.memories[0]?.summary).toContain("semantic retrieval");
+    expect(result.structuredContent.warnings).toEqual([]);
+  });
+
+  test("write_memory falls back when embedding generation fails", async () => {
+    const tools = createToolHandlers(store, {
+      embeddingProvider: { embed: vi.fn(async () => Promise.reject(new Error("Ollama offline"))) }
+    });
+
+    const result = await tools.writeMemory({
+      content: "Keyword search should still work without Ollama.",
+      layer: "recall",
+      tags: ["fallback"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    expect(result.structuredContent.memory.embedding).toBeNull();
+    expect(result.structuredContent.warnings).toEqual(["Embedding unavailable: Ollama offline"]);
   });
 
   test("memory_digest returns compact relevant context", async () => {

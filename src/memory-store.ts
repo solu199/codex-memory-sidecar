@@ -3,6 +3,7 @@ import path from "node:path";
 
 import Database from "better-sqlite3";
 
+import { cosineSimilarity } from "./embedding.js";
 import { containsLikelySecret } from "./secret-detection.js";
 import type {
   CreateMemoryInput,
@@ -26,6 +27,7 @@ interface MemoryRow {
   source_ref: string;
   importance: number;
   confidence: number;
+  embedding: string | null;
   created_at: string;
   updated_at: string;
   last_accessed_at: string | null;
@@ -64,10 +66,10 @@ export class MemoryStore {
       .prepare(
         `INSERT INTO memories (
           layer, content, summary, tags, source_type, source_ref,
-          importance, confidence, created_at, updated_at, expires_at, status
+          importance, confidence, embedding, created_at, updated_at, expires_at, status
         ) VALUES (
           @layer, @content, @summary, @tags, @sourceType, @sourceRef,
-          @importance, @confidence, @createdAt, @updatedAt, @expiresAt, 'active'
+          @importance, @confidence, @embedding, @createdAt, @updatedAt, @expiresAt, 'active'
         )`
       )
       .run({
@@ -79,6 +81,7 @@ export class MemoryStore {
         sourceRef: input.sourceRef,
         importance: clampScore(input.importance ?? 0.5),
         confidence: clampScore(input.confidence ?? 0.5),
+        embedding: input.embedding ? JSON.stringify(input.embedding) : null,
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
         expiresAt: input.expiresAt?.toISOString() ?? null
@@ -157,6 +160,10 @@ export class MemoryStore {
   }
 
   searchMemory(input: SearchMemoryInput): SearchMemoryResult[] {
+    if (input.queryEmbedding?.length) {
+      return this.searchMemoryWithEmbedding(input);
+    }
+
     const limit = Math.max(1, Math.min(input.limit ?? 8, 50));
     const clauses = ["memories_fts MATCH @query"];
     const params: Record<string, unknown> = {
@@ -192,10 +199,7 @@ export class MemoryStore {
       ? rows.filter((row) => input.tags?.every((tag) => safeParseTags(row.tags).includes(tag)))
       : rows;
 
-    const results = filtered.map((row) => ({
-      memory: mapMemory(row),
-      score: scoreRow(row)
-    }));
+    const results = filtered.map((row) => scoreKeywordRow(row));
 
     const now = new Date().toISOString();
     const markRetrieved = this.db.prepare("UPDATE memories SET last_accessed_at = ? WHERE id = ?");
@@ -226,10 +230,10 @@ export class MemoryStore {
         source_ref TEXT NOT NULL,
         importance REAL NOT NULL DEFAULT 0.5,
         confidence REAL NOT NULL DEFAULT 0.5,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        last_accessed_at TEXT,
-        expires_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      last_accessed_at TEXT,
+      expires_at TEXT,
         status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'superseded', 'forgotten'))
       );
 
@@ -260,6 +264,47 @@ export class MemoryStore {
         tags
       );
     `);
+    this.addColumnIfMissing("memories", "embedding", "TEXT");
+  }
+
+  private searchMemoryWithEmbedding(input: SearchMemoryInput): SearchMemoryResult[] {
+    const limit = Math.max(1, Math.min(input.limit ?? 8, 50));
+    const clauses = [input.includeSuperseded ? "status != 'forgotten'" : "status = 'active'"];
+    const params: Record<string, unknown> = {};
+
+    if (input.layers?.length) {
+      clauses.push(`layer IN (${input.layers.map((_, index) => `@layer${index}`).join(", ")})`);
+      input.layers.forEach((layer, index) => {
+        params[`layer${index}`] = layer;
+      });
+    }
+
+    const rows = this.db.prepare(`SELECT * FROM memories WHERE ${clauses.join(" AND ")}`).all(params) as MemoryRow[];
+    const filtered = input.tags?.length
+      ? rows.filter((row) => input.tags?.every((tag) => safeParseTags(row.tags).includes(tag)))
+      : rows;
+
+    const results = filtered
+      .map((row) => scoreHybridRow(row, input.query, input.queryEmbedding ?? []))
+      .filter((result) => result.score > 0)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, limit);
+
+    const now = new Date().toISOString();
+    const markRetrieved = this.db.prepare("UPDATE memories SET last_accessed_at = ? WHERE id = ?");
+    for (const result of results) {
+      markRetrieved.run(now, result.memory.id);
+      this.recordEvent(result.memory.id, "retrieved", { query: input.query, hybrid: true });
+    }
+
+    return results;
+  }
+
+  private addColumnIfMissing(table: string, column: string, definition: string): void {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!columns.some((item) => item.name === column)) {
+      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
   }
 
   private requireMemory(memoryId: number): Memory {
@@ -311,6 +356,7 @@ function mapMemory(row: MemoryRow): Memory {
     sourceRef: row.source_ref,
     importance: row.importance,
     confidence: row.confidence,
+    embedding: row.embedding ? parseEmbedding(row.embedding) : null,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
     lastAccessedAt: row.last_accessed_at ? new Date(row.last_accessed_at) : null,
@@ -352,10 +398,50 @@ function quoteFtsQuery(query: string): string {
   return terms.length ? terms.map((term) => `"${term}"`).join(" OR ") : '""';
 }
 
-function scoreRow(row: MemoryRow & { keyword_rank: number }): number {
+function scoreKeywordRow(row: MemoryRow & { keyword_rank: number }): SearchMemoryResult {
   const keywordScore = 1 / (1 + Math.abs(row.keyword_rank));
   const freshnessScore = freshness(row.updated_at);
-  return Number((keywordScore * 0.3 + row.importance * 0.15 + freshnessScore * 0.1 + row.confidence * 0.45).toFixed(4));
+  return {
+    memory: mapMemory(row),
+    score: weightedScore({
+      vector: 0,
+      keyword: keywordScore,
+      importance: row.importance,
+      freshness: freshnessScore
+    }),
+    scoreBreakdown: {
+      vector: 0,
+      keyword: Number(keywordScore.toFixed(4)),
+      importance: row.importance,
+      freshness: Number(freshnessScore.toFixed(4))
+    }
+  };
+}
+
+function scoreHybridRow(row: MemoryRow, query: string, queryEmbedding: number[]): SearchMemoryResult {
+  const memory = mapMemory(row);
+  const vectorScore = memory.embedding ? Math.max(0, cosineSimilarity(queryEmbedding, memory.embedding)) : 0;
+  const keywordScore = lexicalScore(query, [memory.content, memory.summary, memory.tags.join(" ")].join(" "));
+  const freshnessScore = freshness(row.updated_at);
+
+  const scoreBreakdown = {
+    vector: Number(vectorScore.toFixed(4)),
+    keyword: Number(keywordScore.toFixed(4)),
+    importance: row.importance,
+    freshness: Number(freshnessScore.toFixed(4))
+  };
+
+  return {
+    memory,
+    score: weightedScore(scoreBreakdown),
+    scoreBreakdown
+  };
+}
+
+function weightedScore(parts: SearchMemoryResult["scoreBreakdown"]): number {
+  return Number(
+    (parts.vector * 0.45 + parts.keyword * 0.3 + parts.importance * 0.15 + parts.freshness * 0.1).toFixed(4)
+  );
 }
 
 function freshness(updatedAt: string): number {
@@ -373,4 +459,24 @@ function redactedInput(input: CreateMemoryInput): Record<string, unknown> {
     importance: input.importance,
     confidence: input.confidence
   };
+}
+
+function parseEmbedding(value: string): number[] | null {
+  const parsed = JSON.parse(value) as unknown;
+  return Array.isArray(parsed) && parsed.every((item) => typeof item === "number") ? parsed : null;
+}
+
+function lexicalScore(query: string, text: string): number {
+  const terms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean);
+  if (!terms.length) {
+    return 0;
+  }
+
+  const normalized = text.toLowerCase();
+  const matches = terms.filter((term) => normalized.includes(term)).length;
+  return matches / terms.length;
 }

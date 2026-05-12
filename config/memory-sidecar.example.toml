@@ -1,0 +1,6 @@
+ollama_base_url = "http://localhost:11434"
+embedding_model = "embeddinggemma"
+maintenance_model = "qwen3"
+database_path = "data/memory.sqlite"
+default_search_limit = 8
+consolidation_dry_run = true

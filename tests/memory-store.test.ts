@@ -130,6 +130,39 @@ describe("MemoryStore", () => {
     expect(results[0]?.score).toBeGreaterThan(0);
   });
 
+  test("uses query embeddings to find semantically similar memories without keyword overlap", () => {
+    const first = store.createMemory({
+      content: "Use embeddinggemma for local retrieval.",
+      layer: "recall",
+      tags: ["ollama"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.7,
+      confidence: 0.9,
+      embedding: [1, 0, 0]
+    });
+    store.createMemory({
+      content: "Prefer compact modules.",
+      layer: "core",
+      tags: ["style"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.7,
+      confidence: 0.9,
+      embedding: [0, 1, 0]
+    });
+
+    const results = store.searchMemory({
+      query: "semantic lookup",
+      queryEmbedding: [0.95, 0.05, 0],
+      limit: 1
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.memory.id).toBe(first.id);
+    expect(results[0]?.scoreBreakdown.vector).toBeGreaterThan(0.9);
+  });
+
   test("refuses to store likely secrets unless explicitly overridden", () => {
     expect(() =>
       store.createMemory({

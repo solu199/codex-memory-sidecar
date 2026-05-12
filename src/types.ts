@@ -12,6 +12,7 @@ export interface Memory {
   sourceRef: string;
   importance: number;
   confidence: number;
+  embedding: number[] | null;
   createdAt: Date;
   updatedAt: Date;
   lastAccessedAt: Date | null;
@@ -35,6 +36,7 @@ export interface CreateMemoryInput {
   sourceRef: string;
   importance?: number;
   confidence?: number;
+  embedding?: number[] | null;
   summary?: string;
   expiresAt?: Date | null;
   allowSecret?: boolean;
@@ -57,6 +59,7 @@ export interface ForgetMemoryInput {
 
 export interface SearchMemoryInput {
   query: string;
+  queryEmbedding?: number[] | null;
   layers?: MemoryLayer[];
   tags?: string[];
   limit?: number;
@@ -66,4 +69,10 @@ export interface SearchMemoryInput {
 export interface SearchMemoryResult {
   memory: Memory;
   score: number;
+  scoreBreakdown: {
+    vector: number;
+    keyword: number;
+    importance: number;
+    freshness: number;
+  };
 }

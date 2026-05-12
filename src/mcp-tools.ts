@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
+import type { EmbeddingProvider } from "./embedding.js";
 import { MemoryStore } from "./memory-store.js";
 import type { Memory, MemoryLayer, SearchMemoryResult } from "./types.js";
 
@@ -103,9 +104,14 @@ interface MemoryDigestToolInput {
   maxTokens?: number;
 }
 
-export function createToolHandlers(store: MemoryStore) {
+interface ToolHandlerOptions {
+  embeddingProvider?: EmbeddingProvider;
+}
+
+export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptions = {}) {
   return {
     async writeMemory(input: WriteMemoryToolInput) {
+      const embedding = await tryEmbed(options.embeddingProvider, input.content);
       const memory = store.createMemory({
         content: input.content,
         layer: input.layer,
@@ -114,18 +120,22 @@ export function createToolHandlers(store: MemoryStore) {
         sourceRef: input.sourceRef,
         importance: input.importance,
         confidence: input.confidence,
-        allowSecret: input.allowSecret ?? false
+        allowSecret: input.allowSecret ?? false,
+        embedding: embedding.value
       });
 
       return toolResult({
         memory: serializeMemory(memory),
-        duplicateCandidates: [] as unknown[]
+        duplicateCandidates: [] as unknown[],
+        warnings: embedding.warning ? [embedding.warning] : []
       });
     },
 
     async searchMemory(input: SearchMemoryToolInput) {
+      const embedding = await tryEmbed(options.embeddingProvider, input.query);
       const results = store.searchMemory({
         query: input.query,
+        queryEmbedding: embedding.value,
         layers: input.layers,
         tags: input.tags,
         limit: input.limit,
@@ -133,7 +143,8 @@ export function createToolHandlers(store: MemoryStore) {
       });
 
       return toolResult({
-        memories: results.map(serializeSearchResult)
+        memories: results.map(serializeSearchResult),
+        warnings: embedding.warning ? [embedding.warning] : []
       });
     },
 
@@ -180,21 +191,22 @@ export function createToolHandlers(store: MemoryStore) {
 
     async memoryDigest(input: MemoryDigestToolInput) {
       const query = [input.taskDescription, input.projectPath].filter(Boolean).join(" ");
-      const results = store.searchMemory({ query, limit: 8 });
+      const embedding = await tryEmbed(options.embeddingProvider, query);
+      const results = store.searchMemory({ query, queryEmbedding: embedding.value, limit: 8 });
       const serialized = results.map(serializeSearchResult);
       const digest = compactDigest(serialized, input.maxTokens ?? 800);
 
       return toolResult({
         digest,
         memories: serialized,
-        warnings: [] as string[]
+        warnings: embedding.warning ? [embedding.warning] : []
       });
     }
   };
 }
 
-export function registerMemoryTools(server: McpServer, store: MemoryStore): void {
-  const handlers = createToolHandlers(store);
+export function registerMemoryTools(server: McpServer, store: MemoryStore, options: ToolHandlerOptions = {}): void {
+  const handlers = createToolHandlers(store, options);
 
   server.registerTool(
     "write_memory",
@@ -266,7 +278,8 @@ function toolResult<T extends Record<string, unknown>>(structuredContent: T): To
 function serializeSearchResult(result: SearchMemoryResult) {
   return {
     ...serializeMemory(result.memory),
-    score: result.score
+    score: result.score,
+    scoreBreakdown: result.scoreBreakdown
   };
 }
 
@@ -281,12 +294,29 @@ function serializeMemory(memory: Memory) {
     sourceRef: memory.sourceRef,
     importance: memory.importance,
     confidence: memory.confidence,
+    embedding: memory.embedding,
     createdAt: memory.createdAt.toISOString(),
     updatedAt: memory.updatedAt.toISOString(),
     lastAccessedAt: memory.lastAccessedAt?.toISOString() ?? null,
     expiresAt: memory.expiresAt?.toISOString() ?? null,
     status: memory.status
   };
+}
+
+async function tryEmbed(
+  embeddingProvider: EmbeddingProvider | undefined,
+  input: string
+): Promise<{ value: number[] | null; warning: string | null }> {
+  if (!embeddingProvider) {
+    return { value: null, warning: null };
+  }
+
+  try {
+    return { value: await embeddingProvider.embed(input), warning: null };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { value: null, warning: `Embedding unavailable: ${message}` };
+  }
 }
 
 function compactDigest(memories: ReturnType<typeof serializeSearchResult>[], maxTokens: number): string {
