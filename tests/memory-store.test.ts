@@ -1,0 +1,146 @@
+import os from "node:os";
+import path from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
+
+import { MemoryStore } from "../src/memory-store.js";
+
+describe("MemoryStore", () => {
+  let tempDir: string;
+  let store: MemoryStore;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(path.join(os.tmpdir(), "codex-memory-sidecar-"));
+    store = new MemoryStore(path.join(tempDir, "memory.sqlite"));
+  });
+
+  afterEach(() => {
+    store.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  test("creates an active memory and records an audit event", () => {
+    const created = store.createMemory({
+      content: "User prefers focused TypeScript modules with tests.",
+      layer: "core",
+      tags: ["preference", "typescript"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.9,
+      confidence: 0.8
+    });
+
+    expect(created.id).toBeGreaterThan(0);
+    expect(created.status).toBe("active");
+    expect(created.summary).toBe("User prefers focused TypeScript modules with tests.");
+    expect(created.tags).toEqual(["preference", "typescript"]);
+
+    const events = store.listEvents(created.id);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.eventType).toBe("created");
+  });
+
+  test("creates missing parent directories for the database path", () => {
+    const nestedStore = new MemoryStore(path.join(tempDir, "nested", "data", "memory.sqlite"));
+
+    const created = nestedStore.createMemory({
+      content: "Database parent directories should be created automatically.",
+      layer: "recall",
+      tags: ["setup"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8
+    });
+
+    expect(created.status).toBe("active");
+    nestedStore.close();
+  });
+
+  test("updates a memory while preserving event history", () => {
+    const created = store.createMemory({
+      content: "Use JavaScript for the memory sidecar.",
+      layer: "recall",
+      tags: ["decision"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.6
+    });
+
+    const updated = store.updateMemory({
+      memoryId: created.id,
+      newContent: "Use TypeScript for the memory sidecar.",
+      updateNote: "Design default changed."
+    });
+
+    expect(updated.content).toBe("Use TypeScript for the memory sidecar.");
+    expect(updated.updatedAt.getTime()).toBeGreaterThanOrEqual(created.updatedAt.getTime());
+
+    const events = store.listEvents(created.id);
+    expect(events.map((event) => event.eventType)).toEqual(["created", "updated"]);
+  });
+
+  test("forgets a memory with a logical delete by default", () => {
+    const created = store.createMemory({
+      content: "Temporary implementation note.",
+      layer: "recall",
+      tags: ["temporary"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.2,
+      confidence: 0.7
+    });
+
+    const forgotten = store.forgetMemory({
+      memoryId: created.id,
+      reason: "No longer useful."
+    });
+
+    expect(forgotten.status).toBe("forgotten");
+    expect(store.getMemory(created.id)?.status).toBe("forgotten");
+    expect(store.listEvents(created.id).at(-1)?.eventType).toBe("forgotten");
+  });
+
+  test("searches active memories by keyword and excludes forgotten records", () => {
+    const first = store.createMemory({
+      content: "Ollama embeddings should use embeddinggemma first.",
+      layer: "recall",
+      tags: ["ollama"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.7,
+      confidence: 0.9
+    });
+    const second = store.createMemory({
+      content: "Old note about unrelated deployment setup.",
+      layer: "recall",
+      tags: ["deploy"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.4,
+      confidence: 0.6
+    });
+    store.forgetMemory({ memoryId: second.id, reason: "superseded" });
+
+    const results = store.searchMemory({ query: "embeddinggemma", limit: 5 });
+
+    expect(results.map((result) => result.memory.id)).toEqual([first.id]);
+    expect(results[0]?.score).toBeGreaterThan(0);
+  });
+
+  test("refuses to store likely secrets unless explicitly overridden", () => {
+    expect(() =>
+      store.createMemory({
+        content: "OPENAI_API_KEY=sk-proj-example123",
+        layer: "recall",
+        tags: ["secret"],
+        sourceType: "manual",
+        sourceRef: "test",
+        importance: 0.1,
+        confidence: 0.9
+      })
+    ).toThrow(/secret/i);
+  });
+});
