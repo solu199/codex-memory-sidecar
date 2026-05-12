@@ -169,6 +169,27 @@ describe("MCP tool handlers", () => {
     expect(existsSync(result.structuredContent.backupPath)).toBe(true);
   });
 
+  test("verify_backup reports backup integrity metadata", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "MCP backup verification should report counts.",
+      layer: "recall",
+      tags: ["backup"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const backup = await tools.backupMemory({});
+
+    const result = await tools.verifyBackup({
+      backupPath: backup.structuredContent.backupPath
+    });
+
+    expect(result.structuredContent.ok).toBe(true);
+    expect(result.structuredContent.memoryCount).toBe(1);
+    expect(result.structuredContent.eventCount).toBe(1);
+    expect(result.structuredContent.checkedAt).toEqual(expect.any(String));
+  });
+
   test("audit_memory returns recent audit events with optional memory filter", async () => {
     const tools = createToolHandlers(store);
     const first = await tools.writeMemory({

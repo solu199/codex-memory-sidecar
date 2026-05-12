@@ -87,6 +87,18 @@ export interface MemoryBackup {
   createdAt: Date;
 }
 
+export interface VerifyBackupInput {
+  backupPath: string;
+}
+
+export interface BackupVerification {
+  backupPath: string;
+  ok: boolean;
+  memoryCount: number;
+  eventCount: number;
+  checkedAt: Date;
+}
+
 export interface ListRecentEventsInput {
   limit?: number;
   memoryId?: number;

@@ -258,6 +258,28 @@ describe("MemoryStore", () => {
     expect(existsSync(second.backupPath)).toBe(true);
   });
 
+  test("verifies a readable SQLite backup without modifying the active store", async () => {
+    const created = store.createMemory({
+      content: "Backup verification should be read-only.",
+      layer: "recall",
+      tags: ["backup"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.6,
+      confidence: 0.9
+    });
+    const backup = await store.createBackup({});
+
+    const result = store.verifyBackup({ backupPath: backup.backupPath });
+
+    expect(result.backupPath).toBe(backup.backupPath);
+    expect(result.ok).toBe(true);
+    expect(result.memoryCount).toBe(1);
+    expect(result.eventCount).toBe(1);
+    expect(result.checkedAt).toBeInstanceOf(Date);
+    expect(store.getMemory(created.id)?.content).toBe("Backup verification should be read-only.");
+  });
+
   test("lists recent audit events across memories", () => {
     const first = store.createMemory({
       content: "First audited memory.",

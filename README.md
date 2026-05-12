@@ -11,6 +11,7 @@ Codex app のためのローカル MCP メモリサイドカーです。
 - `consolidate_memory`
 - `memory_digest`
 - `backup_memory`
+- `verify_backup`
 - `audit_memory`
 
 メモリはローカルの SQLite に保存されます。キーワード検索には SQLite FTS を使います。Ollama が起動している場合は、書き込みと検索でローカル embedding も使い、ハイブリッド検索を行います。Ollama が使えない場合でも、ツールはキーワード検索にフォールバックし、warning を返します。
@@ -23,6 +24,7 @@ Codex app のためのローカル MCP メモリサイドカーです。
 - 物理削除を行うには `hardDelete: true` に加えて `confirmHardDelete: true` が必要です。
 - `backup_memory` で SQLite データベースの明示バックアップを作成できます。
 - `backup_memory` の `backupPath` を省略すると、データベース横の `backups/` に timestamp 付きで保存します。
+- `verify_backup` でバックアップファイルが読み取れることと、保存件数を確認できます。
 - `audit_memory` で最近の audit event を確認できます。
 - `consolidate_memory` は dry-run 提案を返すだけで、自動適用はしません。
 - 明らかな secret らしき内容は、明示 override なしでは保存を拒否します。

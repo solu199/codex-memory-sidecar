@@ -58,6 +58,10 @@ const backupMemorySchema = {
   backupPath: z.string().min(1).optional()
 };
 
+const verifyBackupSchema = {
+  backupPath: z.string().min(1)
+};
+
 const auditMemorySchema = {
   memoryId: z.number().int().positive().optional(),
   limit: z.number().int().min(1).max(100).default(20)
@@ -117,6 +121,10 @@ interface MemoryDigestToolInput {
 
 interface BackupMemoryToolInput {
   backupPath?: string;
+}
+
+interface VerifyBackupToolInput {
+  backupPath: string;
 }
 
 interface AuditMemoryToolInput {
@@ -242,6 +250,18 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       });
     },
 
+    async verifyBackup(input: VerifyBackupToolInput) {
+      const verification = store.verifyBackup({ backupPath: input.backupPath });
+
+      return toolResult({
+        backupPath: verification.backupPath,
+        ok: verification.ok,
+        memoryCount: verification.memoryCount,
+        eventCount: verification.eventCount,
+        checkedAt: verification.checkedAt.toISOString()
+      });
+    },
+
     async auditMemory(input: AuditMemoryToolInput) {
       const events = store.listRecentEvents({
         memoryId: input.memoryId,
@@ -325,6 +345,15 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
       inputSchema: backupMemorySchema
     },
     handlers.backupMemory
+  );
+
+  server.registerTool(
+    "verify_backup",
+    {
+      description: "Verify that a SQLite memory backup can be opened and report record counts.",
+      inputSchema: verifyBackupSchema
+    },
+    handlers.verifyBackup
   );
 
   server.registerTool(
