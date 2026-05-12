@@ -9,6 +9,7 @@ import type {
   CreateMemoryInput,
   CreateBackupInput,
   ForgetMemoryInput,
+  ListRecentEventsInput,
   Memory,
   MemoryBackup,
   MemoryEvent,
@@ -222,6 +223,21 @@ export class MemoryStore {
     const rows = this.db
       .prepare("SELECT * FROM memory_events WHERE memory_id = ? ORDER BY id ASC")
       .all(memoryId) as EventRow[];
+    return rows.map(mapEvent);
+  }
+
+  listRecentEvents(input: ListRecentEventsInput = {}): MemoryEvent[] {
+    const limit = Math.max(1, Math.min(input.limit ?? 20, 100));
+    if (input.memoryId) {
+      const rows = this.db
+        .prepare("SELECT * FROM memory_events WHERE memory_id = ? ORDER BY id DESC LIMIT ?")
+        .all(input.memoryId, limit) as EventRow[];
+      return rows.map(mapEvent);
+    }
+
+    const rows = this.db
+      .prepare("SELECT * FROM memory_events ORDER BY id DESC LIMIT ?")
+      .all(limit) as EventRow[];
     return rows.map(mapEvent);
   }
 

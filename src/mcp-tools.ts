@@ -58,6 +58,11 @@ const backupMemorySchema = {
   backupPath: z.string().min(1)
 };
 
+const auditMemorySchema = {
+  memoryId: z.number().int().positive().optional(),
+  limit: z.number().int().min(1).max(100).default(20)
+};
+
 type ToolResult<T extends Record<string, unknown>> = {
   content: [{ type: "text"; text: string }];
   structuredContent: T;
@@ -112,6 +117,11 @@ interface MemoryDigestToolInput {
 
 interface BackupMemoryToolInput {
   backupPath: string;
+}
+
+interface AuditMemoryToolInput {
+  memoryId?: number;
+  limit?: number;
 }
 
 interface ToolHandlerOptions {
@@ -222,6 +232,23 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         createdAt: backup.createdAt.toISOString(),
         warning: null
       });
+    },
+
+    async auditMemory(input: AuditMemoryToolInput) {
+      const events = store.listRecentEvents({
+        memoryId: input.memoryId,
+        limit: input.limit
+      });
+
+      return toolResult({
+        events: events.map((event) => ({
+          id: event.id,
+          memoryId: event.memoryId,
+          eventType: event.eventType,
+          payload: event.payload,
+          createdAt: event.createdAt.toISOString()
+        }))
+      });
     }
   };
 }
@@ -290,6 +317,15 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
       inputSchema: backupMemorySchema
     },
     handlers.backupMemory
+  );
+
+  server.registerTool(
+    "audit_memory",
+    {
+      description: "Read recent audit events without returning full memory contents.",
+      inputSchema: auditMemorySchema
+    },
+    handlers.auditMemory
   );
 }
 

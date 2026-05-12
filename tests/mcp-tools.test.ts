@@ -153,6 +153,38 @@ describe("MCP tool handlers", () => {
     expect(existsSync(backupPath)).toBe(true);
   });
 
+  test("audit_memory returns recent audit events with optional memory filter", async () => {
+    const tools = createToolHandlers(store);
+    const first = await tools.writeMemory({
+      content: "First MCP audit record.",
+      layer: "recall",
+      tags: ["audit"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    await tools.writeMemory({
+      content: "Second MCP audit record.",
+      layer: "recall",
+      tags: ["audit"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    await tools.forgetMemory({
+      memoryId: first.structuredContent.memory.id,
+      reason: "audit filter test"
+    });
+
+    const result = await tools.auditMemory({
+      memoryId: first.structuredContent.memory.id,
+      limit: 5
+    });
+
+    expect(result.structuredContent.events.map((event) => event.eventType)).toEqual(["forgotten", "created"]);
+    expect(result.structuredContent.events.every((event) => event.memoryId === first.structuredContent.memory.id)).toBe(
+      true
+    );
+  });
+
   test("memory_digest returns compact relevant context", async () => {
     const tools = createToolHandlers(store);
     await tools.writeMemory({
