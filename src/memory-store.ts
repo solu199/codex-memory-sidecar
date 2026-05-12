@@ -7,8 +7,10 @@ import { cosineSimilarity } from "./embedding.js";
 import { containsLikelySecret } from "./secret-detection.js";
 import type {
   CreateMemoryInput,
+  CreateBackupInput,
   ForgetMemoryInput,
   Memory,
+  MemoryBackup,
   MemoryEvent,
   MemoryEventType,
   MemoryLayer,
@@ -45,8 +47,10 @@ interface EventRow {
 
 export class MemoryStore {
   private readonly db: Database.Database;
+  private readonly databasePath: string;
 
   constructor(databasePath: string) {
+    this.databasePath = databasePath;
     mkdirSync(path.dirname(databasePath), { recursive: true });
     this.db = new Database(databasePath);
     this.db.pragma("journal_mode = WAL");
@@ -137,6 +141,9 @@ export class MemoryStore {
     const existing = this.requireMemory(input.memoryId);
 
     if (input.hardDelete) {
+      if (!input.confirmHardDelete) {
+        throw new Error("Hard delete requires confirmHardDelete=true.");
+      }
       this.deleteFtsRow(input.memoryId);
       this.db.prepare("DELETE FROM memories WHERE id = ?").run(input.memoryId);
       this.recordEvent(input.memoryId, "forgotten", {
@@ -216,6 +223,15 @@ export class MemoryStore {
       .prepare("SELECT * FROM memory_events WHERE memory_id = ? ORDER BY id ASC")
       .all(memoryId) as EventRow[];
     return rows.map(mapEvent);
+  }
+
+  async createBackup(input: CreateBackupInput): Promise<MemoryBackup> {
+    mkdirSync(path.dirname(input.backupPath), { recursive: true });
+    await this.db.backup(input.backupPath);
+    return {
+      backupPath: input.backupPath,
+      createdAt: new Date()
+    };
   }
 
   private migrate(): void {
