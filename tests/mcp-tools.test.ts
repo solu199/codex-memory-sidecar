@@ -114,6 +114,27 @@ describe("MCP tool handlers", () => {
     expect(result.structuredContent.warnings).toEqual(["Embedding unavailable: Ollama offline"]);
   });
 
+  test("forget_memory refuses hard delete without explicit confirmation", async () => {
+    const tools = createToolHandlers(store);
+    const created = await tools.writeMemory({
+      content: "MCP hard delete should require a confirmation flag.",
+      layer: "recall",
+      tags: ["safety"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    await expect(
+      tools.forgetMemory({
+        memoryId: created.structuredContent.memory.id,
+        reason: "testing MCP hard delete guard",
+        hardDelete: true
+      })
+    ).rejects.toThrow(/confirm/i);
+
+    expect(store.getMemory(created.structuredContent.memory.id)?.status).toBe("active");
+  });
+
   test("backup_memory creates a database backup", async () => {
     const tools = createToolHandlers(store);
     await tools.writeMemory({
