@@ -373,7 +373,7 @@ export class MemoryStore {
         `INSERT INTO memory_events (memory_id, event_type, payload_json, created_at)
          VALUES (?, ?, ?, ?)`
       )
-      .run(memoryId, eventType, JSON.stringify(payload), new Date().toISOString());
+      .run(memoryId, eventType, JSON.stringify(redactEventPayload(payload)), new Date().toISOString());
   }
 }
 
@@ -511,4 +511,22 @@ function lexicalScore(query: string, text: string): number {
   const normalized = text.toLowerCase();
   const matches = terms.filter((term) => normalized.includes(term)).length;
   return matches / terms.length;
+}
+
+function redactEventPayload(value: unknown): unknown {
+  if (typeof value === "string") {
+    return containsLikelySecret(value) ? "[REDACTED_SECRET]" : value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => redactEventPayload(item));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, redactEventPayload(item)])
+    );
+  }
+
+  return value;
 }

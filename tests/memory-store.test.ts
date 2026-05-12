@@ -250,4 +250,26 @@ describe("MemoryStore", () => {
     expect(events[1]?.eventType).toBe("created");
     expect(events[1]?.memoryId).toBe(second.id);
   });
+
+  test("redacts likely secrets from audit event payloads", () => {
+    const created = store.createMemory({
+      content: "Audit payload redaction should protect notes.",
+      layer: "recall",
+      tags: ["audit"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8
+    });
+
+    store.updateMemory({
+      memoryId: created.id,
+      newContent: "Audit payload redaction should protect update notes.",
+      updateNote: "accidentally pasted OPENAI_API_KEY=sk-proj-secret123456"
+    });
+
+    const updatedEvent = store.listEvents(created.id).find((event) => event.eventType === "updated");
+
+    expect(updatedEvent?.payload.updateNote).toBe("[REDACTED_SECRET]");
+  });
 });
