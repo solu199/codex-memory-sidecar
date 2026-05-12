@@ -310,6 +310,38 @@ describe("MemoryStore", () => {
     expect(updatedEvent?.payload.updateNote).toBe("[REDACTED_SECRET]");
   });
 
+  test("redacts audit payload values with sensitive key names", () => {
+    const created = store.createMemory({
+      content: "Audit payload redaction should also inspect payload keys.",
+      layer: "recall",
+      tags: ["audit"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8
+    });
+
+    store.updateMemory({
+      memoryId: created.id,
+      newContent: "Audit payload redaction should also inspect payload keys.",
+      updateNote: JSON.stringify({
+        accessToken: "short-token",
+        nested: {
+          apiKey: "abc123"
+        }
+      })
+    });
+
+    const updatedEvent = store.listEvents(created.id).find((event) => event.eventType === "updated");
+
+    expect(JSON.parse(updatedEvent?.payload.updateNote as string)).toEqual({
+      accessToken: "[REDACTED_SECRET]",
+      nested: {
+        apiKey: "[REDACTED_SECRET]"
+      }
+    });
+  });
+
   test("lists active memories with optional layer filtering", () => {
     const core = store.createMemory({
       content: "Core memory for listing.",

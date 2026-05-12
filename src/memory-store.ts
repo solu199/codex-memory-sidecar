@@ -4,7 +4,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 
 import { cosineSimilarity } from "./embedding.js";
-import { containsLikelySecret } from "./secret-detection.js";
+import { containsLikelySecret, isLikelySecretKey } from "./secret-detection.js";
 import type {
   CreateMemoryInput,
   CreateBackupInput,
@@ -562,7 +562,12 @@ function lexicalScore(query: string, text: string): number {
 
 function redactEventPayload(value: unknown): unknown {
   if (typeof value === "string") {
-    return containsLikelySecret(value) ? "[REDACTED_SECRET]" : value;
+    if (containsLikelySecret(value)) {
+      return "[REDACTED_SECRET]";
+    }
+
+    const parsed = parseJsonObjectOrArray(value);
+    return parsed ? JSON.stringify(redactEventPayload(parsed)) : value;
   }
 
   if (Array.isArray(value)) {
@@ -571,9 +576,26 @@ function redactEventPayload(value: unknown): unknown {
 
   if (value && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, redactEventPayload(item)])
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        isLikelySecretKey(key) ? "[REDACTED_SECRET]" : redactEventPayload(item)
+      ])
     );
   }
 
   return value;
+}
+
+function parseJsonObjectOrArray(value: string): unknown[] | Record<string, unknown> | null {
+  const trimmed = value.trim();
+  if (!trimmed || !["{", "["].includes(trimmed[0] ?? "")) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as unknown[] | Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
 }
