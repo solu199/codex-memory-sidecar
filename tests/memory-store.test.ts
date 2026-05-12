@@ -235,8 +235,27 @@ describe("MemoryStore", () => {
     const backup = await store.createBackup({});
 
     expect(backup.backupPath).toContain(path.join(tempDir, "backups"));
-    expect(path.basename(backup.backupPath)).toMatch(/^memory-\d{8}-\d{6}\.sqlite$/);
+    expect(path.basename(backup.backupPath)).toMatch(/^memory-\d{8}-\d{6}-\d{3}(?:-\d+)?\.sqlite$/);
     expect(existsSync(backup.backupPath)).toBe(true);
+  });
+
+  test("does not overwrite default backups created in quick succession", async () => {
+    store.createMemory({
+      content: "Backups created quickly should use distinct paths.",
+      layer: "recall",
+      tags: ["backup"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.6,
+      confidence: 0.9
+    });
+
+    const first = await store.createBackup({});
+    const second = await store.createBackup({});
+
+    expect(second.backupPath).not.toBe(first.backupPath);
+    expect(existsSync(first.backupPath)).toBe(true);
+    expect(existsSync(second.backupPath)).toBe(true);
   });
 
   test("lists recent audit events across memories", () => {
