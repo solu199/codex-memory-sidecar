@@ -16,9 +16,11 @@ import type {
   MemoryEvent,
   MemoryEventType,
   MemoryLayer,
+  BackupVerification,
   SearchMemoryInput,
   SearchMemoryResult,
-  UpdateMemoryInput
+  UpdateMemoryInput,
+  VerifyBackupInput
 } from "./types.js";
 
 interface MemoryRow {
@@ -275,6 +277,27 @@ export class MemoryStore {
     };
   }
 
+  verifyBackup(input: VerifyBackupInput): BackupVerification {
+    if (!existsSync(input.backupPath)) {
+      throw new Error(`Backup file was not found: ${input.backupPath}`);
+    }
+
+    const backupDb = new Database(input.backupPath, { readonly: true, fileMustExist: true });
+    try {
+      const memoryCount = countRows(backupDb, "memories");
+      const eventCount = countRows(backupDb, "memory_events");
+      return {
+        backupPath: input.backupPath,
+        ok: true,
+        memoryCount,
+        eventCount,
+        checkedAt: new Date()
+      };
+    } finally {
+      backupDb.close();
+    }
+  }
+
   private defaultBackupPath(): string {
     const stamp = new Date()
       .toISOString()
@@ -466,6 +489,11 @@ function summarize(content: string): string {
 
 function clampScore(value: number): number {
   return Math.max(0, Math.min(1, value));
+}
+
+function countRows(db: Database.Database, table: string): number {
+  const row = db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number };
+  return row.count;
 }
 
 function quoteFtsQuery(query: string): string {
