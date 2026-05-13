@@ -25,6 +25,16 @@ export interface DashboardStatus {
     dimensions: number;
     error: string | null;
   };
+  recentMemories: Array<{
+    id: number;
+    layer: string;
+    summary: string;
+    tags: string[];
+    importance: number;
+    confidence: number;
+    status: string;
+    updatedAt: string;
+  }>;
   recentEvents: Array<{
     id: number;
     memoryId: number;
@@ -54,6 +64,16 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
       eventCount: counts.eventCount
     },
     embedding,
+    recentMemories: store.listMemories({ limit: 10 }).map((memory) => ({
+      id: memory.id,
+      layer: memory.layer,
+      summary: memory.summary,
+      tags: memory.tags,
+      importance: memory.importance,
+      confidence: memory.confidence,
+      status: memory.status,
+      updatedAt: memory.updatedAt.toISOString()
+    })),
     recentEvents: store.listRecentEvents({ limit: 10 }).map((event) => ({
       id: event.id,
       memoryId: event.memoryId,
@@ -182,6 +202,15 @@ function renderDashboardHtml(): string {
       border-radius: 8px;
       overflow: hidden;
     }
+    .summary {
+      max-width: 420px;
+      overflow-wrap: anywhere;
+    }
+    .tags {
+      color: #52606d;
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
     th, td {
       border-bottom: 1px solid #e4e7eb;
       padding: 10px;
@@ -218,6 +247,9 @@ function renderDashboardHtml(): string {
       .label {
         color: #cbd5e1;
       }
+      .tags {
+        color: #cbd5e1;
+      }
     }
   </style>
 </head>
@@ -233,6 +265,11 @@ function renderDashboardHtml(): string {
       <div class="panel"><p class="label">Events</p><p class="value" id="events">-</p></div>
       <div class="panel"><p class="label">Embedding</p><p class="value" id="embedding">-</p></div>
     </section>
+    <h2>Recent Memories</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Layer</th><th>Summary</th><th>Tags</th><th>Updated</th></tr></thead>
+      <tbody id="recent-memories"></tbody>
+    </table>
     <h2>Recent Events</h2>
     <table>
       <thead><tr><th>ID</th><th>Memory</th><th>Type</th><th>Created</th></tr></thead>
@@ -248,9 +285,21 @@ function renderDashboardHtml(): string {
       document.getElementById("memories").textContent = String(status.database.memoryCount);
       document.getElementById("events").textContent = String(status.database.eventCount);
       document.getElementById("embedding").textContent = status.embedding.ok ? String(status.embedding.dimensions) : "Unavailable";
+      document.getElementById("recent-memories").innerHTML = status.recentMemories.map((memory) => (
+        "<tr><td>" + memory.id + "</td><td>" + escapeHtml(memory.layer) + "</td><td class=\\"summary\\">" + escapeHtml(memory.summary) + "</td><td class=\\"tags\\">" + escapeHtml(memory.tags.join(", ")) + "</td><td>" + escapeHtml(memory.updatedAt) + "</td></tr>"
+      )).join("");
       document.getElementById("recent-events").innerHTML = status.recentEvents.map((event) => (
         "<tr><td>" + event.id + "</td><td>" + event.memoryId + "</td><td>" + event.eventType + "</td><td>" + event.createdAt + "</td></tr>"
       )).join("");
+    }
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\\"": "&quot;",
+        "'": "&#39;"
+      }[char]));
     }
     document.getElementById("refresh").addEventListener("click", refresh);
     void refresh();
