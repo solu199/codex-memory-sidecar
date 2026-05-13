@@ -188,6 +188,12 @@ export interface DatabaseHealth {
 export interface MemoryStats extends MemoryStoreCounts {
   byStatus: Record<MemoryStatus, number>;
   byLayer: Record<MemoryLayer, number>;
+  byProjectScope: Array<{
+    projectScope: string;
+    total: number;
+    active: number;
+    latestUpdatedAt: Date | null;
+  }>;
   updatedAtRange: {
     oldest: Date | null;
     newest: Date | null;
