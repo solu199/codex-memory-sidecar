@@ -13,6 +13,8 @@ const writeMemorySchema = {
   tags: z.array(z.string()).default([]),
   sourceType: z.string().min(1),
   sourceRef: z.string().min(1),
+  projectScope: z.string().min(1).optional(),
+  projectPath: z.string().min(1).optional(),
   importance: z.number().min(0).max(1).default(0.5),
   confidence: z.number().min(0).max(1).default(0.5),
   allowSecret: z.boolean().default(false)
@@ -42,7 +44,10 @@ const searchMemorySchema = {
   tags: z.array(z.string()).optional(),
   limit: z.number().int().min(1).max(50).default(8),
   includeSuperseded: z.boolean().default(false),
-  includeEmbedding: z.boolean().default(false)
+  includeEmbedding: z.boolean().default(false),
+  projectScope: z.string().min(1).optional(),
+  projectPath: z.string().min(1).optional(),
+  includeCrossProject: z.boolean().default(false)
 };
 
 const updateMemorySchema = {
@@ -105,6 +110,8 @@ interface WriteMemoryToolInput {
   tags?: string[];
   sourceType: string;
   sourceRef: string;
+  projectScope?: string;
+  projectPath?: string;
   importance?: number;
   confidence?: number;
   allowSecret?: boolean;
@@ -134,6 +141,9 @@ interface SearchMemoryToolInput {
   limit?: number;
   includeSuperseded?: boolean;
   includeEmbedding?: boolean;
+  projectScope?: string;
+  projectPath?: string;
+  includeCrossProject?: boolean;
 }
 
 interface UpdateMemoryToolInput {
@@ -197,6 +207,8 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         content: input.content,
         layer: input.layer,
         tags: input.tags,
+        projectScope: input.projectScope,
+        projectPath: input.projectPath,
         sourceType: input.sourceType,
         sourceRef: input.sourceRef,
         importance: input.importance,
@@ -295,7 +307,10 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         layers: input.layers,
         tags: input.tags,
         limit: input.limit,
-        includeSuperseded: input.includeSuperseded ?? false
+        includeSuperseded: input.includeSuperseded ?? false,
+        projectScope: input.projectScope,
+        projectPath: input.projectPath,
+        includeCrossProject: input.includeCrossProject ?? false
       });
 
       return toolResult({
@@ -360,7 +375,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
     async memoryDigest(input: MemoryDigestToolInput) {
       const query = [input.taskDescription, input.projectPath].filter(Boolean).join(" ");
       const embedding = await tryEmbed(options.embeddingProvider, query);
-      const results = store.searchMemory({ query, queryEmbedding: embedding.value, limit: 8 });
+      const results = store.searchMemory({ query, queryEmbedding: embedding.value, limit: 8, projectPath: input.projectPath });
       const serialized = results.map((result) => serializeSearchResult(result));
       const digest = compactDigest(serialized, input.maxTokens ?? 800);
 
@@ -594,6 +609,7 @@ function serializeMemory(memory: Memory, options: { includeEmbedding?: boolean }
     content: memory.content,
     summary: memory.summary,
     tags: memory.tags,
+    projectScope: memory.projectScope,
     sourceType: memory.sourceType,
     sourceRef: memory.sourceRef,
     importance: memory.importance,
@@ -613,6 +629,7 @@ function serializeMemorySummary(memory: Memory) {
     layer: memory.layer,
     summary: memory.summary,
     tags: memory.tags,
+    projectScope: memory.projectScope,
     sourceType: memory.sourceType,
     sourceRef: memory.sourceRef,
     importance: memory.importance,

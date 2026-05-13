@@ -94,6 +94,36 @@ describe("MCP tool handlers", () => {
     expect(result.structuredContent.memories[0]?.summary).toContain("SQLite FTS");
   });
 
+  test("write_memory and search_memory preserve project scope", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "Scoped MCP lookup phrase for alpha.",
+      layer: "recall",
+      tags: ["scope"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "alpha"
+    });
+    await tools.writeMemory({
+      content: "Scoped MCP lookup phrase for beta.",
+      layer: "recall",
+      tags: ["scope"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "beta"
+    });
+
+    const result = await tools.searchMemory({
+      query: "scoped MCP lookup phrase",
+      projectScope: "alpha",
+      limit: 10
+    });
+
+    expect(result.structuredContent.memories).toHaveLength(1);
+    expect(result.structuredContent.memories[0]?.projectScope).toBe("alpha");
+    expect(result.structuredContent.memories[0]?.summary).toContain("alpha");
+  });
+
   test("search_memory uses embeddings when the provider is available", async () => {
     const embedder = {
       embed: vi
@@ -698,6 +728,36 @@ describe("MCP tool handlers", () => {
     });
 
     expect(result.structuredContent.digest).toContain("local-first");
+    expect(result.structuredContent.memories).toHaveLength(1);
+  });
+
+  test("memory_digest scopes projectPath lookups", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "Digest scoped memory for this project.",
+      layer: "recall",
+      tags: ["digest"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectPath: tempDir
+    });
+    await tools.writeMemory({
+      content: "Digest scoped memory for another project.",
+      layer: "recall",
+      tags: ["digest"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "other-project"
+    });
+
+    const result = await tools.memoryDigest({
+      taskDescription: "Digest scoped memory",
+      projectPath: tempDir,
+      maxTokens: 200
+    });
+
+    expect(result.structuredContent.digest).toContain("this project");
+    expect(result.structuredContent.digest).not.toContain("another project");
     expect(result.structuredContent.memories).toHaveLength(1);
   });
 });

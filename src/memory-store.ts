@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
 import Database from "better-sqlite3";
@@ -16,6 +17,8 @@ import type {
   Memory,
   BackupInspection,
   BackupMemorySummary,
+  BackupRetentionPlan,
+  BackupRetentionPlanInput,
   MemoryBackup,
   MemoryEvent,
   MemoryEventType,
@@ -35,6 +38,7 @@ interface MemoryRow {
   content: string;
   summary: string;
   tags: string;
+  project_scope: string;
   source_type: string;
   source_ref: string;
   importance: number;
@@ -83,6 +87,9 @@ interface UpdatedAtRangeRow {
 
 const DEFAULT_HYBRID_CANDIDATE_LIMIT = 250;
 const MAX_HYBRID_CANDIDATE_LIMIT = 1000;
+const GLOBAL_PROJECT_SCOPE = "global";
+const DEFAULT_BACKUP_RETENTION_KEEP_COUNT = 10;
+const DEFAULT_BACKUP_FILE_PATTERN = /^memory-\d{8}-\d{6}-\d{3}(?:-\d+)?\.sqlite$/;
 
 export class MemoryStore {
   private readonly db: Database.Database;
@@ -105,13 +112,14 @@ export class MemoryStore {
     this.assertStorable(input.content, input.allowSecret);
 
     const now = new Date();
+    const projectScope = resolveProjectScope(input);
     const result = this.db
       .prepare(
         `INSERT INTO memories (
-          layer, content, summary, tags, source_type, source_ref,
+          layer, content, summary, tags, project_scope, source_type, source_ref,
           importance, confidence, embedding, created_at, updated_at, expires_at, status
         ) VALUES (
-          @layer, @content, @summary, @tags, @sourceType, @sourceRef,
+          @layer, @content, @summary, @tags, @projectScope, @sourceType, @sourceRef,
           @importance, @confidence, @embedding, @createdAt, @updatedAt, @expiresAt, 'active'
         )`
       )
@@ -120,6 +128,7 @@ export class MemoryStore {
         content: input.content,
         summary: input.summary ?? summarize(input.content),
         tags: JSON.stringify(input.tags ?? []),
+        projectScope,
         sourceType: input.sourceType,
         sourceRef: input.sourceRef,
         importance: clampScore(input.importance ?? 0.5),
@@ -238,6 +247,8 @@ export class MemoryStore {
         params[`tag${index}`] = `%${escapeLikePattern(JSON.stringify(tag))}%`;
       });
     }
+
+    addProjectScopeFilter(clauses, params, input, "m.");
 
     const rows = this.db
       .prepare(
@@ -400,6 +411,37 @@ export class MemoryStore {
     };
   }
 
+  planBackupRetention(input: BackupRetentionPlanInput = {}): BackupRetentionPlan {
+    const backupDir = this.defaultBackupDir();
+    const keepCount = Math.max(0, Math.floor(input.keepCount ?? DEFAULT_BACKUP_RETENTION_KEEP_COUNT));
+    const backups = existsSync(backupDir)
+      ? readdirSync(backupDir, { withFileTypes: true })
+          .filter((entry) => entry.isFile() && DEFAULT_BACKUP_FILE_PATTERN.test(entry.name))
+          .map((entry) => {
+            const backupPath = path.join(backupDir, entry.name);
+            const stat = statSync(backupPath);
+            return {
+              backupPath,
+              sizeBytes: stat.size,
+              mtime: stat.mtime
+            };
+          })
+          .sort((left, right) => {
+            const byMtime = right.mtime.getTime() - left.mtime.getTime();
+            return byMtime === 0 ? path.basename(right.backupPath).localeCompare(path.basename(left.backupPath)) : byMtime;
+          })
+      : [];
+
+    return {
+      backupDir,
+      keepCount,
+      backups,
+      kept: backups.slice(0, keepCount),
+      prunable: backups.slice(keepCount),
+      plannedAt: new Date()
+    };
+  }
+
   verifyBackup(input: VerifyBackupInput): BackupVerification {
     if (!existsSync(input.backupPath)) {
       throw new Error(`Backup file was not found: ${input.backupPath}`);
@@ -519,7 +561,7 @@ export class MemoryStore {
       .replace(/[-:]/g, "")
       .replace(/\.(\d{3})Z$/, "-$1")
       .replace("T", "-");
-    const backupDir = path.join(path.dirname(this.databasePath), "backups");
+    const backupDir = this.defaultBackupDir();
     const basePath = path.join(backupDir, `memory-${stamp}.sqlite`);
     if (!existsSync(basePath)) {
       return basePath;
@@ -535,6 +577,10 @@ export class MemoryStore {
     throw new Error("Could not allocate a unique backup path.");
   }
 
+  private defaultBackupDir(): string {
+    return path.join(path.dirname(this.databasePath), "backups");
+  }
+
   private migrate(): void {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS memories (
@@ -543,6 +589,7 @@ export class MemoryStore {
         content TEXT NOT NULL,
         summary TEXT NOT NULL,
         tags TEXT NOT NULL DEFAULT '[]',
+        project_scope TEXT NOT NULL DEFAULT 'global',
         source_type TEXT NOT NULL,
         source_ref TEXT NOT NULL,
         importance REAL NOT NULL DEFAULT 0.5,
@@ -588,7 +635,11 @@ export class MemoryStore {
         ON memories(layer, status);
     `);
     this.addColumnIfMissing("memories", "embedding", "TEXT");
+    this.addColumnIfMissing("memories", "project_scope", "TEXT NOT NULL DEFAULT 'global'");
     this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_memories_project_scope_status_updated
+        ON memories(project_scope, status, updated_at DESC);
+
       CREATE INDEX IF NOT EXISTS idx_memories_active_embedding_candidates
         ON memories(status, importance DESC, updated_at DESC)
         WHERE embedding IS NOT NULL;
@@ -617,6 +668,8 @@ export class MemoryStore {
         vectorParams[`tag${index}`] = `%${escapeLikePattern(JSON.stringify(tag))}%`;
       });
     }
+
+    addProjectScopeFilter(vectorClauses, vectorParams, input);
 
     const vectorRows = this.db
       .prepare(
@@ -671,6 +724,8 @@ export class MemoryStore {
       });
     }
 
+    addProjectScopeFilter(clauses, params, input, "m.");
+
     return this.db
       .prepare(
         `SELECT m.*
@@ -698,8 +753,10 @@ export class MemoryStore {
       return;
     }
 
+    const projectScope = resolveProjectScope(input);
     this.recordEvent(results[0].memory.id, "retrieved", {
       query: input.query,
+      ...(projectScope === GLOBAL_PROJECT_SCOPE ? {} : { projectScope }),
       ...payload,
       resultCount: results.length,
       memoryIds: results.map((result) => result.memory.id)
@@ -758,6 +815,7 @@ function mapMemory(row: MemoryRow): Memory {
     content: row.content,
     summary: row.summary,
     tags: safeParseTags(row.tags),
+    projectScope: row.project_scope ?? GLOBAL_PROJECT_SCOPE,
     sourceType: row.source_type,
     sourceRef: row.source_ref,
     importance: row.importance,
@@ -872,6 +930,47 @@ function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, (match) => `\\${match}`);
 }
 
+function addProjectScopeFilter(
+  clauses: string[],
+  params: Record<string, unknown>,
+  input: Pick<SearchMemoryInput, "projectScope" | "projectPath" | "includeCrossProject">,
+  alias = ""
+): void {
+  if (input.includeCrossProject) {
+    return;
+  }
+
+  const projectScope = resolveProjectScope(input);
+  if (projectScope === GLOBAL_PROJECT_SCOPE) {
+    return;
+  }
+
+  clauses.push(`(${alias}project_scope = @projectScope OR ${alias}project_scope = @globalProjectScope)`);
+  params.projectScope = projectScope;
+  params.globalProjectScope = GLOBAL_PROJECT_SCOPE;
+}
+
+function resolveProjectScope(input: { projectScope?: string; projectPath?: string }): string {
+  const explicitScope = normalizeProjectScope(input.projectScope);
+  if (explicitScope) {
+    return explicitScope;
+  }
+
+  const projectPath = input.projectPath?.trim();
+  if (!projectPath) {
+    return GLOBAL_PROJECT_SCOPE;
+  }
+
+  const normalizedPath = path.resolve(projectPath).toLowerCase();
+  const digest = createHash("sha256").update(normalizedPath).digest("hex").slice(0, 16);
+  return `project:${digest}`;
+}
+
+function normalizeProjectScope(value: string | undefined): string | null {
+  const normalized = value?.trim().replace(/\s+/g, "-").toLowerCase();
+  return normalized || null;
+}
+
 function scoreKeywordRow(row: MemoryRow & { keyword_rank: number }): SearchMemoryResult {
   const keywordScore = 1 / (1 + Math.abs(row.keyword_rank));
   const freshnessScore = freshness(row.updated_at);
@@ -928,6 +1027,7 @@ function redactedInput(input: CreateMemoryInput): Record<string, unknown> {
   return {
     layer: input.layer,
     tags: input.tags ?? [],
+    projectScope: resolveProjectScope(input),
     sourceType: input.sourceType,
     sourceRef: input.sourceRef,
     importance: input.importance,

@@ -1,48 +1,28 @@
 # Codex Memory Sidecar
 
-Codex app のためのローカル MCP メモリサイドカーです。
+Codex app 向けのローカル MCP メモリサイドカーです。個人利用を前提に、作業中の判断、好み、運用ルール、検証結果などをローカル SQLite に保存し、次回以降の作業で参照できるようにします。
 
-このサイドカーは、長期的な作業記憶を明示的な MCP ツールとして扱います。
+## できること
 
-- `search_memory`
-- `read_memory`
-- `list_memory_summaries`
-- `health_check`
-- `memory_stats`
-- `write_memory`
-- `update_memory`
-- `forget_memory`
-- `consolidate_memory`
-- `memory_digest`
-- `backup_memory`
-- `verify_backup`
-- `inspect_backup`
-- `audit_memory`
-
-メモリはローカルの SQLite に保存されます。キーワード検索には SQLite FTS を使います。Ollama が起動している場合は、書き込みと検索でローカル embedding も使い、ハイブリッド検索を行います。Ollama が使えない場合でも、ツールはキーワード検索にフォールバックし、warning を返します。
-
-Codex/AGENTS 系の作業手順に組み込むときは、[AGENTS-memory-protocol.md](AGENTS-memory-protocol.md) を参照してください。
+- `write_memory` / `update_memory` / `forget_memory` でメモリを安全に管理します。
+- `search_memory` は SQLite FTS と、Ollama が使える場合はローカル embedding を組み合わせて検索します。
+- `memory_digest` は作業前に関連しそうなメモリを短くまとめます。
+- `projectScope` / `projectPath` を使うと、同じプロジェクトのメモリと `global` メモリを優先して検索し、別プロジェクトの混入を抑えます。
+- `backup_memory` / `verify_backup` / `inspect_backup` で SQLite バックアップを作成・確認できます。
+- `planBackupRetention` は既定バックアップの保持計画を dry-run で返します。ファイル削除はしません。
+- `health_check`、`memory_stats`、read-only dashboard で状態を確認できます。
+- `audit_memory` で直近の作成・更新・削除・検索イベントを確認できます。
 
 ## 安全性
 
-このツールは個人利用のローカルメモリを前提にしています。安全側の挙動として、次の方針を取ります。
+このツールはローカル・個人利用を前提にしています。
 
-- `forget_memory` はデフォルトで論理削除のみを行います。
-- 物理削除を行うには `hardDelete: true` に加えて `confirmHardDelete: true` が必要です。
-- `backup_memory` で SQLite データベースの明示バックアップを作成できます。
-- `backup_memory` の `backupPath` を省略すると、データベース横の `backups/` に timestamp 付きで保存します。
-- `verify_backup` でバックアップファイルが読み取れることと、保存件数を確認できます。
-- `inspect_backup` でバックアップの件数とメモリ要約を read-only で確認できます。本文は返しません。
-- `health_check` でローカル DB と embedding provider の状態を確認できます。
-- 起動時に DB の quick check、FTS 整合性確認、WAL checkpoint を軽く実行します。`auto_backup_on_startup` を有効にした場合は、起動時バックアップを作成して即時検証します。
-- `memory_stats` で本文なしの件数集計を確認できます。
-- `audit_memory` で最近の audit event を確認できます。
-- `consolidate_memory` は dry-run 提案を返すだけで、自動適用はしません。
-- `write_memory` は保存後、既存メモリとの明確な重複候補があれば `duplicateCandidates` に返します。
-- `read_memory` / `search_memory` は既定では embedding 配列を返しません。必要な場合だけ `includeEmbedding: true` を指定します。
-- 明らかな secret らしき内容は、明示 override なしでは保存を拒否します。
-- 書き込み、更新、忘却、検索は audit event として記録されます。検索時は 1 回の検索につき 1 件の `retrieved` event を記録し、query 文字列、`resultCount`、`memoryIds` を payload に含めます。
-- audit payload は secret らしき値を redaction しますが、通常の個人情報や検索文言を自動で匿名化するものではありません。
+- メモリ DB は既定で `data/memory.sqlite` に保存されます。
+- 明らかな secret らしき内容は、明示的な override なしでは保存を拒否します。
+- `forget_memory` は既定で論理削除です。物理削除には `hardDelete: true` と `confirmHardDelete: true` が必要です。
+- 検索結果は既定で embedding 配列を返しません。必要な場合だけ `includeEmbedding: true` を指定します。
+- バックアップ確認や inspection は read-only で実行します。
+- 起動時メンテナンスは DB quick check、FTS 整合性確認、WAL checkpoint を軽く実行できます。
 
 ## セットアップ
 
@@ -58,31 +38,33 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" install
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run build
 ```
 
-テストを実行します。
+テストします。
 
 ```powershell
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" test
 ```
 
-MCP サーバーとしてツール一覧を取得し、`health_check` を呼び出す smoke test も実行できます。
+MCP smoke test:
 
 ```powershell
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:mcp
 ```
 
-Ollama と `embeddinggemma` の疎通を確認する smoke test も実行できます。この smoke test は一時 SQLite DB だけを使い、通常のメモリ DB は変更しません。
+Ollama smoke test:
 
 ```powershell
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:ollama
 ```
 
-ローカル状態をブラウザで確認したい場合は、read-only dashboard を起動できます。`127.0.0.1` のみに bind し、メモリ本文や audit payload は表示しません。
+## Dashboard
+
+ローカル状態をブラウザで確認できます。`127.0.0.1` のみに bind し、メモリ本文や audit payload は表示しません。
 
 ```powershell
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run dashboard
 ```
 
-起動後、次の URL を開きます。
+起動後に開く URL:
 
 ```text
 http://127.0.0.1:3737
@@ -90,7 +72,7 @@ http://127.0.0.1:3737
 
 ## 設定
 
-デフォルト設定を上書きしたい場合は、`config/memory-sidecar.toml` を作成します。
+`config/memory-sidecar.toml` を作ると既定値を上書きできます。
 
 ```toml
 ollama_base_url = "http://localhost:11434"
@@ -113,6 +95,10 @@ auto_backup_on_startup = false
 - `CODEX_MEMORY_MAINTENANCE_MODEL`
 - `CODEX_MEMORY_DEFAULT_SEARCH_LIMIT`
 - `CODEX_MEMORY_CONSOLIDATION_DRY_RUN`
+- `CODEX_MEMORY_STARTUP_INTEGRITY_CHECK`
+- `CODEX_MEMORY_STARTUP_FTS_SANITY_CHECK`
+- `CODEX_MEMORY_STARTUP_WAL_CHECKPOINT`
+- `CODEX_MEMORY_AUTO_BACKUP_ON_STARTUP`
 
 ## Codex MCP 登録
 
@@ -122,7 +108,7 @@ auto_backup_on_startup = false
 node C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\index.js
 ```
 
-デフォルトのデータベースパスは次の通りです。
+既定の DB パス:
 
 ```text
 C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\data\memory.sqlite
@@ -130,16 +116,29 @@ C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\data\memory.sqlite
 
 ## Ollama
 
-想定しているローカル endpoint は次の通りです。
+既定 endpoint:
 
 ```text
 http://localhost:11434
 ```
 
-最初に使う embedding model としては `embeddinggemma` を推奨します。
+推奨 embedding model:
 
 ```powershell
 ollama pull embeddinggemma
 ```
 
-このサイドカーにおける Ollama の役割は、embedding を作るローカルのメモリ司書です。最終的な推論は Codex が担当します。
+保守・要約系のローカルモデルとして `qwen3` を想定しています。
+
+## projectScope の考え方
+
+- `write_memory` に `projectScope` を渡すと、その文字列を正規化して保存します。
+- `projectPath` を渡すと、絶対パスを hash 化した `project:<hash>` scope として保存します。生のローカルパスは scope 名に残しません。
+- `search_memory` / `memory_digest` に同じ `projectScope` または `projectPath` を渡すと、その scope と `global` のメモリだけを既定で検索します。
+- 全プロジェクトを横断したい場合は `includeCrossProject: true` を指定します。
+
+## 開発メモ
+
+- このリポジトリは private package です。
+- 通常の `npm` shim が環境によって壊れる場合は、上記の `node ... npm-cli.js` 形式で実行します。
+- 作業プロトコルを Codex/AGENTS 系に組み込む場合は `AGENTS-memory-protocol.md` を参照してください。
