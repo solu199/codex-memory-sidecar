@@ -5,6 +5,7 @@ Codex app のためのローカル MCP メモリサイドカーです。
 このサイドカーは、長期的な作業記憶を明示的な MCP ツールとして扱います。
 
 - `search_memory`
+- `read_memory`
 - `health_check`
 - `write_memory`
 - `update_memory`

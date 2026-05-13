@@ -20,6 +20,11 @@ const writeMemorySchema = {
 
 const healthCheckSchema = {};
 
+const readMemorySchema = {
+  memoryId: z.number().int().positive(),
+  includeForgotten: z.boolean().default(false)
+};
+
 const searchMemorySchema = {
   query: z.string().min(1),
   layers: z.array(layerSchema).optional(),
@@ -86,6 +91,11 @@ interface WriteMemoryToolInput {
 }
 
 type HealthCheckToolInput = Record<string, never>;
+
+interface ReadMemoryToolInput {
+  memoryId: number;
+  includeForgotten?: boolean;
+}
 
 interface SearchMemoryToolInput {
   query: string;
@@ -187,6 +197,20 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           error: embedding.warning ? embedding.warning.replace(/^Embedding unavailable: /, "") : null
         },
         warnings
+      });
+    },
+
+    async readMemory(input: ReadMemoryToolInput) {
+      const memory = store.getMemory(input.memoryId);
+      if (!memory) {
+        throw new Error(`Memory ${input.memoryId} was not found.`);
+      }
+      if (memory.status === "forgotten" && !input.includeForgotten) {
+        throw new Error(`Memory ${input.memoryId} is forgotten. Set includeForgotten=true to read it explicitly.`);
+      }
+
+      return toolResult({
+        memory: serializeMemory(memory)
       });
     },
 
@@ -340,6 +364,15 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
       inputSchema: searchMemorySchema
     },
     handlers.searchMemory
+  );
+
+  server.registerTool(
+    "read_memory",
+    {
+      description: "Read a single memory by id, excluding forgotten records unless explicitly requested.",
+      inputSchema: readMemorySchema
+    },
+    handlers.readMemory
   );
 
   server.registerTool(
