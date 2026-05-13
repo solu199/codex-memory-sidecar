@@ -37,7 +37,8 @@ Codex app のためのローカル MCP メモリサイドカーです。
 - `consolidate_memory` は dry-run 提案を返すだけで、自動適用はしません。
 - `read_memory` / `search_memory` は既定では embedding 配列を返しません。必要な場合だけ `includeEmbedding: true` を指定します。
 - 明らかな secret らしき内容は、明示 override なしでは保存を拒否します。
-- 書き込み、更新、忘却、検索は audit event として記録されます。
+- 書き込み、更新、忘却、検索は audit event として記録されます。検索時の query 文字列は `retrieved` event の payload に含まれます。
+- audit payload は secret らしき値を redaction しますが、通常の個人情報や検索文言を自動で匿名化するものではありません。
 
 ## セットアップ
 
