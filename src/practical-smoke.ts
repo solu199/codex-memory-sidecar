@@ -51,6 +51,13 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       sourceRef: "npm run smoke:practical",
       projectPath
     });
+    const proposal = await tools.proposeMemoryUpdate({
+      content: "Practical scoped memory for alpha project.",
+      taskContext: "practical smoke duplicate proposal",
+      sourceType: "smoke",
+      sourceRef: "npm run smoke:practical",
+      projectPath
+    });
     await tools.writeMemory({
       content: "Practical scoped memory for beta project.",
       layer: "recall",
@@ -105,6 +112,12 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
     const dashboardProjectScopes = dashboard.memoryStats.byProjectScope.map((scope) => scope.projectScope);
     const checks = {
       writeMemory: alpha.structuredContent.memory.projectScope.startsWith("project:"),
+      proposeMemoryUpdate:
+        proposal.structuredContent.recommendation === "update" &&
+        proposal.structuredContent.wouldWrite === false &&
+        proposal.structuredContent.duplicateCandidates.some(
+          (candidate) => candidate.memoryId === alpha.structuredContent.memory.id
+        ),
       scopedSearchExcludesBeta: scopedIds.length === 1 && scopedIds[0] === alpha.structuredContent.memory.id,
       crossProjectSearchIncludesBeta: crossScopeNames.includes("beta"),
       startMemorySession:

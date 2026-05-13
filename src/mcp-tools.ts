@@ -20,6 +20,16 @@ const writeMemorySchema = {
   allowSecret: z.boolean().default(false)
 };
 
+const proposeMemoryUpdateSchema = {
+  content: z.string().min(1),
+  taskContext: z.string().min(1).optional(),
+  projectScope: z.string().min(1).optional(),
+  projectPath: z.string().min(1).optional(),
+  sourceType: z.string().min(1),
+  sourceRef: z.string().min(1),
+  allowSecret: z.boolean().default(false)
+};
+
 const healthCheckSchema = {};
 
 const memoryStatsSchema = {};
@@ -138,6 +148,16 @@ interface WriteMemoryToolInput {
   projectPath?: string;
   importance?: number;
   confidence?: number;
+  allowSecret?: boolean;
+}
+
+interface ProposeMemoryUpdateToolInput {
+  content: string;
+  taskContext?: string;
+  projectScope?: string;
+  projectPath?: string;
+  sourceType: string;
+  sourceRef: string;
   allowSecret?: boolean;
 }
 
@@ -278,6 +298,55 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         memory: serializeMemory(memory),
         duplicateCandidates,
         warnings: embedding.warning ? [embedding.warning] : []
+      });
+    },
+
+    async proposeMemoryUpdate(input: ProposeMemoryUpdateToolInput) {
+      const proposal = buildMemoryProposal(input);
+      const duplicateCandidates = findDuplicateCandidatesForContent(
+        input.content,
+        store.listMemories({
+          limit: 500,
+          projectScope: input.projectScope,
+          projectPath: input.projectPath,
+          includeCrossProject: false
+        })
+      );
+      const reasons = [...proposal.reasons];
+      let recommendation: "create" | "update" | "skip" = duplicateCandidates.length ? "update" : "create";
+
+      if (!input.allowSecret && looksLikeSecret(input.content)) {
+        recommendation = "skip";
+        reasons.push("Content looks like a secret; do not store without an explicit override.");
+      }
+      if (isEphemeralMemory(input.content, input.taskContext)) {
+        recommendation = "skip";
+        reasons.push("Content looks temporary and is unlikely to help future work.");
+      }
+
+      return toolResult({
+        recommendation,
+        wouldWrite: false,
+        proposed: {
+          content: input.content,
+          layer: proposal.layer,
+          tags: proposal.tags,
+          sourceType: input.sourceType,
+          sourceRef: input.sourceRef,
+          projectScope: input.projectScope ?? null,
+          projectPath: input.projectPath ?? null,
+          importance: proposal.importance,
+          confidence: proposal.confidence
+        },
+        duplicateCandidates,
+        reasons,
+        nextAction:
+          recommendation === "create"
+            ? "Call write_memory with the proposed fields if the user approves."
+            : recommendation === "update"
+              ? "Consider update_memory for the best matching existing memory instead of creating a duplicate."
+              : "Do not write this memory unless the user explicitly overrides the recommendation.",
+        warnings: [] as string[]
       });
     },
 
@@ -633,6 +702,15 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
   );
 
   server.registerTool(
+    "propose_memory_update",
+    {
+      description: "Dry-run a memory write/update decision without modifying the database.",
+      inputSchema: proposeMemoryUpdateSchema
+    },
+    handlers.proposeMemoryUpdate
+  );
+
+  server.registerTool(
     "health_check",
     {
       description: "Check local memory database and embedding provider readiness.",
@@ -951,6 +1029,67 @@ function findDuplicateCandidatesForMemory(memory: Memory, candidates: Memory[]) 
       reason: "duplicate_content",
       summary: candidate.summary
     }));
+}
+
+function findDuplicateCandidatesForContent(content: string, candidates: Memory[]) {
+  const key = normalizeMemoryContent(content);
+  return candidates
+    .filter((candidate) => normalizeMemoryContent(candidate.content) === key)
+    .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || left.id - right.id)
+    .slice(0, 5)
+    .map((candidate) => ({
+      memoryId: candidate.id,
+      reason: "duplicate_content",
+      summary: candidate.summary
+    }));
+}
+
+function buildMemoryProposal(input: ProposeMemoryUpdateToolInput) {
+  const combined = `${input.taskContext ?? ""} ${input.content}`.toLowerCase();
+  const tags = new Set<string>();
+  const reasons: string[] = [];
+  let layer: MemoryLayer = "recall";
+  let importance = 0.5;
+  let confidence = 0.75;
+
+  if (/\b(rule|policy|preference|always|never|must|should|運用|方針|ルール|毎回|必ず)\b/i.test(combined)) {
+    layer = "core";
+    importance = 0.75;
+    confidence = 0.85;
+    reasons.push("Content looks like a durable rule or preference.");
+  } else {
+    reasons.push("Content looks useful as task recall.");
+  }
+
+  if (/daily|startup|session|operation|運用|作業開始|日常/.test(combined)) {
+    tags.add("daily-operation");
+  }
+  if (/mcp|sidecar|memory/.test(combined)) {
+    tags.add("codex-memory-sidecar");
+  }
+  if (/test|verify|smoke|検証|確認/.test(combined)) {
+    tags.add("verification");
+  }
+  if (!tags.size) {
+    tags.add("memory-candidate");
+  }
+
+  return {
+    layer,
+    tags: [...tags].sort(),
+    importance,
+    confidence,
+    reasons
+  };
+}
+
+function looksLikeSecret(content: string): boolean {
+  return /(?:api[_-]?key|token|password|secret)\s*[:=]/i.test(content) || /sk-(?:proj-)?[a-z0-9_-]{12,}/i.test(content);
+}
+
+function isEphemeralMemory(content: string, taskContext: string | undefined): boolean {
+  const combined = `${taskContext ?? ""} ${content}`.toLowerCase();
+  return /\b(temporary|one-off|scratch|just now|一時的|すぐ消す|今回だけ)\b/.test(combined);
 }
 
 function normalizeMemoryContent(content: string): string {

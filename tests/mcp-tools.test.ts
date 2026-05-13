@@ -72,6 +72,70 @@ describe("MCP tool handlers", () => {
     expect(store.getMemory(result.structuredContent.memory.id)?.status).toBe("active");
   });
 
+  test("propose_memory_update recommends creating useful durable memories without writing", async () => {
+    const tools = createToolHandlers(store);
+
+    const result = await tools.proposeMemoryUpdate({
+      content: "When using Codex Memory Sidecar, call start_memory_session before multi-file work.",
+      taskContext: "daily operation rule",
+      projectPath: tempDir,
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    expect(result.structuredContent.recommendation).toBe("create");
+    expect(result.structuredContent.proposed.layer).toBe("core");
+    expect(result.structuredContent.proposed.tags).toEqual(expect.arrayContaining(["daily-operation"]));
+    expect(result.structuredContent.duplicateCandidates).toEqual([]);
+    expect(result.structuredContent.wouldWrite).toBe(false);
+    expect(store.countRecords().memoryCount).toBe(0);
+  });
+
+  test("propose_memory_update detects duplicates and recommends update", async () => {
+    const tools = createToolHandlers(store);
+    const existing = await tools.writeMemory({
+      content: "Use start_memory_session before multi-file work.",
+      layer: "core",
+      tags: ["daily-operation"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectPath: tempDir
+    });
+
+    const result = await tools.proposeMemoryUpdate({
+      content: " use start_memory_session before multi-file work ",
+      taskContext: "daily operation rule",
+      projectPath: tempDir,
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    expect(result.structuredContent.recommendation).toBe("update");
+    expect(result.structuredContent.duplicateCandidates).toEqual([
+      expect.objectContaining({
+        memoryId: existing.structuredContent.memory.id,
+        reason: "duplicate_content"
+      })
+    ]);
+    expect(store.countRecords().memoryCount).toBe(1);
+  });
+
+  test("propose_memory_update rejects likely secrets without writing", async () => {
+    const tools = createToolHandlers(store);
+
+    const result = await tools.proposeMemoryUpdate({
+      content: "OPENAI_API_KEY=sk-proj-this-should-not-be-stored",
+      taskContext: "secret test",
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    expect(result.structuredContent.recommendation).toBe("skip");
+    expect(result.structuredContent.reasons.join(" ")).toMatch(/secret/i);
+    expect(result.structuredContent.wouldWrite).toBe(false);
+    expect(store.countRecords().memoryCount).toBe(0);
+  });
+
   test("write_memory duplicate candidates stay within project scope plus global memories", async () => {
     const tools = createToolHandlers(store);
     await tools.writeMemory({

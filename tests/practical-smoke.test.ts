@@ -9,6 +9,7 @@ describe("runPracticalSmoke", () => {
     expect(result.ok).toBe(true);
     expect(result.checks).toMatchObject({
       writeMemory: true,
+      proposeMemoryUpdate: true,
       scopedSearchExcludesBeta: true,
       crossProjectSearchIncludesBeta: true,
       startMemorySession: true,
