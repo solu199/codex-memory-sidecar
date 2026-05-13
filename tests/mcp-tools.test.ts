@@ -72,6 +72,29 @@ describe("MCP tool handlers", () => {
     expect(store.getMemory(result.structuredContent.memory.id)?.status).toBe("active");
   });
 
+  test("write_memory duplicate candidates stay within project scope plus global memories", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "Scoped duplicate candidate.",
+      layer: "core",
+      tags: ["scope"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "alpha"
+    });
+
+    const beta = await tools.writeMemory({
+      content: "Scoped duplicate candidate.",
+      layer: "core",
+      tags: ["scope"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "beta"
+    });
+
+    expect(beta.structuredContent.duplicateCandidates).toEqual([]);
+  });
+
   test("search_memory returns ranked matching memories", async () => {
     const tools = createToolHandlers(store);
     await tools.writeMemory({
@@ -92,6 +115,36 @@ describe("MCP tool handlers", () => {
 
     expect(result.structuredContent.memories).toHaveLength(1);
     expect(result.structuredContent.memories[0]?.summary).toContain("SQLite FTS");
+  });
+
+  test("write_memory and search_memory preserve project scope", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "Scoped MCP lookup phrase for alpha.",
+      layer: "recall",
+      tags: ["scope"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "alpha"
+    });
+    await tools.writeMemory({
+      content: "Scoped MCP lookup phrase for beta.",
+      layer: "recall",
+      tags: ["scope"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "beta"
+    });
+
+    const result = await tools.searchMemory({
+      query: "scoped MCP lookup phrase",
+      projectScope: "alpha",
+      limit: 10
+    });
+
+    expect(result.structuredContent.memories).toHaveLength(1);
+    expect(result.structuredContent.memories[0]?.projectScope).toBe("alpha");
+    expect(result.structuredContent.memories[0]?.summary).toContain("alpha");
   });
 
   test("search_memory uses embeddings when the provider is available", async () => {
@@ -264,6 +317,35 @@ describe("MCP tool handlers", () => {
     });
 
     expect(result.structuredContent.memories[0]?.status).toBe("forgotten");
+  });
+
+  test("list_memory_summaries can scope results", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "Alpha summary should be listed.",
+      layer: "recall",
+      tags: ["summary"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "alpha"
+    });
+    await tools.writeMemory({
+      content: "Beta summary should stay hidden.",
+      layer: "recall",
+      tags: ["summary"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "beta"
+    });
+
+    const result = await tools.listMemorySummaries({
+      projectScope: "alpha",
+      limit: 10
+    });
+
+    expect(result.structuredContent.memories).toHaveLength(1);
+    expect(result.structuredContent.memories[0]?.projectScope).toBe("alpha");
+    expect(result.structuredContent.memories[0]?.summary).toContain("Alpha");
   });
 
   test("list_memory_summaries keeps forgotten and superseded opt-ins independent", async () => {
@@ -573,7 +655,8 @@ describe("MCP tool handlers", () => {
         id: visible.structuredContent.memory.id,
         summary: expect.stringContaining("Backup inspection should show only a generated summary"),
         status: "active",
-        tags: ["backup"]
+        tags: ["backup"],
+        projectScope: "global"
       })
     ]);
     expect(JSON.stringify(result.structuredContent)).not.toContain(longVisibleContent);
@@ -585,6 +668,41 @@ describe("MCP tool handlers", () => {
       limit: 10
     });
     expect(withForgotten.structuredContent.memories.map((memory) => memory.status)).toEqual(["forgotten", "active"]);
+  });
+
+  test("inspect_backup can scope backup summaries", async () => {
+    const tools = createToolHandlers(store);
+    const alpha = await tools.writeMemory({
+      content: "Alpha backup scope summary.",
+      layer: "recall",
+      tags: ["backup"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "alpha"
+    });
+    await tools.writeMemory({
+      content: "Beta backup scope summary.",
+      layer: "recall",
+      tags: ["backup"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "beta"
+    });
+    const backup = await tools.backupMemory({});
+
+    const result = await tools.inspectBackup({
+      backupPath: backup.structuredContent.backupPath,
+      projectScope: "alpha",
+      limit: 10
+    });
+
+    expect(result.structuredContent.memories).toEqual([
+      expect.objectContaining({
+        id: alpha.structuredContent.memory.id,
+        projectScope: "alpha",
+        summary: "Alpha backup scope summary."
+      })
+    ]);
   });
 
   test("audit_memory returns recent audit events with optional memory filter", async () => {
@@ -653,6 +771,34 @@ describe("MCP tool handlers", () => {
     expect(store.getMemory(second.structuredContent.memory.id)?.status).toBe("active");
   });
 
+  test("consolidate_memory keeps duplicate proposals inside project scope", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "Scoped consolidation candidate.",
+      layer: "core",
+      tags: ["safety"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "alpha"
+    });
+    await tools.writeMemory({
+      content: "scoped consolidation candidate",
+      layer: "core",
+      tags: ["safety"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "beta"
+    });
+
+    const result = await tools.consolidateMemory({
+      projectScope: "alpha",
+      dryRun: true,
+      maxCandidates: 10
+    });
+
+    expect(result.structuredContent.proposedMerges).toEqual([]);
+  });
+
   test("consolidate_memory honors since when selecting candidates", async () => {
     const tools = createToolHandlers(store);
     await tools.writeMemory({
@@ -699,5 +845,69 @@ describe("MCP tool handlers", () => {
 
     expect(result.structuredContent.digest).toContain("local-first");
     expect(result.structuredContent.memories).toHaveLength(1);
+  });
+
+  test("memory_digest scopes projectPath lookups", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "Digest scoped memory for this project.",
+      layer: "recall",
+      tags: ["digest"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectPath: tempDir
+    });
+    await tools.writeMemory({
+      content: "Digest scoped memory for another project.",
+      layer: "recall",
+      tags: ["digest"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "other-project"
+    });
+
+    const result = await tools.memoryDigest({
+      taskDescription: "Digest scoped memory",
+      projectPath: tempDir,
+      maxTokens: 200
+    });
+
+    expect(result.structuredContent.digest).toContain("this project");
+    expect(result.structuredContent.digest).not.toContain("another project");
+    expect(result.structuredContent.memories).toHaveLength(1);
+  });
+
+  test("memory_digest supports projectScope without embedding raw projectPath", async () => {
+    const embedder = { embed: vi.fn(async () => [1, 0]) };
+    const tools = createToolHandlers(store, { embeddingProvider: embedder });
+    await tools.writeMemory({
+      content: "Project scope digest memory.",
+      layer: "recall",
+      tags: ["digest"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "alpha"
+    });
+    await tools.writeMemory({
+      content: "Other scope digest memory.",
+      layer: "recall",
+      tags: ["digest"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "beta"
+    });
+
+    const result = await tools.memoryDigest({
+      taskDescription: "Project scope digest",
+      projectScope: "alpha",
+      projectPath: tempDir,
+      maxTokens: 200
+    });
+    const retrievedEvents = store.listRecentEvents({ limit: 10 }).filter((event) => event.eventType === "retrieved");
+
+    expect(embedder.embed).toHaveBeenLastCalledWith("Project scope digest");
+    expect(result.structuredContent.digest).toContain("Project scope");
+    expect(result.structuredContent.digest).not.toContain("Other scope");
+    expect(JSON.stringify(retrievedEvents[0]?.payload)).not.toContain(tempDir);
   });
 });

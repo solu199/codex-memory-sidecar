@@ -1,6 +1,6 @@
 import os from "node:os";
 import path from "node:path";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import Database from "better-sqlite3";
@@ -259,6 +259,107 @@ describe("MemoryStore", () => {
     expect(results.map((result) => result.memory.id)).toEqual([tagged.id]);
   });
 
+  test("scopes keyword search to the requested project plus global memories", () => {
+    const global = store.createMemory({
+      content: "Shared scoped lookup policy.",
+      layer: "core",
+      tags: ["scope"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const sameProject = store.createMemory({
+      content: "Shared scoped lookup policy for project alpha.",
+      layer: "recall",
+      tags: ["scope"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "alpha"
+    });
+    store.createMemory({
+      content: "Shared scoped lookup policy for project beta.",
+      layer: "recall",
+      tags: ["scope"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "beta"
+    });
+
+    const results = store.searchMemory({
+      query: "shared scoped lookup policy",
+      projectScope: "alpha",
+      limit: 10
+    });
+
+    expect(results.map((result) => result.memory.id)).toEqual([global.id, sameProject.id]);
+    expect(results.map((result) => result.memory.projectScope)).toEqual(["global", "alpha"]);
+  });
+
+  test("scopes hybrid search before vector scoring", () => {
+    const sameProject = store.createMemory({
+      content: "Semantic scoped memory for alpha.",
+      layer: "recall",
+      tags: ["scope"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "alpha",
+      embedding: [1, 0, 0]
+    });
+    store.createMemory({
+      content: "Semantic scoped memory for beta.",
+      layer: "recall",
+      tags: ["scope"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "beta",
+      embedding: [1, 0, 0]
+    });
+
+    const results = store.searchMemory({
+      query: "semantic scoped",
+      queryEmbedding: [1, 0, 0],
+      projectScope: "alpha",
+      limit: 10
+    });
+
+    expect(results.map((result) => result.memory.id)).toEqual([sameProject.id]);
+  });
+
+  test("allows explicit cross-project keyword search and audits the scope decision", () => {
+    const alpha = store.createMemory({
+      content: "Cross project lookup phrase for alpha.",
+      layer: "recall",
+      tags: ["scope"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "alpha"
+    });
+    const beta = store.createMemory({
+      content: "Cross project lookup phrase for beta.",
+      layer: "recall",
+      tags: ["scope"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "beta"
+    });
+
+    const results = store.searchMemory({
+      query: "cross project lookup phrase",
+      projectScope: "alpha",
+      includeCrossProject: true,
+      limit: 10
+    });
+    const retrievedEvents = store.listRecentEvents({ limit: 10 }).filter((event) => event.eventType === "retrieved");
+
+    expect(results.map((result) => result.memory.id).sort((left, right) => left - right)).toEqual([alpha.id, beta.id]);
+    expect(retrievedEvents[0]?.payload).toMatchObject({
+      query: "cross project lookup phrase",
+      projectScope: "alpha",
+      includeCrossProject: true,
+      scopeFilterApplied: false,
+      resultProjectScopes: ["alpha", "beta"]
+    });
+  });
+
   test("records one retrieved audit event per keyword search", () => {
     const first = store.createMemory({
       content: "Shared audit lookup phrase.",
@@ -287,8 +388,11 @@ describe("MemoryStore", () => {
     expect(retrievedEvents[0]?.memoryId).toBe(first.id);
     expect(retrievedEvents[0]?.payload).toEqual({
       query: "shared audit lookup phrase",
+      includeCrossProject: false,
+      scopeFilterApplied: false,
       resultCount: 2,
-      memoryIds: [first.id, second.id]
+      memoryIds: [first.id, second.id],
+      resultProjectScopes: ["global"]
     });
     expect(store.getMemory(first.id)?.lastAccessedAt).toBeInstanceOf(Date);
     expect(store.getMemory(second.id)?.lastAccessedAt).toBeInstanceOf(Date);
@@ -362,8 +466,11 @@ describe("MemoryStore", () => {
     expect(retrievedEvents[0]?.payload).toEqual({
       query: "semantic lookup",
       hybrid: true,
+      includeCrossProject: false,
+      scopeFilterApplied: false,
       resultCount: 2,
-      memoryIds: [first.id, second.id]
+      memoryIds: [first.id, second.id],
+      resultProjectScopes: ["global"]
     });
     expect(store.getMemory(first.id)?.lastAccessedAt).toBeInstanceOf(Date);
     expect(store.getMemory(second.id)?.lastAccessedAt).toBeInstanceOf(Date);
@@ -504,6 +611,44 @@ describe("MemoryStore", () => {
     expect(second.backupPath).not.toBe(first.backupPath);
     expect(existsSync(first.backupPath)).toBe(true);
     expect(existsSync(second.backupPath)).toBe(true);
+  });
+
+  test("plans default backup retention without deleting files", () => {
+    const backupDir = path.join(tempDir, "backups");
+    const oldest = createBackupFixture(backupDir, "memory-20260514-010000-000.sqlite", "oldest", new Date("2026-05-14T01:00:00Z"));
+    const middle = createBackupFixture(backupDir, "memory-20260514-020000-000.sqlite", "middle", new Date("2026-05-14T02:00:00Z"));
+    const newest = createBackupFixture(backupDir, "memory-20260514-030000-000.sqlite", "newest", new Date("2026-05-14T03:00:00Z"));
+
+    const plan = store.planBackupRetention({ keepCount: 2 });
+
+    expect(plan.backupDir).toBe(backupDir);
+    expect(plan.keepCount).toBe(2);
+    expect(plan.backups.map((backup) => backup.backupPath)).toEqual([newest, middle, oldest]);
+    expect(plan.kept.map((backup) => backup.backupPath)).toEqual([newest, middle]);
+    expect(plan.prunable.map((backup) => backup.backupPath)).toEqual([oldest]);
+    expect(plan.prunable[0]?.sizeBytes).toBe(Buffer.byteLength("oldest"));
+    expect(plan.prunable[0]?.mtime).toEqual(new Date("2026-05-14T01:00:00Z"));
+    expect(existsSync(oldest)).toBe(true);
+    expect(existsSync(middle)).toBe(true);
+    expect(existsSync(newest)).toBe(true);
+  });
+
+  test("plans retention only for default backup file names", () => {
+    const backupDir = path.join(tempDir, "backups");
+    const defaultBackup = createBackupFixture(
+      backupDir,
+      "memory-20260514-010000-000.sqlite",
+      "default",
+      new Date("2026-05-14T01:00:00Z")
+    );
+    createBackupFixture(backupDir, "memory-manual.sqlite", "manual", new Date("2026-05-14T02:00:00Z"));
+    createBackupFixture(backupDir, "not-memory-20260514-030000-000.sqlite", "other", new Date("2026-05-14T03:00:00Z"));
+
+    const plan = store.planBackupRetention({ keepCount: 0 });
+
+    expect(plan.backups.map((backup) => backup.backupPath)).toEqual([defaultBackup]);
+    expect(plan.kept).toEqual([]);
+    expect(plan.prunable.map((backup) => backup.backupPath)).toEqual([defaultBackup]);
   });
 
   test("verifies a readable SQLite backup without modifying the active store", async () => {
@@ -667,4 +812,42 @@ describe("MemoryStore", () => {
 
     expect(memories.map((memory) => memory.id)).toEqual([core.id]);
   });
+
+  test("lists memories within a project scope plus global memories", () => {
+    const global = store.createMemory({
+      content: "Global scoped listing memory.",
+      layer: "core",
+      tags: ["list"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const alpha = store.createMemory({
+      content: "Alpha scoped listing memory.",
+      layer: "recall",
+      tags: ["list"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "alpha"
+    });
+    store.createMemory({
+      content: "Beta scoped listing memory.",
+      layer: "recall",
+      tags: ["list"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "beta"
+    });
+
+    const memories = store.listMemories({ projectScope: "alpha", limit: 10 });
+
+    expect(memories.map((memory) => memory.id)).toEqual([alpha.id, global.id]);
+  });
 });
+
+function createBackupFixture(backupDir: string, fileName: string, content: string, mtime: Date): string {
+  mkdirSync(backupDir, { recursive: true });
+  const backupPath = path.join(backupDir, fileName);
+  writeFileSync(backupPath, content);
+  utimesSync(backupPath, mtime, mtime);
+  return backupPath;
+}

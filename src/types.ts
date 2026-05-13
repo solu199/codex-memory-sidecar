@@ -8,6 +8,7 @@ export interface Memory {
   content: string;
   summary: string;
   tags: string[];
+  projectScope: string;
   sourceType: string;
   sourceRef: string;
   importance: number;
@@ -40,6 +41,8 @@ export interface CreateMemoryInput {
   summary?: string;
   expiresAt?: Date | null;
   allowSecret?: boolean;
+  projectScope?: string;
+  projectPath?: string;
 }
 
 export interface UpdateMemoryInput {
@@ -67,6 +70,9 @@ export interface SearchMemoryInput {
   limit?: number;
   includeSuperseded?: boolean;
   hybridCandidateLimit?: number;
+  projectScope?: string;
+  projectPath?: string;
+  includeCrossProject?: boolean;
 }
 
 export interface SearchMemoryResult {
@@ -89,6 +95,25 @@ export interface MemoryBackup {
   createdAt: Date;
 }
 
+export interface BackupRetentionPlanInput {
+  keepCount?: number;
+}
+
+export interface BackupRetentionPlanEntry {
+  backupPath: string;
+  sizeBytes: number;
+  mtime: Date;
+}
+
+export interface BackupRetentionPlan {
+  backupDir: string;
+  keepCount: number;
+  backups: BackupRetentionPlanEntry[];
+  kept: BackupRetentionPlanEntry[];
+  prunable: BackupRetentionPlanEntry[];
+  plannedAt: Date;
+}
+
 export interface VerifyBackupInput {
   backupPath: string;
 }
@@ -109,6 +134,7 @@ export interface BackupMemorySummary {
   layer: MemoryLayer;
   summary: string;
   tags: string[];
+  projectScope: string;
   sourceType: string;
   sourceRef: string;
   importance: number;
@@ -126,6 +152,9 @@ export interface InspectBackupInput {
   includeSuperseded?: boolean;
   includeForgotten?: boolean;
   limit?: number;
+  projectScope?: string;
+  projectPath?: string;
+  includeCrossProject?: boolean;
 }
 
 export interface BackupInspection extends BackupVerification {
@@ -176,4 +205,7 @@ export interface ListMemoriesInput {
   includeForgotten?: boolean;
   since?: string;
   limit?: number;
+  projectScope?: string;
+  projectPath?: string;
+  includeCrossProject?: boolean;
 }

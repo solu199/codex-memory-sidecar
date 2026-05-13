@@ -13,6 +13,8 @@ const writeMemorySchema = {
   tags: z.array(z.string()).default([]),
   sourceType: z.string().min(1),
   sourceRef: z.string().min(1),
+  projectScope: z.string().min(1).optional(),
+  projectPath: z.string().min(1).optional(),
   importance: z.number().min(0).max(1).default(0.5),
   confidence: z.number().min(0).max(1).default(0.5),
   allowSecret: z.boolean().default(false)
@@ -33,7 +35,10 @@ const listMemorySummariesSchema = {
   includeSuperseded: z.boolean().default(false),
   includeForgotten: z.boolean().default(false),
   since: z.string().optional(),
-  limit: z.number().int().min(1).max(100).default(20)
+  limit: z.number().int().min(1).max(100).default(20),
+  projectScope: z.string().min(1).optional(),
+  projectPath: z.string().min(1).optional(),
+  includeCrossProject: z.boolean().default(false)
 };
 
 const searchMemorySchema = {
@@ -42,7 +47,10 @@ const searchMemorySchema = {
   tags: z.array(z.string()).optional(),
   limit: z.number().int().min(1).max(50).default(8),
   includeSuperseded: z.boolean().default(false),
-  includeEmbedding: z.boolean().default(false)
+  includeEmbedding: z.boolean().default(false),
+  projectScope: z.string().min(1).optional(),
+  projectPath: z.string().min(1).optional(),
+  includeCrossProject: z.boolean().default(false)
 };
 
 const updateMemorySchema = {
@@ -64,12 +72,17 @@ const consolidateMemorySchema = {
   layers: z.array(layerSchema).optional(),
   since: z.string().optional(),
   dryRun: z.boolean().default(true),
-  maxCandidates: z.number().int().min(1).max(100).default(20)
+  maxCandidates: z.number().int().min(1).max(100).default(20),
+  projectScope: z.string().min(1).optional(),
+  projectPath: z.string().min(1).optional(),
+  includeCrossProject: z.boolean().default(false)
 };
 
 const memoryDigestSchema = {
   taskDescription: z.string().min(1),
+  projectScope: z.string().min(1).optional(),
   projectPath: z.string().optional(),
+  includeCrossProject: z.boolean().default(false),
   maxTokens: z.number().int().min(50).max(4000).default(800)
 };
 
@@ -86,7 +99,10 @@ const inspectBackupSchema = {
   layers: z.array(layerSchema).optional(),
   includeSuperseded: z.boolean().default(false),
   includeForgotten: z.boolean().default(false),
-  limit: z.number().int().min(1).max(100).default(20)
+  limit: z.number().int().min(1).max(100).default(20),
+  projectScope: z.string().min(1).optional(),
+  projectPath: z.string().min(1).optional(),
+  includeCrossProject: z.boolean().default(false)
 };
 
 const auditMemorySchema = {
@@ -105,6 +121,8 @@ interface WriteMemoryToolInput {
   tags?: string[];
   sourceType: string;
   sourceRef: string;
+  projectScope?: string;
+  projectPath?: string;
   importance?: number;
   confidence?: number;
   allowSecret?: boolean;
@@ -125,6 +143,9 @@ interface ListMemorySummariesToolInput {
   includeForgotten?: boolean;
   since?: string;
   limit?: number;
+  projectScope?: string;
+  projectPath?: string;
+  includeCrossProject?: boolean;
 }
 
 interface SearchMemoryToolInput {
@@ -134,6 +155,9 @@ interface SearchMemoryToolInput {
   limit?: number;
   includeSuperseded?: boolean;
   includeEmbedding?: boolean;
+  projectScope?: string;
+  projectPath?: string;
+  includeCrossProject?: boolean;
 }
 
 interface UpdateMemoryToolInput {
@@ -156,11 +180,16 @@ interface ConsolidateMemoryToolInput {
   since?: string;
   dryRun?: boolean;
   maxCandidates?: number;
+  projectScope?: string;
+  projectPath?: string;
+  includeCrossProject?: boolean;
 }
 
 interface MemoryDigestToolInput {
   taskDescription: string;
+  projectScope?: string;
   projectPath?: string;
+  includeCrossProject?: boolean;
   maxTokens?: number;
 }
 
@@ -178,6 +207,9 @@ interface InspectBackupToolInput {
   includeSuperseded?: boolean;
   includeForgotten?: boolean;
   limit?: number;
+  projectScope?: string;
+  projectPath?: string;
+  includeCrossProject?: boolean;
 }
 
 interface AuditMemoryToolInput {
@@ -197,6 +229,8 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         content: input.content,
         layer: input.layer,
         tags: input.tags,
+        projectScope: input.projectScope,
+        projectPath: input.projectPath,
         sourceType: input.sourceType,
         sourceRef: input.sourceRef,
         importance: input.importance,
@@ -204,7 +238,15 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         allowSecret: input.allowSecret ?? false,
         embedding: embedding.value
       });
-      const duplicateCandidates = findDuplicateCandidatesForMemory(memory, store.listMemories({ limit: 500 }));
+      const duplicateCandidates = findDuplicateCandidatesForMemory(
+        memory,
+        store.listMemories({
+          limit: 500,
+          projectScope: input.projectScope,
+          projectPath: input.projectPath,
+          includeCrossProject: false
+        })
+      );
 
       return toolResult({
         memory: serializeMemory(memory),
@@ -279,7 +321,10 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         includeSuperseded: input.includeSuperseded ?? false,
         includeForgotten: input.includeForgotten ?? false,
         since: input.since,
-        limit: input.limit ?? 20
+        limit: input.limit ?? 20,
+        projectScope: input.projectScope,
+        projectPath: input.projectPath,
+        includeCrossProject: input.includeCrossProject ?? false
       });
 
       return toolResult({
@@ -295,7 +340,10 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         layers: input.layers,
         tags: input.tags,
         limit: input.limit,
-        includeSuperseded: input.includeSuperseded ?? false
+        includeSuperseded: input.includeSuperseded ?? false,
+        projectScope: input.projectScope,
+        projectPath: input.projectPath,
+        includeCrossProject: input.includeCrossProject ?? false
       });
 
       return toolResult({
@@ -340,7 +388,10 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       const memories = store.listMemories({
         layers: input.layers,
         since: input.since,
-        limit: input.maxCandidates ?? 20
+        limit: input.maxCandidates ?? 20,
+        projectScope: input.projectScope,
+        projectPath: input.projectPath,
+        includeCrossProject: input.includeCrossProject ?? false
       });
       const proposedMerges = findDuplicateMergeProposals(memories);
 
@@ -358,9 +409,16 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
     },
 
     async memoryDigest(input: MemoryDigestToolInput) {
-      const query = [input.taskDescription, input.projectPath].filter(Boolean).join(" ");
+      const query = input.taskDescription;
       const embedding = await tryEmbed(options.embeddingProvider, query);
-      const results = store.searchMemory({ query, queryEmbedding: embedding.value, limit: 8 });
+      const results = store.searchMemory({
+        query,
+        queryEmbedding: embedding.value,
+        limit: 8,
+        projectScope: input.projectScope,
+        projectPath: input.projectPath,
+        includeCrossProject: input.includeCrossProject ?? false
+      });
       const serialized = results.map((result) => serializeSearchResult(result));
       const digest = compactDigest(serialized, input.maxTokens ?? 800);
 
@@ -402,7 +460,10 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         layers: input.layers,
         includeSuperseded: input.includeSuperseded ?? false,
         includeForgotten: input.includeForgotten ?? false,
-        limit: input.limit ?? 20
+        limit: input.limit ?? 20,
+        projectScope: input.projectScope,
+        projectPath: input.projectPath,
+        includeCrossProject: input.includeCrossProject ?? false
       });
 
       return toolResult({
@@ -594,6 +655,7 @@ function serializeMemory(memory: Memory, options: { includeEmbedding?: boolean }
     content: memory.content,
     summary: memory.summary,
     tags: memory.tags,
+    projectScope: memory.projectScope,
     sourceType: memory.sourceType,
     sourceRef: memory.sourceRef,
     importance: memory.importance,
@@ -613,6 +675,7 @@ function serializeMemorySummary(memory: Memory) {
     layer: memory.layer,
     summary: memory.summary,
     tags: memory.tags,
+    projectScope: memory.projectScope,
     sourceType: memory.sourceType,
     sourceRef: memory.sourceRef,
     importance: memory.importance,
@@ -631,6 +694,7 @@ function serializeBackupMemorySummary(memory: ReturnType<MemoryStore["inspectBac
     layer: memory.layer,
     summary: memory.summary,
     tags: memory.tags,
+    projectScope: memory.projectScope,
     sourceType: memory.sourceType,
     sourceRef: memory.sourceRef,
     importance: memory.importance,
