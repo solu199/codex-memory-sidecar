@@ -112,6 +112,7 @@ export interface ListRecentEventsInput {
 export interface ListMemoriesInput {
   layers?: MemoryLayer[];
   includeSuperseded?: boolean;
+  includeForgotten?: boolean;
   since?: string;
   limit?: number;
 }
