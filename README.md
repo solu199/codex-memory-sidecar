@@ -6,6 +6,7 @@ Codex app のためのローカル MCP メモリサイドカーです。
 
 - `search_memory`
 - `read_memory`
+- `list_memory_summaries`
 - `health_check`
 - `write_memory`
 - `update_memory`

@@ -247,8 +247,18 @@ export class MemoryStore {
 
   listMemories(input: ListMemoriesInput = {}): Memory[] {
     const limit = Math.max(1, Math.min(input.limit ?? 100, 500));
-    const clauses = [input.includeSuperseded ? "status != 'forgotten'" : "status = 'active'"];
+    const statuses: Memory["status"][] = ["active"];
+    if (input.includeSuperseded) {
+      statuses.push("superseded");
+    }
+    if (input.includeForgotten) {
+      statuses.push("forgotten");
+    }
+    const clauses = [`status IN (${statuses.map((_, index) => `@status${index}`).join(", ")})`];
     const params: Record<string, unknown> = { limit };
+    statuses.forEach((status, index) => {
+      params[`status${index}`] = status;
+    });
 
     if (input.layers?.length) {
       clauses.push(`layer IN (${input.layers.map((_, index) => `@layer${index}`).join(", ")})`);

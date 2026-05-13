@@ -25,6 +25,14 @@ const readMemorySchema = {
   includeForgotten: z.boolean().default(false)
 };
 
+const listMemorySummariesSchema = {
+  layers: z.array(layerSchema).optional(),
+  includeSuperseded: z.boolean().default(false),
+  includeForgotten: z.boolean().default(false),
+  since: z.string().optional(),
+  limit: z.number().int().min(1).max(100).default(20)
+};
+
 const searchMemorySchema = {
   query: z.string().min(1),
   layers: z.array(layerSchema).optional(),
@@ -95,6 +103,14 @@ type HealthCheckToolInput = Record<string, never>;
 interface ReadMemoryToolInput {
   memoryId: number;
   includeForgotten?: boolean;
+}
+
+interface ListMemorySummariesToolInput {
+  layers?: MemoryLayer[];
+  includeSuperseded?: boolean;
+  includeForgotten?: boolean;
+  since?: string;
+  limit?: number;
 }
 
 interface SearchMemoryToolInput {
@@ -211,6 +227,20 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
 
       return toolResult({
         memory: serializeMemory(memory)
+      });
+    },
+
+    async listMemorySummaries(input: ListMemorySummariesToolInput) {
+      const memories = store.listMemories({
+        layers: input.layers,
+        includeSuperseded: input.includeSuperseded ?? false,
+        includeForgotten: input.includeForgotten ?? false,
+        since: input.since,
+        limit: input.limit ?? 20
+      });
+
+      return toolResult({
+        memories: memories.map(serializeMemorySummary)
       });
     },
 
@@ -376,6 +406,15 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
   );
 
   server.registerTool(
+    "list_memory_summaries",
+    {
+      description: "List memory metadata and summaries without returning full memory content.",
+      inputSchema: listMemorySummariesSchema
+    },
+    handlers.listMemorySummaries
+  );
+
+  server.registerTool(
     "update_memory",
     {
       description: "Update an existing memory while preserving audit history.",
@@ -471,6 +510,24 @@ function serializeMemory(memory: Memory) {
     importance: memory.importance,
     confidence: memory.confidence,
     embedding: memory.embedding,
+    createdAt: memory.createdAt.toISOString(),
+    updatedAt: memory.updatedAt.toISOString(),
+    lastAccessedAt: memory.lastAccessedAt?.toISOString() ?? null,
+    expiresAt: memory.expiresAt?.toISOString() ?? null,
+    status: memory.status
+  };
+}
+
+function serializeMemorySummary(memory: Memory) {
+  return {
+    id: memory.id,
+    layer: memory.layer,
+    summary: memory.summary,
+    tags: memory.tags,
+    sourceType: memory.sourceType,
+    sourceRef: memory.sourceRef,
+    importance: memory.importance,
+    confidence: memory.confidence,
     createdAt: memory.createdAt.toISOString(),
     updatedAt: memory.updatedAt.toISOString(),
     lastAccessedAt: memory.lastAccessedAt?.toISOString() ?? null,

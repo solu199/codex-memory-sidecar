@@ -3,6 +3,7 @@ import path from "node:path";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import Database from "better-sqlite3";
 
 import { createToolHandlers } from "../src/mcp-tools.js";
 import { MemoryStore } from "../src/memory-store.js";
@@ -141,6 +142,92 @@ describe("MCP tool handlers", () => {
     });
 
     expect(result.structuredContent.memory.status).toBe("forgotten");
+  });
+
+  test("list_memory_summaries returns metadata without full content", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "Full content should stay out of summary listings.",
+      layer: "core",
+      tags: ["summary"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const result = await tools.listMemorySummaries({
+      layers: ["core"],
+      limit: 10
+    });
+
+    expect(result.structuredContent.memories).toHaveLength(1);
+    expect(result.structuredContent.memories[0]).toMatchObject({
+      layer: "core",
+      summary: "Full content should stay out of summary listings.",
+      tags: ["summary"],
+      status: "active"
+    });
+    expect(JSON.stringify(result.structuredContent.memories[0])).not.toContain("\"content\"");
+  });
+
+  test("list_memory_summaries excludes forgotten records by default", async () => {
+    const tools = createToolHandlers(store);
+    const created = await tools.writeMemory({
+      content: "Forgotten summaries should require opt-in.",
+      layer: "recall",
+      tags: ["summary"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    await tools.forgetMemory({
+      memoryId: created.structuredContent.memory.id,
+      reason: "summary filter test"
+    });
+
+    expect((await tools.listMemorySummaries({ limit: 10 })).structuredContent.memories).toEqual([]);
+
+    const result = await tools.listMemorySummaries({
+      includeForgotten: true,
+      limit: 10
+    });
+
+    expect(result.structuredContent.memories[0]?.status).toBe("forgotten");
+  });
+
+  test("list_memory_summaries keeps forgotten and superseded opt-ins independent", async () => {
+    const tools = createToolHandlers(store);
+    const forgotten = await tools.writeMemory({
+      content: "Forgotten summaries need their own opt-in.",
+      layer: "recall",
+      tags: ["summary"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const superseded = await tools.writeMemory({
+      content: "Superseded summaries need their own opt-in.",
+      layer: "recall",
+      tags: ["summary"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    await tools.forgetMemory({
+      memoryId: forgotten.structuredContent.memory.id,
+      reason: "summary filter test"
+    });
+    const db = new Database(path.join(tempDir, "memory.sqlite"));
+    db.prepare("UPDATE memories SET status = 'superseded' WHERE id = ?").run(superseded.structuredContent.memory.id);
+    db.close();
+
+    const forgottenOnly = await tools.listMemorySummaries({
+      includeForgotten: true,
+      limit: 10
+    });
+    const supersededOnly = await tools.listMemorySummaries({
+      includeSuperseded: true,
+      limit: 10
+    });
+
+    expect(forgottenOnly.structuredContent.memories.map((memory) => memory.status)).toEqual(["forgotten"]);
+    expect(supersededOnly.structuredContent.memories.map((memory) => memory.status)).toEqual(["superseded"]);
   });
 
   test("write_memory falls back when embedding generation fails", async () => {
