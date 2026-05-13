@@ -96,6 +96,28 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       projectPath,
       limit: 10
     });
+    const duplicateRule = await tools.writeMemory({
+      content: "Call start_memory_session before multi-file implementation work.",
+      layer: "core",
+      tags: ["consolidation"],
+      sourceType: "smoke",
+      sourceRef: "npm run smoke:practical",
+      projectPath
+    });
+    const nearDuplicateRule = await tools.writeMemory({
+      content: "Before multi file implementation work, call start memory session.",
+      layer: "core",
+      tags: ["consolidation"],
+      sourceType: "smoke",
+      sourceRef: "npm run smoke:practical",
+      projectPath
+    });
+    const consolidation = await tools.consolidateMemory({
+      layers: ["core"],
+      dryRun: true,
+      projectPath,
+      maxCandidates: 10
+    });
     const repairDb = new Database(databasePath);
     try {
       repairDb.prepare("DELETE FROM memories_fts WHERE rowid = ?").run(alpha.structuredContent.memory.id);
@@ -124,6 +146,13 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         session.structuredContent.ready === true &&
         session.structuredContent.digest.includes("alpha project") &&
         !JSON.stringify(session.structuredContent).includes("beta project"),
+      consolidateNearDuplicate:
+        consolidation.structuredContent.proposedMerges.some(
+          (proposal) =>
+            proposal.reason === "near_duplicate_content" &&
+            proposal.memoryIds.includes(duplicateRule.structuredContent.memory.id) &&
+            proposal.memoryIds.includes(nearDuplicateRule.structuredContent.memory.id)
+        ) && store.getMemory(nearDuplicateRule.structuredContent.memory.id)?.status === "active",
       digestUsesScopedMemory:
         digest.structuredContent.digest.includes("alpha project") &&
         !digest.structuredContent.digest.includes("beta project"),

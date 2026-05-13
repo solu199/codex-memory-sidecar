@@ -776,7 +776,7 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
   server.registerTool(
     "consolidate_memory",
     {
-      description: "Return dry-run consolidation proposals such as duplicate_content merge candidates.",
+      description: "Return dry-run consolidation proposals such as duplicate_content and near_duplicate_content merge candidates.",
       inputSchema: consolidateMemorySchema
     },
     handlers.consolidateMemory
@@ -1006,7 +1006,7 @@ function findDuplicateMergeProposals(memories: Memory[]) {
     groups.set(key, group);
   }
 
-  return [...groups.values()]
+  const exactProposals = [...groups.values()]
     .filter((group) => group.length > 1)
     .map((group) => {
       const ordered = [...group].sort((left, right) => left.id - right.id);
@@ -1016,6 +1016,52 @@ function findDuplicateMergeProposals(memories: Memory[]) {
         summary: ordered[0]?.summary ?? ""
       };
     });
+  const exactPairKeys = new Set<string>();
+  for (const proposal of exactProposals) {
+    for (let left = 0; left < proposal.memoryIds.length; left += 1) {
+      for (let right = left + 1; right < proposal.memoryIds.length; right += 1) {
+        exactPairKeys.add(pairKey(proposal.memoryIds[left] ?? 0, proposal.memoryIds[right] ?? 0));
+      }
+    }
+  }
+
+  return [...exactProposals, ...findNearDuplicateMergeProposals(memories, exactPairKeys)];
+}
+
+function findNearDuplicateMergeProposals(memories: Memory[], excludedPairs: Set<string>) {
+  const proposals: Array<{
+    memoryIds: number[];
+    reason: "near_duplicate_content";
+    summary: string;
+    confidence: number;
+  }> = [];
+
+  for (let leftIndex = 0; leftIndex < memories.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < memories.length; rightIndex += 1) {
+      const left = memories[leftIndex];
+      const right = memories[rightIndex];
+      if (!left || !right || left.layer !== right.layer) {
+        continue;
+      }
+      const key = pairKey(left.id, right.id);
+      if (excludedPairs.has(key)) {
+        continue;
+      }
+      const confidence = contentSimilarity(left.content, right.content);
+      if (confidence < 0.72) {
+        continue;
+      }
+      const ordered = [left, right].sort((a, b) => a.id - b.id);
+      proposals.push({
+        memoryIds: ordered.map((memory) => memory.id),
+        reason: "near_duplicate_content",
+        summary: ordered[0]?.summary ?? "",
+        confidence: Number(confidence.toFixed(4))
+      });
+    }
+  }
+
+  return proposals.sort((left, right) => left.memoryIds[0] - right.memoryIds[0] || left.memoryIds[1] - right.memoryIds[1]);
 }
 
 function findDuplicateCandidatesForMemory(memory: Memory, candidates: Memory[]) {
@@ -1090,6 +1136,65 @@ function looksLikeSecret(content: string): boolean {
 function isEphemeralMemory(content: string, taskContext: string | undefined): boolean {
   const combined = `${taskContext ?? ""} ${content}`.toLowerCase();
   return /\b(temporary|one-off|scratch|just now|一時的|すぐ消す|今回だけ)\b/.test(combined);
+}
+
+function contentSimilarity(left: string, right: string): number {
+  const leftTokens = tokenizeMemoryContent(left);
+  const rightTokens = tokenizeMemoryContent(right);
+  const tokenSimilarity =
+    leftTokens.size && rightTokens.size
+      ? setIntersectionSize(leftTokens, rightTokens) / new Set([...leftTokens, ...rightTokens]).size
+      : 0;
+  return Math.max(tokenSimilarity, characterSimilarity(left, right));
+}
+
+function tokenizeMemoryContent(content: string): Set<string> {
+  const stopWords = new Set(["a", "an", "and", "are", "be", "for", "in", "is", "of", "the", "to", "with"]);
+  return new Set(
+    content
+      .toLowerCase()
+      .replace(/[_-]/g, " ")
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length > 2 && !stopWords.has(token))
+  );
+}
+
+function characterSimilarity(left: string, right: string): number {
+  const leftShingles = characterShingles(left);
+  const rightShingles = characterShingles(right);
+  if (!leftShingles.size || !rightShingles.size) {
+    return 0;
+  }
+  return (2 * setIntersectionSize(leftShingles, rightShingles)) / (leftShingles.size + rightShingles.size);
+}
+
+function characterShingles(content: string): Set<string> {
+  const normalized = content
+    .toLowerCase()
+    .replace(/[_\-\s]+/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+  if (normalized.length <= 2) {
+    return normalized ? new Set([normalized]) : new Set();
+  }
+  const shingles = new Set<string>();
+  for (let index = 0; index <= normalized.length - 2; index += 1) {
+    shingles.add(normalized.slice(index, index + 2));
+  }
+  return shingles;
+}
+
+function setIntersectionSize<T>(left: Set<T>, right: Set<T>): number {
+  let count = 0;
+  for (const value of left) {
+    if (right.has(value)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function pairKey(left: number, right: number): string {
+  return left < right ? `${left}:${right}` : `${right}:${left}`;
 }
 
 function normalizeMemoryContent(content: string): string {
