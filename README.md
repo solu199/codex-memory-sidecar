@@ -35,6 +35,7 @@ Codex app のためのローカル MCP メモリサイドカーです。
 - `memory_stats` で本文なしの件数集計を確認できます。
 - `audit_memory` で最近の audit event を確認できます。
 - `consolidate_memory` は dry-run 提案を返すだけで、自動適用はしません。
+- `write_memory` は保存後、既存メモリとの明確な重複候補があれば `duplicateCandidates` に返します。
 - `read_memory` / `search_memory` は既定では embedding 配列を返しません。必要な場合だけ `includeEmbedding: true` を指定します。
 - 明らかな secret らしき内容は、明示 override なしでは保存を拒否します。
 - 書き込み、更新、忘却、検索は audit event として記録されます。検索時は 1 回の検索につき 1 件の `retrieved` event を記録し、query 文字列、`resultCount`、`memoryIds` を payload に含めます。

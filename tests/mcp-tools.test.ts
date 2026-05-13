@@ -43,6 +43,35 @@ describe("MCP tool handlers", () => {
     expect(result.content[0]?.type).toBe("text");
   });
 
+  test("write_memory returns duplicate candidates for matching existing memories", async () => {
+    const tools = createToolHandlers(store);
+    const existing = await tools.writeMemory({
+      content: "Prefer logical delete before hard delete.",
+      layer: "core",
+      tags: ["safety"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const result = await tools.writeMemory({
+      content: " prefer logical delete before hard delete ",
+      layer: "core",
+      tags: ["safety"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    expect(result.structuredContent.memory.id).not.toBe(existing.structuredContent.memory.id);
+    expect(result.structuredContent.duplicateCandidates).toEqual([
+      {
+        memoryId: existing.structuredContent.memory.id,
+        reason: "duplicate_content",
+        summary: "Prefer logical delete before hard delete."
+      }
+    ]);
+    expect(store.getMemory(result.structuredContent.memory.id)?.status).toBe("active");
+  });
+
   test("search_memory returns ranked matching memories", async () => {
     const tools = createToolHandlers(store);
     await tools.writeMemory({
