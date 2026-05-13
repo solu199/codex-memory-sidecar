@@ -94,7 +94,7 @@ auto_backup_on_startup = false
 ビルド後、Codex app には stdio server として次のコマンドを登録します。
 
 ```text
-node C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\index.js
+node C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\src\index.js
 ```
 
 既定の DB パス:
