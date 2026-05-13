@@ -722,6 +722,43 @@ describe("MCP tool handlers", () => {
     expect(existsSync(result.structuredContent.backupPath)).toBe(true);
   });
 
+  test("plan_backup_retention reports kept and prunable default backups without deleting files", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "Retention planning should not delete backup files.",
+      layer: "recall",
+      tags: ["backup"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const first = await tools.backupMemory({});
+    const second = await tools.backupMemory({});
+
+    const result = await tools.planBackupRetention({ keepCount: 1 });
+
+    expect(result.structuredContent.backupDir).toBe(path.join(tempDir, "backups"));
+    expect(result.structuredContent.keepCount).toBe(1);
+    expect(result.structuredContent.backups).toHaveLength(2);
+    expect(result.structuredContent.kept).toEqual([
+      expect.objectContaining({
+        backupPath: second.structuredContent.backupPath,
+        sizeBytes: expect.any(Number),
+        mtime: expect.any(String)
+      })
+    ]);
+    expect(result.structuredContent.prunable).toEqual([
+      expect.objectContaining({
+        backupPath: first.structuredContent.backupPath,
+        sizeBytes: expect.any(Number),
+        mtime: expect.any(String)
+      })
+    ]);
+    expect(result.structuredContent.wouldDelete).toBe(false);
+    expect(result.structuredContent.plannedAt).toEqual(expect.any(String));
+    expect(existsSync(first.structuredContent.backupPath)).toBe(true);
+    expect(existsSync(second.structuredContent.backupPath)).toBe(true);
+  });
+
   test("verify_backup reports backup integrity metadata", async () => {
     const tools = createToolHandlers(store);
     await tools.writeMemory({

@@ -34,6 +34,7 @@ Codex Memory Sidecar を毎日の開発で使うための短い手順です。�
 ## バックアップと修復
 
 - `backup_memory` は大きな修復、削除、設定変更の前に実行します。
+- バックアップが増えてきたら `plan_backup_retention` を使い、保持対象と削除候補を dry-run で確認します。
 - `health_check` や Dashboard が FTS warning を出した場合は、まず `backup_memory` と `repair_memory_index` の既定バックアップを使います。
 - `repair_memory_index` は、バックアップ検証後に FTS index だけを再構築します。メモリ本文は変更しません。
 - 修復後は `health_check` を再実行し、`warnings: []` を確認します。

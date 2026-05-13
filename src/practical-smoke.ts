@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -90,6 +90,7 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
     });
     const backup = await tools.backupMemory({});
     backupPath = backup.structuredContent.backupPath;
+    const retention = await tools.planBackupRetention({ keepCount: 0 });
     const verification = await tools.verifyBackup({ backupPath });
     const inspection = await tools.inspectBackup({
       backupPath,
@@ -157,6 +158,10 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         digest.structuredContent.digest.includes("alpha project") &&
         !digest.structuredContent.digest.includes("beta project"),
       backupVerified: verification.structuredContent.ok === true,
+      backupRetentionDryRun:
+        retention.structuredContent.wouldDelete === false &&
+        retention.structuredContent.prunable.some((entry) => entry.backupPath === backupPath) &&
+        existsSync(backupPath),
       inspectBackupScoped:
         inspection.structuredContent.memories.length === 1 &&
         inspection.structuredContent.memories[0]?.id === alpha.structuredContent.memory.id,
