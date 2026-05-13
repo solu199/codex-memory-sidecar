@@ -27,6 +27,7 @@ describe("runMcpSmoke", () => {
     expect(result.toolNames).toContain("inspect_backup");
     expect(result.toolNames).toContain("memory_stats");
     expect(result.toolNames).toContain("repair_memory_index");
+    expect(result.toolNames).toContain("start_memory_session");
     expect(result.healthCheck.database.ok).toBe(true);
   });
 });

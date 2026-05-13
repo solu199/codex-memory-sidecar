@@ -52,6 +52,7 @@ Codex app に登録する場合も、上と同じ環境変数つきで起動さ�
 - `write_memory`: `projectPath` を付けて短い recall memory を保存する。
 - `search_memory`: 同じ `projectPath` で保存した memory が返る。
 - `memory_digest`: 同じ `projectPath` で digest に保存内容が入る。
+- `start_memory_session`: health、stats、digest、repair 推奨をまとめて返す。
 - `list_memory_summaries`: 本文ではなく summary と metadata だけが返る。
 - `audit_memory`: 作成・検索イベントが確認でき、長い payload や secret が露出しない。
 - `backup_memory`: backup path が作られる。
