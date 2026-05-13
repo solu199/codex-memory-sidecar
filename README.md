@@ -56,6 +56,12 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run build
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" test
 ```
 
+MCP サーバーとしてツール一覧を取得し、`health_check` を呼び出す smoke test も実行できます。
+
+```powershell
+node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:mcp
+```
+
 Ollama と `embeddinggemma` の疎通を確認する smoke test も実行できます。この smoke test は一時 SQLite DB だけを使い、通常のメモリ DB は変更しません。
 
 ```powershell
