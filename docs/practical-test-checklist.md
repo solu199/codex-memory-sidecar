@@ -1,13 +1,13 @@
 # 実用テストチェックリスト
 
-ローカルで安全に動く最小実用版として確認するための手順です。通常のメモリ DB を使う前に、必要なら `CODEX_MEMORY_DB` で一時 DB を指定して試してください。
+ローカルで安全に動く最小実用版として確認するための手順です。通常のメモリ DB を使う前に、一時 DB または事前バックアップで安全を確保してください。
 
 ## 前提
 
 - Ollama アプリが起動している。
 - `embeddinggemma` が pull 済み。
 - 必要に応じて `qwen3` が pull 済み。
-- このリポジトリで `node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run build` が通る。
+- このリポジトリで build が通る。
 
 ## 1. ローカル検証
 
@@ -16,6 +16,7 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" test
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run build
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:mcp
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:ollama
+node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:practical
 ```
 
 期待値:
@@ -24,10 +25,11 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:ollama
 - build は TypeScript error なし。
 - `smoke:mcp` は `ok: true`。
 - `smoke:ollama` は `embeddingDimensions` が 0 より大きく、warnings が空。
+- `smoke:practical` は一時 DB で write/search/digest/backup/dashboard の流れを確認し、`ok: true`。
 
 ## 2. Codex MCP 登録
 
-Codex app に stdio server として次を登録します。
+Codex app には stdio server として次を登録します。
 
 ```text
 node C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\index.js

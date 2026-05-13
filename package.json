@@ -10,6 +10,7 @@
     "dashboard": "tsc -p tsconfig.json && node dist/src/dashboard.js",
     "smoke:mcp": "tsc -p tsconfig.json && node dist/src/mcp-smoke.js",
     "smoke:ollama": "tsc -p tsconfig.json && node dist/src/ollama-smoke.js",
+    "smoke:practical": "tsc -p tsconfig.json && node dist/src/practical-smoke.js",
     "start": "node dist/index.js"
   },
   "dependencies": {

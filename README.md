@@ -27,35 +27,23 @@ Codex app 向けのローカル MCP メモリサイドカーです。個人利�
 
 ## セットアップ
 
-依存関係をインストールします。
-
 ```powershell
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" install
-```
-
-ビルドします。
-
-```powershell
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run build
-```
-
-テストします。
-
-```powershell
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" test
 ```
 
-MCP smoke test:
+## Smoke Tests
 
 ```powershell
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:mcp
-```
-
-Ollama smoke test:
-
-```powershell
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:ollama
+node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:practical
 ```
+
+- `smoke:mcp` は MCP server 登録と `health_check` を確認します。
+- `smoke:ollama` は Ollama / `embeddinggemma` を使った embedding 検索を確認します。
+- `smoke:practical` は一時 DB で write/search/digest/backup/dashboard の最小実用フローを確認します。
 
 ## Dashboard
 
