@@ -204,10 +204,11 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         allowSecret: input.allowSecret ?? false,
         embedding: embedding.value
       });
+      const duplicateCandidates = findDuplicateCandidatesForMemory(memory, store.listMemories({ limit: 500 }));
 
       return toolResult({
         memory: serializeMemory(memory),
-        duplicateCandidates: [] as unknown[],
+        duplicateCandidates,
         warnings: embedding.warning ? [embedding.warning] : []
       });
     },
@@ -675,6 +676,19 @@ function findDuplicateMergeProposals(memories: Memory[]) {
         summary: ordered[0]?.summary ?? ""
       };
     });
+}
+
+function findDuplicateCandidatesForMemory(memory: Memory, candidates: Memory[]) {
+  const key = normalizeMemoryContent(memory.content);
+  return candidates
+    .filter((candidate) => candidate.id !== memory.id && normalizeMemoryContent(candidate.content) === key)
+    .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || left.id - right.id)
+    .slice(0, 5)
+    .map((candidate) => ({
+      memoryId: candidate.id,
+      reason: "duplicate_content",
+      summary: candidate.summary
+    }));
 }
 
 function normalizeMemoryContent(content: string): string {
