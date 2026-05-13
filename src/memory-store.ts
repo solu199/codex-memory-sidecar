@@ -22,8 +22,10 @@ import type {
   MemoryBackup,
   MemoryEvent,
   MemoryEventType,
+  MemoryIndexRepair,
   MemoryLayer,
   MemoryStats,
+  RepairMemoryIndexInput,
   BackupVerification,
   MemoryStoreCounts,
   SearchMemoryInput,
@@ -561,6 +563,38 @@ export class MemoryStore {
     }
   }
 
+  async repairMemoryIndex(input: RepairMemoryIndexInput = {}): Promise<MemoryIndexRepair> {
+    const before = this.checkDatabaseHealth();
+    const shouldCreateBackup = input.createBackup ?? true;
+    const backup = shouldCreateBackup ? await this.createBackup({ backupPath: input.backupPath }) : null;
+    const backupVerification = backup ? this.verifyBackup({ backupPath: backup.backupPath }) : null;
+
+    if (backupVerification && !backupVerification.ok) {
+      return {
+        repaired: false,
+        backupPath: backup?.backupPath ?? null,
+        backupVerification,
+        before,
+        after: before,
+        warnings: ["Backup verification failed; FTS index was not rebuilt."],
+        repairedAt: new Date()
+      };
+    }
+
+    this.rebuildFtsIndex();
+    const after = this.checkDatabaseHealth();
+
+    return {
+      repaired: after.ok,
+      backupPath: backup?.backupPath ?? null,
+      backupVerification,
+      before,
+      after,
+      warnings: after.ok ? [] : ["FTS index rebuild completed, but database health is still not OK.", ...after.warnings],
+      repairedAt: new Date()
+    };
+  }
+
   private checkFtsConsistency(): DatabaseHealth["fts"] {
     const expectedCount = countRowsWhere(this.db, "memories", "status != 'forgotten'");
     const indexedCount = countRows(this.db, "memories_fts");
@@ -588,6 +622,23 @@ export class MemoryStore {
       missingCount: missing.count,
       orphanCount: orphan.count
     };
+  }
+
+  private rebuildFtsIndex(): void {
+    const rebuild = this.db.transaction(() => {
+      this.db.prepare("DELETE FROM memories_fts").run();
+      this.db
+        .prepare(
+          `INSERT INTO memories_fts(rowid, content, summary, tags)
+           SELECT id, content, summary, tags
+           FROM memories
+           WHERE status != 'forgotten'
+           ORDER BY id ASC`
+        )
+        .run();
+    });
+
+    rebuild();
   }
 
   private defaultBackupPath(): string {

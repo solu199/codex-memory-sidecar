@@ -73,6 +73,7 @@ describe("createMemoryServer", () => {
         "memory_digest",
         "memory_stats",
         "read_memory",
+        "repair_memory_index",
         "search_memory",
         "update_memory",
         "verify_backup",

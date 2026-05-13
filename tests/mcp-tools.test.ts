@@ -619,6 +619,32 @@ describe("MCP tool handlers", () => {
     expect(result.structuredContent.checkedAt).toEqual(expect.any(String));
   });
 
+  test("repair_memory_index rebuilds FTS and returns backup details", async () => {
+    const tools = createToolHandlers(store);
+    const created = await tools.writeMemory({
+      content: "MCP repair should restore keyword search.",
+      layer: "recall",
+      tags: ["repair"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const db = new Database(path.join(tempDir, "memory.sqlite"));
+    try {
+      db.prepare("DELETE FROM memories_fts WHERE rowid = ?").run(created.structuredContent.memory.id);
+    } finally {
+      db.close();
+    }
+
+    const result = await tools.repairMemoryIndex({});
+
+    expect(result.structuredContent.repaired).toBe(true);
+    expect(result.structuredContent.backupPath).toContain(path.join(tempDir, "backups"));
+    expect(result.structuredContent.backupVerification?.ok).toBe(true);
+    expect(result.structuredContent.before.fts.missingCount).toBe(1);
+    expect(result.structuredContent.after.ok).toBe(true);
+    expect(result.structuredContent.after.fts.missingCount).toBe(0);
+  });
+
   test("inspect_backup returns backup counts and summaries without full content", async () => {
     const tools = createToolHandlers(store);
     const longVisibleContent = `Backup inspection should show only a generated summary, not this full content. ${"private detail ".repeat(30)}`;

@@ -97,6 +97,34 @@ describe("dashboard", () => {
     expect(JSON.stringify(status)).not.toContain("hide payload details");
   });
 
+  test("buildDashboardStatus reports maintenance guidance for repairable index warnings", async () => {
+    const created = store.createMemory({
+      content: "Dashboard should explain repairable index warnings.",
+      layer: "recall",
+      tags: ["dashboard", "repair"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    await store.createBackup({});
+    const dbPath = path.join(tempDir, "memory.sqlite");
+    const { default: Database } = await import("better-sqlite3");
+    const db = new Database(dbPath);
+    try {
+      db.prepare("DELETE FROM memories_fts WHERE rowid = ?").run(created.id);
+    } finally {
+      db.close();
+    }
+
+    const status = await buildDashboardStatus(store, {
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) }
+    });
+
+    expect(status.ok).toBe(false);
+    expect(status.maintenance.repairRecommended).toBe(true);
+    expect(status.maintenance.latestBackup?.backupPath).toContain(path.join(tempDir, "backups"));
+    expect(status.warnings).toContain("FTS index is missing 1 active memory row(s).");
+  });
+
   test("serves HTML and JSON status over HTTP", async () => {
     const server = createDashboardServer(store, {
       embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) }
@@ -115,6 +143,8 @@ describe("dashboard", () => {
       const html = await page.text();
       expect(html).toContain("Codex Memory Sidecar");
       expect(html).toContain("Memory Stats");
+      expect(html).toContain("Maintenance");
+      expect(html).toContain("Warnings");
       expect(html).toContain("Project Scopes");
       expect(html).toContain("Recent Memories");
 
