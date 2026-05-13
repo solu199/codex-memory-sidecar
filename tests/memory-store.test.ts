@@ -787,6 +787,50 @@ describe("MemoryStore", () => {
     });
   });
 
+  test("truncates long audit payload strings after redaction", () => {
+    const created = store.createMemory({
+      content: "Audit payload truncation should keep logs bounded.",
+      layer: "recall",
+      tags: ["audit"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8
+    });
+    const longNote = "safe audit detail ".repeat(300);
+
+    store.updateMemory({
+      memoryId: created.id,
+      newContent: "Audit payload truncation should keep logs bounded after update.",
+      updateNote: longNote
+    });
+
+    const updatedEvent = store.listEvents(created.id).find((event) => event.eventType === "updated");
+
+    expect(updatedEvent?.payload.updateNote).toContain("[TRUNCATED");
+    expect((updatedEvent?.payload.updateNote as string).length).toBeLessThan(longNote.length);
+  });
+
+  test("truncates long search queries in retrieved audit events", () => {
+    const created = store.createMemory({
+      content: "Long query audit target.",
+      layer: "recall",
+      tags: ["audit"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8
+    });
+    const longQuery = `target ${"safe query detail ".repeat(300)}`;
+
+    store.searchMemory({ query: longQuery, limit: 1 });
+
+    const retrievedEvent = store.listEvents(created.id).find((event) => event.eventType === "retrieved");
+
+    expect(retrievedEvent?.payload.query).toContain("[TRUNCATED");
+    expect((retrievedEvent?.payload.query as string).length).toBeLessThan(longQuery.length);
+  });
+
   test("lists active memories with optional layer filtering", () => {
     const core = store.createMemory({
       content: "Core memory for listing.",

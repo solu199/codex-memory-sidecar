@@ -91,6 +91,7 @@ const MAX_HYBRID_CANDIDATE_LIMIT = 1000;
 const GLOBAL_PROJECT_SCOPE = "global";
 const DEFAULT_BACKUP_RETENTION_KEEP_COUNT = 10;
 const DEFAULT_BACKUP_FILE_PATTERN = /^memory-\d{8}-\d{6}-\d{3}(?:-\d+)?\.sqlite$/;
+const MAX_AUDIT_STRING_LENGTH = 2048;
 
 export class MemoryStore {
   private readonly db: Database.Database;
@@ -1085,7 +1086,7 @@ function redactEventPayload(value: unknown): unknown {
     }
 
     const parsed = parseJsonObjectOrArray(value);
-    return parsed ? JSON.stringify(redactEventPayload(parsed)) : value;
+    return truncateAuditString(parsed ? JSON.stringify(redactEventPayload(parsed)) : value);
   }
 
   if (Array.isArray(value)) {
@@ -1102,6 +1103,14 @@ function redactEventPayload(value: unknown): unknown {
   }
 
   return value;
+}
+
+function truncateAuditString(value: string): string {
+  if (value.length <= MAX_AUDIT_STRING_LENGTH) {
+    return value;
+  }
+
+  return `${value.slice(0, MAX_AUDIT_STRING_LENGTH)}...[TRUNCATED ${value.length - MAX_AUDIT_STRING_LENGTH} chars]`;
 }
 
 function parseJsonObjectOrArray(value: string): unknown[] | Record<string, unknown> | null {
