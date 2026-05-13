@@ -248,12 +248,7 @@ export class MemoryStore {
 
     const results = rows.map((row) => scoreKeywordRow(row));
 
-    const now = new Date().toISOString();
-    const markRetrieved = this.db.prepare("UPDATE memories SET last_accessed_at = ? WHERE id = ?");
-    for (const result of results) {
-      markRetrieved.run(now, result.memory.id);
-      this.recordEvent(result.memory.id, "retrieved", { query: input.query });
-    }
+    this.recordSearchRetrieval(input, results);
 
     return results;
   }
@@ -544,14 +539,32 @@ export class MemoryStore {
       .sort((left, right) => right.score - left.score)
       .slice(0, limit);
 
+    this.recordSearchRetrieval(input, results, { hybrid: true });
+
+    return results;
+  }
+
+  private recordSearchRetrieval(
+    input: SearchMemoryInput,
+    results: SearchMemoryResult[],
+    payload: Record<string, unknown> = {}
+  ): void {
     const now = new Date().toISOString();
     const markRetrieved = this.db.prepare("UPDATE memories SET last_accessed_at = ? WHERE id = ?");
     for (const result of results) {
       markRetrieved.run(now, result.memory.id);
-      this.recordEvent(result.memory.id, "retrieved", { query: input.query, hybrid: true });
     }
 
-    return results;
+    if (!results.length) {
+      return;
+    }
+
+    this.recordEvent(results[0].memory.id, "retrieved", {
+      query: input.query,
+      ...payload,
+      resultCount: results.length,
+      memoryIds: results.map((result) => result.memory.id)
+    });
   }
 
   private addColumnIfMissing(table: string, column: string, definition: string): void {
