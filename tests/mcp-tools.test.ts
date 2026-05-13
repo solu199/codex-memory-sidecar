@@ -37,7 +37,8 @@ describe("MCP tool handlers", () => {
     });
 
     expect(result.structuredContent.memory.status).toBe("active");
-    expect(result.structuredContent.memory.embedding).toEqual([1, 0]);
+    expect(result.structuredContent.memory.embedding).toBeNull();
+    expect(store.getMemory(result.structuredContent.memory.id)?.embedding).toEqual([1, 0]);
     expect(result.structuredContent.duplicateCandidates).toEqual([]);
     expect(result.content[0]?.type).toBe("text");
   });
@@ -95,7 +96,30 @@ describe("MCP tool handlers", () => {
     });
 
     expect(result.structuredContent.memories[0]?.summary).toContain("semantic retrieval");
+    expect(result.structuredContent.memories[0]?.embedding).toBeNull();
     expect(result.structuredContent.warnings).toEqual([]);
+  });
+
+  test("search_memory can include embeddings explicitly", async () => {
+    const embedder = {
+      embed: vi.fn().mockResolvedValueOnce([1, 0]).mockResolvedValueOnce([1, 0])
+    };
+    const tools = createToolHandlers(store, { embeddingProvider: embedder });
+    await tools.writeMemory({
+      content: "Embedding response should be opt-in.",
+      layer: "recall",
+      tags: ["embedding"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const result = await tools.searchMemory({
+      query: "embedding opt in",
+      includeEmbedding: true,
+      limit: 1
+    });
+
+    expect(result.structuredContent.memories[0]?.embedding).toEqual([1, 0]);
   });
 
   test("read_memory returns one active memory by id", async () => {
@@ -114,6 +138,26 @@ describe("MCP tool handlers", () => {
 
     expect(result.structuredContent.memory.id).toBe(created.structuredContent.memory.id);
     expect(result.structuredContent.memory.content).toBe("Read memory should return the exact record by id.");
+    expect(result.structuredContent.memory.embedding).toBeNull();
+  });
+
+  test("read_memory can include embeddings explicitly", async () => {
+    const tools = createToolHandlers(store);
+    const created = store.createMemory({
+      content: "Read memory embedding should be opt-in.",
+      layer: "core",
+      tags: ["read"],
+      sourceType: "manual",
+      sourceRef: "test",
+      embedding: [0.3, 0.7]
+    });
+
+    const result = await tools.readMemory({
+      memoryId: created.id,
+      includeEmbedding: true
+    });
+
+    expect(result.structuredContent.memory.embedding).toEqual([0.3, 0.7]);
   });
 
   test("read_memory excludes forgotten records unless explicitly requested", async () => {
@@ -267,7 +311,7 @@ describe("MCP tool handlers", () => {
     });
 
     expect(embedder.embed).toHaveBeenLastCalledWith("New semantic meaning.");
-    expect(updated.structuredContent.memory.embedding).toEqual([0, 1]);
+    expect(updated.structuredContent.memory.embedding).toBeNull();
     expect(store.getMemory(created.structuredContent.memory.id)?.embedding).toEqual([0, 1]);
   });
 

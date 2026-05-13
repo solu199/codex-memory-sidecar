@@ -24,7 +24,8 @@ const memoryStatsSchema = {};
 
 const readMemorySchema = {
   memoryId: z.number().int().positive(),
-  includeForgotten: z.boolean().default(false)
+  includeForgotten: z.boolean().default(false),
+  includeEmbedding: z.boolean().default(false)
 };
 
 const listMemorySummariesSchema = {
@@ -40,7 +41,8 @@ const searchMemorySchema = {
   layers: z.array(layerSchema).optional(),
   tags: z.array(z.string()).optional(),
   limit: z.number().int().min(1).max(50).default(8),
-  includeSuperseded: z.boolean().default(false)
+  includeSuperseded: z.boolean().default(false),
+  includeEmbedding: z.boolean().default(false)
 };
 
 const updateMemorySchema = {
@@ -114,6 +116,7 @@ type MemoryStatsToolInput = Record<string, never>;
 interface ReadMemoryToolInput {
   memoryId: number;
   includeForgotten?: boolean;
+  includeEmbedding?: boolean;
 }
 
 interface ListMemorySummariesToolInput {
@@ -130,6 +133,7 @@ interface SearchMemoryToolInput {
   tags?: string[];
   limit?: number;
   includeSuperseded?: boolean;
+  includeEmbedding?: boolean;
 }
 
 interface UpdateMemoryToolInput {
@@ -260,7 +264,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       }
 
       return toolResult({
-        memory: serializeMemory(memory)
+        memory: serializeMemory(memory, { includeEmbedding: input.includeEmbedding ?? false })
       });
     },
 
@@ -290,7 +294,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       });
 
       return toolResult({
-        memories: results.map(serializeSearchResult),
+        memories: results.map((result) => serializeSearchResult(result, { includeEmbedding: input.includeEmbedding ?? false })),
         warnings: embedding.warning ? [embedding.warning] : []
       });
     },
@@ -352,7 +356,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       const query = [input.taskDescription, input.projectPath].filter(Boolean).join(" ");
       const embedding = await tryEmbed(options.embeddingProvider, query);
       const results = store.searchMemory({ query, queryEmbedding: embedding.value, limit: 8 });
-      const serialized = results.map(serializeSearchResult);
+      const serialized = results.map((result) => serializeSearchResult(result));
       const digest = compactDigest(serialized, input.maxTokens ?? 800);
 
       return toolResult({
@@ -564,15 +568,15 @@ function toolResult<T extends Record<string, unknown>>(structuredContent: T): To
   };
 }
 
-function serializeSearchResult(result: SearchMemoryResult) {
+function serializeSearchResult(result: SearchMemoryResult, options: { includeEmbedding?: boolean } = {}) {
   return {
-    ...serializeMemory(result.memory),
+    ...serializeMemory(result.memory, options),
     score: result.score,
     scoreBreakdown: result.scoreBreakdown
   };
 }
 
-function serializeMemory(memory: Memory) {
+function serializeMemory(memory: Memory, options: { includeEmbedding?: boolean } = {}) {
   return {
     id: memory.id,
     layer: memory.layer,
@@ -583,7 +587,7 @@ function serializeMemory(memory: Memory) {
     sourceRef: memory.sourceRef,
     importance: memory.importance,
     confidence: memory.confidence,
-    embedding: memory.embedding,
+    embedding: options.includeEmbedding ? memory.embedding : null,
     createdAt: memory.createdAt.toISOString(),
     updatedAt: memory.updatedAt.toISOString(),
     lastAccessedAt: memory.lastAccessedAt?.toISOString() ?? null,

@@ -46,13 +46,14 @@ export async function runOllamaSmoke(options: OllamaSmokeOptions): Promise<Ollam
     });
 
     const warnings = [...created.structuredContent.warnings, ...result.structuredContent.warnings];
+    const storedCreated = store.getMemory(created.structuredContent.memory.id);
 
     return {
       ok:
         warnings.length === 0 &&
-        created.structuredContent.memory.embedding !== null &&
+        storedCreated?.embedding !== null &&
         result.structuredContent.memories[0]?.id === created.structuredContent.memory.id,
-      embeddingDimensions: created.structuredContent.memory.embedding?.length ?? 0,
+      embeddingDimensions: storedCreated?.embedding?.length ?? 0,
       topMemorySummary: result.structuredContent.memories[0]?.summary ?? "",
       warnings
     };
