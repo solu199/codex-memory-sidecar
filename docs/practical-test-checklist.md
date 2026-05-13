@@ -32,14 +32,14 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:practic
 Codex app には stdio server として次を登録します。
 
 ```text
-node C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\index.js
+node C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\src\index.js
 ```
 
 通常 DB を汚したくない場合は、一時 DB 用の MCP server 登録を別に作り、その server プロセスに `CODEX_MEMORY_DB` が渡るようにします。PowerShell の現在のセッションだけで `$env:CODEX_MEMORY_DB` を設定しても、Codex app から起動される stdio server にその環境変数が渡らない場合は通常 DB を使います。
 
 ```powershell
 $env:CODEX_MEMORY_DB="C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\data\practical-test.sqlite"
-node C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\index.js
+node C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\src\index.js
 ```
 
 Codex app に登録する場合も、上と同じ環境変数つきで起動される設定にしてください。env を渡せない登録方法なら、通常 DB で試す前に `backup_memory` を実行してから進めます。
