@@ -114,6 +114,74 @@ describe("MCP tool handlers", () => {
     expect(result.structuredContent.warnings).toEqual(["Embedding unavailable: Ollama offline"]);
   });
 
+  test("health_check reports database and embedding readiness", async () => {
+    const tools = createToolHandlers(store, {
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2, 0.3]) }
+    });
+    await tools.writeMemory({
+      content: "Health check should count existing memories.",
+      layer: "recall",
+      tags: ["health"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const result = await tools.healthCheck({});
+
+    expect(result.structuredContent.ok).toBe(true);
+    expect(result.structuredContent.database.ok).toBe(true);
+    expect(result.structuredContent.database.memoryCount).toBe(1);
+    expect(result.structuredContent.embedding.ok).toBe(true);
+    expect(result.structuredContent.embedding.dimensions).toBe(3);
+    expect(result.structuredContent.warnings).toEqual([]);
+  });
+
+  test("health_check reports embedding warnings without throwing", async () => {
+    const tools = createToolHandlers(store, {
+      embeddingProvider: { embed: vi.fn(async () => Promise.reject(new Error("Ollama offline"))) }
+    });
+
+    const result = await tools.healthCheck({});
+
+    expect(result.structuredContent.ok).toBe(false);
+    expect(result.structuredContent.database.ok).toBe(true);
+    expect(result.structuredContent.embedding.ok).toBe(false);
+    expect(result.structuredContent.embedding.error).toContain("Ollama offline");
+    expect(result.structuredContent.warnings).toEqual(["Embedding unavailable: Ollama offline"]);
+  });
+
+  test("health_check reports missing embedding provider as unavailable", async () => {
+    const tools = createToolHandlers(store);
+
+    const result = await tools.healthCheck({});
+
+    expect(result.structuredContent.ok).toBe(false);
+    expect(result.structuredContent.embedding.ok).toBe(false);
+    expect(result.structuredContent.embedding.error).toContain("not configured");
+    expect(result.structuredContent.warnings).toEqual(["Embedding provider is not configured."]);
+  });
+
+  test("health_check reports uncapped database counts", async () => {
+    const tools = createToolHandlers(store, {
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2, 0.3]) }
+    });
+
+    for (let index = 0; index < 101; index += 1) {
+      await tools.writeMemory({
+        content: `Health check count memory ${index}.`,
+        layer: "recall",
+        tags: ["health"],
+        sourceType: "manual",
+        sourceRef: "test"
+      });
+    }
+
+    const result = await tools.healthCheck({});
+
+    expect(result.structuredContent.database.memoryCount).toBe(101);
+    expect(result.structuredContent.database.eventCount).toBe(101);
+  });
+
   test("forget_memory refuses hard delete without explicit confirmation", async () => {
     const tools = createToolHandlers(store);
     const created = await tools.writeMemory({
