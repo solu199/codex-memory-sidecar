@@ -49,6 +49,7 @@ Codex app に登録する場合も、上と同じ環境変数つきで起動さ�
 順に確認します。
 
 - `health_check`: database と embedding が OK になる。
+- `propose_memory_update`: DB を変更せず、保存候補と重複候補を返す。
 - `write_memory`: `projectPath` を付けて短い recall memory を保存する。
 - `search_memory`: 同じ `projectPath` で保存した memory が返る。
 - `memory_digest`: 同じ `projectPath` で digest に保存内容が入る。

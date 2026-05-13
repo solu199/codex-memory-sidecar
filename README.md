@@ -5,6 +5,7 @@ Codex app 向けのローカル MCP メモリサイドカーです。個人利�
 ## できること
 
 - `write_memory` / `update_memory` / `forget_memory` でメモリを安全に管理します。
+- `propose_memory_update` は DB を変更せず、保存候補、重複候補、推奨 action を dry-run で返します。
 - `search_memory` は SQLite FTS と、Ollama が使える場合はローカル embedding を組み合わせて検索します。
 - `memory_digest` は作業前に関連しそうなメモリを短くまとめます。
 - `start_memory_session` は作業開始時に health、stats、digest、修復推奨をまとめて確認します。
