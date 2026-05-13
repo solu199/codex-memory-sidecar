@@ -99,6 +99,11 @@ export interface BackupVerification {
   checkedAt: Date;
 }
 
+export interface MemoryStoreCounts {
+  memoryCount: number;
+  eventCount: number;
+}
+
 export interface ListRecentEventsInput {
   limit?: number;
   memoryId?: number;

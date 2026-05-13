@@ -17,6 +17,7 @@ import type {
   MemoryEventType,
   MemoryLayer,
   BackupVerification,
+  MemoryStoreCounts,
   SearchMemoryInput,
   SearchMemoryResult,
   UpdateMemoryInput,
@@ -265,6 +266,13 @@ export class MemoryStore {
       .prepare(`SELECT * FROM memories WHERE ${clauses.join(" AND ")} ORDER BY updated_at DESC, id DESC LIMIT @limit`)
       .all(params) as MemoryRow[];
     return rows.map(mapMemory);
+  }
+
+  countRecords(): MemoryStoreCounts {
+    return {
+      memoryCount: countRows(this.db, "memories"),
+      eventCount: countRows(this.db, "memory_events")
+    };
   }
 
   async createBackup(input: CreateBackupInput): Promise<MemoryBackup> {

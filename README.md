@@ -5,6 +5,7 @@ Codex app のためのローカル MCP メモリサイドカーです。
 このサイドカーは、長期的な作業記憶を明示的な MCP ツールとして扱います。
 
 - `search_memory`
+- `health_check`
 - `write_memory`
 - `update_memory`
 - `forget_memory`
@@ -25,6 +26,7 @@ Codex app のためのローカル MCP メモリサイドカーです。
 - `backup_memory` で SQLite データベースの明示バックアップを作成できます。
 - `backup_memory` の `backupPath` を省略すると、データベース横の `backups/` に timestamp 付きで保存します。
 - `verify_backup` でバックアップファイルが読み取れることと、保存件数を確認できます。
+- `health_check` でローカル DB と embedding provider の状態を確認できます。
 - `audit_memory` で最近の audit event を確認できます。
 - `consolidate_memory` は dry-run 提案を返すだけで、自動適用はしません。
 - 明らかな secret らしき内容は、明示 override なしでは保存を拒否します。

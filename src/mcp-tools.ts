@@ -18,6 +18,8 @@ const writeMemorySchema = {
   allowSecret: z.boolean().default(false)
 };
 
+const healthCheckSchema = {};
+
 const searchMemorySchema = {
   query: z.string().min(1),
   layers: z.array(layerSchema).optional(),
@@ -82,6 +84,8 @@ interface WriteMemoryToolInput {
   confidence?: number;
   allowSecret?: boolean;
 }
+
+type HealthCheckToolInput = Record<string, never>;
 
 interface SearchMemoryToolInput {
   query: string;
@@ -156,6 +160,33 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         memory: serializeMemory(memory),
         duplicateCandidates: [] as unknown[],
         warnings: embedding.warning ? [embedding.warning] : []
+      });
+    },
+
+    async healthCheck(_input: HealthCheckToolInput) {
+      const embedding = options.embeddingProvider
+        ? await tryEmbed(options.embeddingProvider, "codex memory sidecar health check")
+        : {
+            value: null,
+            warning: "Embedding provider is not configured."
+          };
+      const counts = store.countRecords();
+      const database = {
+        ok: true,
+        memoryCount: counts.memoryCount,
+        eventCount: counts.eventCount
+      };
+      const warnings = embedding.warning ? [embedding.warning] : [];
+
+      return toolResult({
+        ok: database.ok && warnings.length === 0,
+        database,
+        embedding: {
+          ok: embedding.warning === null,
+          dimensions: embedding.value?.length ?? 0,
+          error: embedding.warning ? embedding.warning.replace(/^Embedding unavailable: /, "") : null
+        },
+        warnings
       });
     },
 
@@ -291,6 +322,15 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
       inputSchema: writeMemorySchema
     },
     handlers.writeMemory
+  );
+
+  server.registerTool(
+    "health_check",
+    {
+      description: "Check local memory database and embedding provider readiness.",
+      inputSchema: healthCheckSchema
+    },
+    handlers.healthCheck
   );
 
   server.registerTool(
