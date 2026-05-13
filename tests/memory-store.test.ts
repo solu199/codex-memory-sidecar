@@ -169,6 +169,35 @@ describe("MemoryStore", () => {
     expect(results[0]?.score).toBeGreaterThan(0);
   });
 
+  test("applies tag filters before final keyword search limit", () => {
+    store.createMemory({
+      content: "Shared search phrase.",
+      layer: "recall",
+      tags: ["other"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.9,
+      confidence: 0.9
+    });
+    const tagged = store.createMemory({
+      content: "Shared search phrase.",
+      layer: "recall",
+      tags: ["target"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.1,
+      confidence: 0.9
+    });
+
+    const results = store.searchMemory({
+      query: "shared search phrase",
+      tags: ["target"],
+      limit: 1
+    });
+
+    expect(results.map((result) => result.memory.id)).toEqual([tagged.id]);
+  });
+
   test("uses query embeddings to find semantically similar memories without keyword overlap", () => {
     const first = store.createMemory({
       content: "Use embeddinggemma for local retrieval.",
