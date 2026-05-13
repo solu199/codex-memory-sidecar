@@ -108,6 +108,10 @@ const backupMemorySchema = {
   backupPath: z.string().min(1).optional()
 };
 
+const planBackupRetentionSchema = {
+  keepCount: z.number().int().min(0).max(1000).optional()
+};
+
 const verifyBackupSchema = {
   backupPath: z.string().min(1)
 };
@@ -236,6 +240,10 @@ interface StartMemorySessionToolInput {
 
 interface BackupMemoryToolInput {
   backupPath?: string;
+}
+
+interface PlanBackupRetentionToolInput {
+  keepCount?: number;
 }
 
 interface VerifyBackupToolInput {
@@ -602,6 +610,21 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       });
     },
 
+    async planBackupRetention(input: PlanBackupRetentionToolInput) {
+      const plan = store.planBackupRetention({ keepCount: input.keepCount });
+
+      return toolResult({
+        backupDir: plan.backupDir,
+        keepCount: plan.keepCount,
+        backups: plan.backups.map(serializeBackupRetentionEntry),
+        kept: plan.kept.map(serializeBackupRetentionEntry),
+        prunable: plan.prunable.map(serializeBackupRetentionEntry),
+        wouldDelete: false,
+        plannedAt: plan.plannedAt.toISOString(),
+        warnings: [] as string[]
+      });
+    },
+
     async verifyBackup(input: VerifyBackupToolInput) {
       const verification = store.verifyBackup({ backupPath: input.backupPath });
 
@@ -810,6 +833,15 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
   );
 
   server.registerTool(
+    "plan_backup_retention",
+    {
+      description: "Dry-run default backup retention and report kept/prunable backup files without deleting anything.",
+      inputSchema: planBackupRetentionSchema
+    },
+    handlers.planBackupRetention
+  );
+
+  server.registerTool(
     "verify_backup",
     {
       description: "Verify that a SQLite memory backup can be opened and report record counts.",
@@ -873,6 +905,14 @@ function serializeMemoryStats(stats: ReturnType<MemoryStore["getStats"]>) {
       oldest: stats.updatedAtRange.oldest?.toISOString() ?? null,
       newest: stats.updatedAtRange.newest?.toISOString() ?? null
     }
+  };
+}
+
+function serializeBackupRetentionEntry(entry: ReturnType<MemoryStore["planBackupRetention"]>["backups"][number]) {
+  return {
+    backupPath: entry.backupPath,
+    sizeBytes: entry.sizeBytes,
+    mtime: entry.mtime.toISOString()
   };
 }
 

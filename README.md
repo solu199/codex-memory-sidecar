@@ -12,6 +12,7 @@ Codex app 向けのローカル MCP メモリサイドカーです。個人利�
 - `start_memory_session` は作業開始時に health、stats、digest、修復推奨をまとめて確認します。
 - `projectScope` / `projectPath` を使うと、同じプロジェクトのメモリと `global` メモリに絞り、別プロジェクトの混入を抑えます。
 - `backup_memory` / `verify_backup` / `inspect_backup` で SQLite バックアップを作成、確認できます。
+- `plan_backup_retention` は既定バックアップの保持計画を dry-run で返します。ファイル削除はしません。
 - `repair_memory_index` でバックアップ作成後に FTS index だけを再構築できます。
 - `health_check`、`memory_stats`、read-only dashboard で状態を確認できます。
 - `audit_memory` で直近の作成、更新、削除、検索イベントを確認できます。
@@ -51,7 +52,7 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:practic
 
 - `smoke:mcp` は MCP server 登録と `health_check` を確認します。
 - `smoke:ollama` は Ollama / `embeddinggemma` を使った embedding 検索を確認します。
-- `smoke:practical` は一時 DB で write/search/digest/backup/dashboard/repair/consolidation の最小実用フローを確認します。
+- `smoke:practical` は一時 DB で write/search/digest/backup/retention/dashboard/repair/consolidation の最小実用フローを確認します。
 
 ## Dashboard
 
@@ -144,7 +145,8 @@ ollama pull embeddinggemma
 2. メモリを残すか迷う場合は、先に `propose_memory_update` を使います。
 3. 同じ内容が増えてきたと感じたら `consolidate_memory` を dry-run で実行し、完全一致または近い重複候補を確認します。
 4. 大きな変更や削除前には `backup_memory` と `verify_backup` を実行します。
-5. Dashboard は状態確認専用として使い、修復や変更は MCP tool から実行します。
+5. バックアップが増えてきたら `plan_backup_retention` で保持対象と削除候補を確認します。
+6. Dashboard は状態確認専用として使い、修復や変更は MCP tool から実行します。
 
 詳しい確認手順:
 
