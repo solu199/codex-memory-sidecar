@@ -86,6 +86,13 @@ interface UpdatedAtRangeRow {
   newest: string | null;
 }
 
+interface ProjectScopeStatsRow {
+  project_scope: string;
+  total: number;
+  active: number;
+  latest_updated_at: string | null;
+}
+
 const DEFAULT_HYBRID_CANDIDATE_LIMIT = 250;
 const MAX_HYBRID_CANDIDATE_LIMIT = 1000;
 const GLOBAL_PROJECT_SCOPE = "global";
@@ -390,6 +397,18 @@ export class MemoryStore {
       byLayer[row.value] = row.count;
     }
 
+    const projectScopeRows = this.db
+      .prepare(
+        `SELECT project_scope,
+                COUNT(*) AS total,
+                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active,
+                MAX(updated_at) AS latest_updated_at
+         FROM memories
+         GROUP BY project_scope
+         ORDER BY active DESC, total DESC, latest_updated_at DESC, project_scope ASC`
+      )
+      .all() as ProjectScopeStatsRow[];
+
     const updatedAtRange = this.db
       .prepare("SELECT MIN(updated_at) AS oldest, MAX(updated_at) AS newest FROM memories")
       .get() as UpdatedAtRangeRow;
@@ -398,6 +417,12 @@ export class MemoryStore {
       ...this.countRecords(),
       byStatus,
       byLayer,
+      byProjectScope: projectScopeRows.map((row) => ({
+        projectScope: row.project_scope,
+        total: row.total,
+        active: row.active,
+        latestUpdatedAt: row.latest_updated_at ? new Date(row.latest_updated_at) : null
+      })),
       updatedAtRange: {
         oldest: updatedAtRange.oldest ? new Date(updatedAtRange.oldest) : null,
         newest: updatedAtRange.newest ? new Date(updatedAtRange.newest) : null

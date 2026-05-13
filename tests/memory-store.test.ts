@@ -76,6 +76,78 @@ describe("MemoryStore", () => {
     }
   });
 
+  test("migrates legacy databases without project_scope as global memories", () => {
+    const legacyPath = path.join(tempDir, "legacy.sqlite");
+    const legacyDb = new Database(legacyPath);
+    legacyDb.exec(`
+      CREATE TABLE memories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        layer TEXT NOT NULL CHECK (layer IN ('core', 'recall', 'archival')),
+        content TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        tags TEXT NOT NULL DEFAULT '[]',
+        source_type TEXT NOT NULL,
+        source_ref TEXT NOT NULL,
+        importance REAL NOT NULL DEFAULT 0.5,
+        confidence REAL NOT NULL DEFAULT 0.5,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        last_accessed_at TEXT,
+        expires_at TEXT,
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'superseded', 'forgotten'))
+      );
+
+      CREATE TABLE memory_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        memory_id INTEGER NOT NULL,
+        event_type TEXT NOT NULL CHECK (
+          event_type IN ('created', 'updated', 'forgotten', 'consolidated', 'retrieved')
+        ),
+        payload_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL
+      );
+
+      CREATE VIRTUAL TABLE memories_fts USING fts5(content, summary, tags);
+    `);
+    const now = new Date("2026-05-14T00:00:00Z").toISOString();
+    legacyDb
+      .prepare(
+        `INSERT INTO memories (
+          layer, content, summary, tags, source_type, source_ref,
+          importance, confidence, created_at, updated_at, status
+        ) VALUES (
+          'recall', 'Legacy scoped migration memory.', 'Legacy scoped migration memory.', '["legacy"]',
+          'manual', 'test', 0.6, 0.8, @now, @now, 'active'
+        )`
+      )
+      .run({ now });
+    legacyDb
+      .prepare("INSERT INTO memories_fts(rowid, content, summary, tags) VALUES (1, ?, ?, ?)")
+      .run("Legacy scoped migration memory.", "Legacy scoped migration memory.", "legacy");
+    legacyDb.close();
+
+    const legacyStore = new MemoryStore(legacyPath);
+    try {
+      const migrated = legacyStore.getMemory(1);
+      const migratedDb = new Database(legacyPath, { readonly: true, fileMustExist: true });
+      const indexes = migratedDb.prepare("PRAGMA index_list(memories)").all() as { name: string }[];
+      migratedDb.close();
+
+      expect(migrated?.projectScope).toBe("global");
+      expect(legacyStore.searchMemory({ query: "legacy scoped migration", projectScope: "alpha", limit: 5 })).toHaveLength(1);
+      expect(legacyStore.getStats().byProjectScope).toEqual([
+        expect.objectContaining({
+          projectScope: "global",
+          active: 1,
+          total: 1
+        })
+      ]);
+      expect(indexes.map((index) => index.name)).toContain("idx_memories_project_scope_status_updated");
+    } finally {
+      legacyStore.close();
+    }
+  });
+
   test("checks active database integrity and FTS consistency", () => {
     store.createMemory({
       content: "Database health should include FTS consistency.",

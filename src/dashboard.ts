@@ -45,6 +45,12 @@ export interface DashboardStatus {
       recall: number;
       archival: number;
     };
+    byProjectScope: Array<{
+      projectScope: string;
+      total: number;
+      active: number;
+      latestUpdatedAt: string | null;
+    }>;
     updatedAtRange: {
       oldest: string | null;
       newest: string | null;
@@ -104,6 +110,12 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
     memoryStats: {
       byStatus: memoryStats.byStatus,
       byLayer: memoryStats.byLayer,
+      byProjectScope: memoryStats.byProjectScope.map((scope) => ({
+        projectScope: scope.projectScope,
+        total: scope.total,
+        active: scope.active,
+        latestUpdatedAt: scope.latestUpdatedAt?.toISOString() ?? null
+      })),
       updatedAtRange: {
         oldest: memoryStats.updatedAtRange.oldest?.toISOString() ?? null,
         newest: memoryStats.updatedAtRange.newest?.toISOString() ?? null
@@ -349,6 +361,11 @@ function renderDashboardHtml(): string {
         <ul class="stats-list" id="updated-stats"></ul>
       </div>
     </section>
+    <h2>Project Scopes</h2>
+    <table>
+      <thead><tr><th>Scope</th><th>Active</th><th>Total</th><th>Latest</th></tr></thead>
+      <tbody id="project-scopes"></tbody>
+    </table>
     <h2>Recent Memories</h2>
     <table>
       <thead><tr><th>ID</th><th>Layer</th><th>Summary</th><th>Tags</th><th>Updated</th></tr></thead>
@@ -379,6 +396,9 @@ function renderDashboardHtml(): string {
         oldest: status.memoryStats.updatedAtRange.oldest ?? "-",
         newest: status.memoryStats.updatedAtRange.newest ?? "-"
       });
+      document.getElementById("project-scopes").innerHTML = status.memoryStats.byProjectScope.map((scope) => (
+        "<tr><td class=\\"summary\\">" + escapeHtml(scope.projectScope) + "</td><td>" + scope.active + "</td><td>" + scope.total + "</td><td>" + escapeHtml(scope.latestUpdatedAt ?? "-") + "</td></tr>"
+      )).join("");
       document.getElementById("recent-memories").innerHTML = status.recentMemories.map((memory) => (
         "<tr><td>" + memory.id + "</td><td>" + escapeHtml(memory.layer) + "</td><td class=\\"summary\\">" + escapeHtml(memory.summary) + "</td><td class=\\"tags\\">" + escapeHtml(memory.tags.join(", ")) + "</td><td>" + escapeHtml(memory.updatedAt) + "</td></tr>"
       )).join("");

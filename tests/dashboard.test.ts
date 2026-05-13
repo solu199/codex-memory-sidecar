@@ -28,7 +28,8 @@ describe("dashboard", () => {
       layer: "core",
       tags: ["dashboard"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
+      projectScope: "alpha"
     });
     const forgotten = store.createMemory({
       content: "Dashboard must not expose memory contents.",
@@ -63,7 +64,19 @@ describe("dashboard", () => {
         core: 2,
         recall: 0,
         archival: 0
-      }
+      },
+      byProjectScope: [
+        expect.objectContaining({
+          projectScope: "alpha",
+          active: 1,
+          total: 1
+        }),
+        expect.objectContaining({
+          projectScope: "global",
+          active: 0,
+          total: 1
+        })
+      ]
     });
     expect(status.embedding.dimensions).toBe(2);
     expect(status.recentMemories).toEqual([
@@ -102,6 +115,7 @@ describe("dashboard", () => {
       const html = await page.text();
       expect(html).toContain("Codex Memory Sidecar");
       expect(html).toContain("Memory Stats");
+      expect(html).toContain("Project Scopes");
       expect(html).toContain("Recent Memories");
 
       const response = await fetch(`${baseUrl}/api/status`);
@@ -114,7 +128,8 @@ describe("dashboard", () => {
         memoryStats: {
           byStatus: {
             active: 0
-          }
+          },
+          byProjectScope: []
         },
         recentMemories: []
       });

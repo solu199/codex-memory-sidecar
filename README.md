@@ -144,3 +144,5 @@ ollama pull embeddinggemma
 - このリポジトリは private package です。
 - 通常の `npm` shim が環境によって壊れる場合は、上記の `node ... npm-cli.js` 形式で実行します。
 - 作業プロトコルを Codex/AGENTS 系に組み込む場合は `AGENTS-memory-protocol.md` を参照してください。
+- 実用テスト前の確認手順は `docs/practical-test-checklist.md` を参照してください。
+- `memory_digest` の運用ルールは `docs/memory-digest-protocol.md` を参照してください。
