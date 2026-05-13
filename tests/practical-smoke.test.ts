@@ -13,6 +13,7 @@ describe("runPracticalSmoke", () => {
       scopedSearchExcludesBeta: true,
       crossProjectSearchIncludesBeta: true,
       startMemorySession: true,
+      consolidateNearDuplicate: true,
       digestUsesScopedMemory: true,
       backupVerified: true,
       inspectBackupScoped: true,
@@ -20,7 +21,7 @@ describe("runPracticalSmoke", () => {
       auditRecorded: true,
       dashboardShowsProjectScopes: true
     });
-    expect(result.memoryCount).toBe(2);
+    expect(result.memoryCount).toBe(4);
     expect(result.eventCount).toBeGreaterThan(0);
     expect(result.warnings).toEqual([]);
   });

@@ -25,37 +25,40 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:practic
 - build は TypeScript error なし。
 - `smoke:mcp` は `ok: true`。
 - `smoke:ollama` は `embeddingDimensions` が 0 より大きく、warnings が空。
-- `smoke:practical` は一時 DB で write/search/digest/backup/dashboard の流れを確認し、`ok: true`。
+- `smoke:practical` は一時 DB で write/search/digest/backup/dashboard/repair/consolidation の流れを確認し、`ok: true`。
 
 ## 2. Codex MCP 登録
 
-Codex app には stdio server として次を登録します。
+Codex app には stdio server として登録します。
 
 ```text
-node C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\src\index.js
+command: node
+args: C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\src\index.js
+cwd: C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar
 ```
 
-通常 DB を汚したくない場合は、一時 DB 用の MCP server 登録を別に作り、その server プロセスに `CODEX_MEMORY_DB` が渡るようにします。PowerShell の現在のセッションだけで `$env:CODEX_MEMORY_DB` を設定しても、Codex app から起動される stdio server にその環境変数が渡らない場合は通常 DB を使います。
+通常 DB を汚したくない場合は、一時 DB 用の MCP server 登録を別に作り、その server プロセスに `CODEX_MEMORY_DB` が渡るようにします。
 
 ```powershell
 $env:CODEX_MEMORY_DB="C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\data\practical-test.sqlite"
 node C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\src\index.js
 ```
 
-Codex app に登録する場合も、上と同じ環境変数つきで起動される設定にしてください。env を渡せない登録方法なら、通常 DB で試す前に `backup_memory` を実行してから進めます。
+Codex app から起動する stdio server には、Codex app の MCP 登録側で環境変数を指定してください。
 
-## 3. MCP ツール確認
+## 3. MCP tool 確認
 
 順に確認します。
 
-- `health_check`: database と embedding が OK になる。
+- `health_check`: database と embedding が OK。
 - `propose_memory_update`: DB を変更せず、保存候補と重複候補を返す。
 - `write_memory`: `projectPath` を付けて短い recall memory を保存する。
 - `search_memory`: 同じ `projectPath` で保存した memory が返る。
 - `memory_digest`: 同じ `projectPath` で digest に保存内容が入る。
 - `start_memory_session`: health、stats、digest、repair 推奨をまとめて返す。
+- `consolidate_memory`: 完全一致または近い重複候補を dry-run で返す。
 - `list_memory_summaries`: 本文ではなく summary と metadata だけが返る。
-- `audit_memory`: 作成・検索イベントが確認でき、長い payload や secret が露出しない。
+- `audit_memory`: 作成、検索イベントが確認でき、長い payload や secret が露出しない。
 - `backup_memory`: backup path が作られる。
 - `verify_backup`: backup が `ok: true` になる。
 - `inspect_backup`: content ではなく summary だけが返る。
@@ -79,7 +82,7 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run dashboard
 
 期待値:
 
-- Status が OK または原因が読める warning になる。
+- Status が OK、または原因が読める warning になる。
 - memory/event 件数が表示される。
 - Project Scopes に scope 別の active/total/latest が表示される。
 - Recent Memories は summary だけで、本文は表示されない。

@@ -4,7 +4,7 @@ Codex Memory Sidecar を毎日の開発で使うための短い手順です。�
 
 ## 開発開始時
 
-1. まず `start_memory_session` を `taskDescription` と `projectPath` 付きで呼びます。
+1. `start_memory_session` を `taskDescription` と `projectPath` 付きで呼びます。
 2. `ready: true` なら、返ってきた digest と memory summary を参考にします。
 3. `repairRecommended: true` の場合は、作業に入る前に `repair_memory_index` を検討します。
 4. digest は参考情報として扱い、現在のユーザー指示と実ファイルを優先します。
@@ -24,10 +24,17 @@ Codex Memory Sidecar を毎日の開発で使うための短い手順です。�
 - 明示的に横断確認が必要なときだけ `includeCrossProject: true` を使います。
 - 検索結果は memory id と summary を根拠にし、必要に応じて `read_memory` や `audit_memory` で確認します。
 
+## 重複整理
+
+- 重複が気になったら `consolidate_memory` を dry-run で実行します。
+- `duplicate_content` は正規化後に同じ内容の候補です。
+- `near_duplicate_content` は同じ layer 内で語彙がかなり近い候補です。
+- 提案だけでは DB は変更されません。実際に統合する前に summary、tags、project scope を確認します。
+
 ## バックアップと修復
 
 - `backup_memory` は大きな修復、削除、設定変更の前に実行します。
-- `health_check` や Dashboard が FTS warning を出した場合は、まず `backup_memory` か `repair_memory_index` の既定バックアップを使います。
+- `health_check` や Dashboard が FTS warning を出した場合は、まず `backup_memory` と `repair_memory_index` の既定バックアップを使います。
 - `repair_memory_index` は、バックアップ検証後に FTS index だけを再構築します。メモリ本文は変更しません。
 - 修復後は `health_check` を再実行し、`warnings: []` を確認します。
 
@@ -35,10 +42,10 @@ Codex Memory Sidecar を毎日の開発で使うための短い手順です。�
 
 - Dashboard は読み取り専用の状態確認に使います。
 - `Status`、`Database`、`Embedding`、`Warnings`、`Maintenance` を確認します。
-- `Maintenance` で repair が推奨されている場合は、Dashboard 上で直接直すのではなく MCP の `repair_memory_index` を使います。
+- `Maintenance` で repair が推奨されている場合は、Dashboard から直接直すのではなく MCP の `repair_memory_index` を使います。
 
 ## 作業終了時
 
 - 次回も役立つ決定、注意点、検証結果だけを保存します。
 - 一時的な作業ログやすぐ失効する状態は保存しません。
-- 不安がある場合は `audit_memory` で直近の書き込み・検索イベントを確認します。
+- 不安がある場合は `audit_memory` で直近の書き込み、検索イベントを確認します。

@@ -921,6 +921,71 @@ describe("MCP tool handlers", () => {
     expect(store.getMemory(second.structuredContent.memory.id)?.status).toBe("active");
   });
 
+  test("consolidate_memory proposes near-duplicate records with shared terms", async () => {
+    const tools = createToolHandlers(store);
+    const first = await tools.writeMemory({
+      content: "Call start_memory_session before multi-file implementation work.",
+      layer: "core",
+      tags: ["daily-operation", "memory"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const second = await tools.writeMemory({
+      content: "Before multi file implementation work, call start memory session.",
+      layer: "core",
+      tags: ["daily-operation", "memory"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const result = await tools.consolidateMemory({
+      layers: ["core"],
+      dryRun: true,
+      maxCandidates: 10
+    });
+
+    expect(result.structuredContent.proposedMerges).toEqual([
+      {
+        memoryIds: [first.structuredContent.memory.id, second.structuredContent.memory.id],
+        reason: "near_duplicate_content",
+        summary: "Call start_memory_session before multi-file implementation work.",
+        confidence: expect.any(Number)
+      }
+    ]);
+    expect(store.getMemory(second.structuredContent.memory.id)?.status).toBe("active");
+  });
+
+  test("consolidate_memory proposes near-duplicate Japanese records", async () => {
+    const tools = createToolHandlers(store);
+    const first = await tools.writeMemory({
+      content: "複数ファイル実装前に start_memory_session を呼ぶ。",
+      layer: "core",
+      tags: ["daily-operation", "memory"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const second = await tools.writeMemory({
+      content: "複数 file 実装の前は start memory session を呼ぶ。",
+      layer: "core",
+      tags: ["daily-operation", "memory"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const result = await tools.consolidateMemory({
+      layers: ["core"],
+      dryRun: true,
+      maxCandidates: 10
+    });
+
+    expect(result.structuredContent.proposedMerges).toEqual([
+      expect.objectContaining({
+        memoryIds: [first.structuredContent.memory.id, second.structuredContent.memory.id],
+        reason: "near_duplicate_content"
+      })
+    ]);
+  });
+
   test("consolidate_memory keeps duplicate proposals inside project scope", async () => {
     const tools = createToolHandlers(store);
     await tools.writeMemory({
