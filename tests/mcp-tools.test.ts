@@ -97,6 +97,52 @@ describe("MCP tool handlers", () => {
     expect(result.structuredContent.warnings).toEqual([]);
   });
 
+  test("read_memory returns one active memory by id", async () => {
+    const tools = createToolHandlers(store);
+    const created = await tools.writeMemory({
+      content: "Read memory should return the exact record by id.",
+      layer: "core",
+      tags: ["read"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const result = await tools.readMemory({
+      memoryId: created.structuredContent.memory.id
+    });
+
+    expect(result.structuredContent.memory.id).toBe(created.structuredContent.memory.id);
+    expect(result.structuredContent.memory.content).toBe("Read memory should return the exact record by id.");
+  });
+
+  test("read_memory excludes forgotten records unless explicitly requested", async () => {
+    const tools = createToolHandlers(store);
+    const created = await tools.writeMemory({
+      content: "Forgotten records should require explicit read opt-in.",
+      layer: "recall",
+      tags: ["read"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    await tools.forgetMemory({
+      memoryId: created.structuredContent.memory.id,
+      reason: "read guard test"
+    });
+
+    await expect(
+      tools.readMemory({
+        memoryId: created.structuredContent.memory.id
+      })
+    ).rejects.toThrow(/forgotten/i);
+
+    const result = await tools.readMemory({
+      memoryId: created.structuredContent.memory.id,
+      includeForgotten: true
+    });
+
+    expect(result.structuredContent.memory.status).toBe("forgotten");
+  });
+
   test("write_memory falls back when embedding generation fails", async () => {
     const tools = createToolHandlers(store, {
       embeddingProvider: { embed: vi.fn(async () => Promise.reject(new Error("Ollama offline"))) }
