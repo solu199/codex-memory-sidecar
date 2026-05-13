@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "dashboard": "tsc -p tsconfig.json && node dist/src/dashboard.js",
+    "smoke:mcp": "tsc -p tsconfig.json && node dist/src/mcp-smoke.js",
     "smoke:ollama": "tsc -p tsconfig.json && node dist/src/ollama-smoke.js",
     "start": "node dist/index.js"
   },
