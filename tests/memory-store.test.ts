@@ -198,6 +198,41 @@ describe("MemoryStore", () => {
     expect(results.map((result) => result.memory.id)).toEqual([tagged.id]);
   });
 
+  test("records one retrieved audit event per keyword search", () => {
+    const first = store.createMemory({
+      content: "Shared audit lookup phrase.",
+      layer: "recall",
+      tags: ["audit"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.9,
+      confidence: 0.9
+    });
+    const second = store.createMemory({
+      content: "Shared audit lookup phrase with another detail.",
+      layer: "recall",
+      tags: ["audit"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.4,
+      confidence: 0.9
+    });
+
+    const results = store.searchMemory({ query: "shared audit lookup phrase", limit: 2 });
+    const retrievedEvents = store.listRecentEvents({ limit: 10 }).filter((event) => event.eventType === "retrieved");
+
+    expect(results.map((result) => result.memory.id)).toEqual([first.id, second.id]);
+    expect(retrievedEvents).toHaveLength(1);
+    expect(retrievedEvents[0]?.memoryId).toBe(first.id);
+    expect(retrievedEvents[0]?.payload).toEqual({
+      query: "shared audit lookup phrase",
+      resultCount: 2,
+      memoryIds: [first.id, second.id]
+    });
+    expect(store.getMemory(first.id)?.lastAccessedAt).toBeInstanceOf(Date);
+    expect(store.getMemory(second.id)?.lastAccessedAt).toBeInstanceOf(Date);
+  });
+
   test("uses query embeddings to find semantically similar memories without keyword overlap", () => {
     const first = store.createMemory({
       content: "Use embeddinggemma for local retrieval.",
@@ -229,6 +264,48 @@ describe("MemoryStore", () => {
     expect(results).toHaveLength(1);
     expect(results[0]?.memory.id).toBe(first.id);
     expect(results[0]?.scoreBreakdown.vector).toBeGreaterThan(0.9);
+  });
+
+  test("records one retrieved audit event per hybrid search", () => {
+    const first = store.createMemory({
+      content: "Use embeddinggemma for local retrieval.",
+      layer: "recall",
+      tags: ["ollama"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.7,
+      confidence: 0.9,
+      embedding: [1, 0, 0]
+    });
+    const second = store.createMemory({
+      content: "Use local embeddings for memory recall.",
+      layer: "recall",
+      tags: ["ollama"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.9,
+      embedding: [0.9, 0.1, 0]
+    });
+
+    const results = store.searchMemory({
+      query: "semantic lookup",
+      queryEmbedding: [0.95, 0.05, 0],
+      limit: 2
+    });
+    const retrievedEvents = store.listRecentEvents({ limit: 10 }).filter((event) => event.eventType === "retrieved");
+
+    expect(results.map((result) => result.memory.id)).toEqual([first.id, second.id]);
+    expect(retrievedEvents).toHaveLength(1);
+    expect(retrievedEvents[0]?.memoryId).toBe(first.id);
+    expect(retrievedEvents[0]?.payload).toEqual({
+      query: "semantic lookup",
+      hybrid: true,
+      resultCount: 2,
+      memoryIds: [first.id, second.id]
+    });
+    expect(store.getMemory(first.id)?.lastAccessedAt).toBeInstanceOf(Date);
+    expect(store.getMemory(second.id)?.lastAccessedAt).toBeInstanceOf(Date);
   });
 
   test("refuses to store likely secrets unless explicitly overridden", () => {
