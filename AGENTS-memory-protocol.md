@@ -53,6 +53,7 @@
 
 - `projectPath` を渡すと、ローカルパスを hash 化した project scope が使われます。
 - 検索時に scope が指定された場合、既定では同じ scope と `global` のメモリだけを返します。
+- `memory_digest` は `projectPath` を検索文に混ぜず、scope の判定だけに使います。
 - 明示的に横断検索したいときだけ `includeCrossProject: true` を使います。
 - 個人パスをそのまま保存したくない場合は `projectPath` を使います。人間が読める scope 名が必要な場合だけ `projectScope` を使います。
 

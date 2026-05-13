@@ -324,6 +324,42 @@ describe("MemoryStore", () => {
     expect(results.map((result) => result.memory.id)).toEqual([sameProject.id]);
   });
 
+  test("allows explicit cross-project keyword search and audits the scope decision", () => {
+    const alpha = store.createMemory({
+      content: "Cross project lookup phrase for alpha.",
+      layer: "recall",
+      tags: ["scope"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "alpha"
+    });
+    const beta = store.createMemory({
+      content: "Cross project lookup phrase for beta.",
+      layer: "recall",
+      tags: ["scope"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "beta"
+    });
+
+    const results = store.searchMemory({
+      query: "cross project lookup phrase",
+      projectScope: "alpha",
+      includeCrossProject: true,
+      limit: 10
+    });
+    const retrievedEvents = store.listRecentEvents({ limit: 10 }).filter((event) => event.eventType === "retrieved");
+
+    expect(results.map((result) => result.memory.id).sort((left, right) => left - right)).toEqual([alpha.id, beta.id]);
+    expect(retrievedEvents[0]?.payload).toMatchObject({
+      query: "cross project lookup phrase",
+      projectScope: "alpha",
+      includeCrossProject: true,
+      scopeFilterApplied: false,
+      resultProjectScopes: ["alpha", "beta"]
+    });
+  });
+
   test("records one retrieved audit event per keyword search", () => {
     const first = store.createMemory({
       content: "Shared audit lookup phrase.",
@@ -352,8 +388,11 @@ describe("MemoryStore", () => {
     expect(retrievedEvents[0]?.memoryId).toBe(first.id);
     expect(retrievedEvents[0]?.payload).toEqual({
       query: "shared audit lookup phrase",
+      includeCrossProject: false,
+      scopeFilterApplied: false,
       resultCount: 2,
-      memoryIds: [first.id, second.id]
+      memoryIds: [first.id, second.id],
+      resultProjectScopes: ["global"]
     });
     expect(store.getMemory(first.id)?.lastAccessedAt).toBeInstanceOf(Date);
     expect(store.getMemory(second.id)?.lastAccessedAt).toBeInstanceOf(Date);
@@ -427,8 +466,11 @@ describe("MemoryStore", () => {
     expect(retrievedEvents[0]?.payload).toEqual({
       query: "semantic lookup",
       hybrid: true,
+      includeCrossProject: false,
+      scopeFilterApplied: false,
       resultCount: 2,
-      memoryIds: [first.id, second.id]
+      memoryIds: [first.id, second.id],
+      resultProjectScopes: ["global"]
     });
     expect(store.getMemory(first.id)?.lastAccessedAt).toBeInstanceOf(Date);
     expect(store.getMemory(second.id)?.lastAccessedAt).toBeInstanceOf(Date);
@@ -769,6 +811,36 @@ describe("MemoryStore", () => {
     const memories = store.listMemories({ layers: ["core"] });
 
     expect(memories.map((memory) => memory.id)).toEqual([core.id]);
+  });
+
+  test("lists memories within a project scope plus global memories", () => {
+    const global = store.createMemory({
+      content: "Global scoped listing memory.",
+      layer: "core",
+      tags: ["list"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const alpha = store.createMemory({
+      content: "Alpha scoped listing memory.",
+      layer: "recall",
+      tags: ["list"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "alpha"
+    });
+    store.createMemory({
+      content: "Beta scoped listing memory.",
+      layer: "recall",
+      tags: ["list"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectScope: "beta"
+    });
+
+    const memories = store.listMemories({ projectScope: "alpha", limit: 10 });
+
+    expect(memories.map((memory) => memory.id)).toEqual([alpha.id, global.id]);
   });
 });
 

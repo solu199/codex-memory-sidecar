@@ -134,6 +134,7 @@ export interface BackupMemorySummary {
   layer: MemoryLayer;
   summary: string;
   tags: string[];
+  projectScope: string;
   sourceType: string;
   sourceRef: string;
   importance: number;
@@ -151,6 +152,9 @@ export interface InspectBackupInput {
   includeSuperseded?: boolean;
   includeForgotten?: boolean;
   limit?: number;
+  projectScope?: string;
+  projectPath?: string;
+  includeCrossProject?: boolean;
 }
 
 export interface BackupInspection extends BackupVerification {
@@ -201,4 +205,7 @@ export interface ListMemoriesInput {
   includeForgotten?: boolean;
   since?: string;
   limit?: number;
+  projectScope?: string;
+  projectPath?: string;
+  includeCrossProject?: boolean;
 }

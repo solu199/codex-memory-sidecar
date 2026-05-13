@@ -7,7 +7,7 @@ Codex app 向けのローカル MCP メモリサイドカーです。個人利�
 - `write_memory` / `update_memory` / `forget_memory` でメモリを安全に管理します。
 - `search_memory` は SQLite FTS と、Ollama が使える場合はローカル embedding を組み合わせて検索します。
 - `memory_digest` は作業前に関連しそうなメモリを短くまとめます。
-- `projectScope` / `projectPath` を使うと、同じプロジェクトのメモリと `global` メモリを優先して検索し、別プロジェクトの混入を抑えます。
+- `projectScope` / `projectPath` を使うと、同じプロジェクトのメモリと `global` メモリに絞り、別プロジェクトの混入を抑えます。
 - `backup_memory` / `verify_backup` / `inspect_backup` で SQLite バックアップを作成・確認できます。
 - `planBackupRetention` は既定バックアップの保持計画を dry-run で返します。ファイル削除はしません。
 - `health_check`、`memory_stats`、read-only dashboard で状態を確認できます。
@@ -134,7 +134,8 @@ ollama pull embeddinggemma
 
 - `write_memory` に `projectScope` を渡すと、その文字列を正規化して保存します。
 - `projectPath` を渡すと、絶対パスを hash 化した `project:<hash>` scope として保存します。生のローカルパスは scope 名に残しません。
-- `search_memory` / `memory_digest` に同じ `projectScope` または `projectPath` を渡すと、その scope と `global` のメモリだけを既定で検索します。
+- `search_memory` / `memory_digest` / `list_memory_summaries` / `consolidate_memory` / `inspect_backup` に同じ `projectScope` または `projectPath` を渡すと、その scope と `global` のメモリだけを既定で扱います。
+- `memory_digest` は `projectPath` を検索文や audit payload に混ぜず、scope の判定だけに使います。
 - 全プロジェクトを横断したい場合は `includeCrossProject: true` を指定します。
 
 ## 開発メモ

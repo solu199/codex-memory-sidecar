@@ -64,6 +64,7 @@ interface BackupMemorySummaryRow {
   layer: MemoryLayer;
   summary: string;
   tags: string;
+  project_scope?: string;
   source_type: string;
   source_ref: string;
   importance: number;
@@ -317,6 +318,8 @@ export class MemoryStore {
       params.since = new Date(input.since).toISOString();
     }
 
+    addProjectScopeFilter(clauses, params, input);
+
     const rows = this.db
       .prepare(`SELECT * FROM memories WHERE ${clauses.join(" AND ")} ORDER BY updated_at DESC, id DESC LIMIT @limit`)
       .all(params) as MemoryRow[];
@@ -499,9 +502,15 @@ export class MemoryStore {
         });
       }
 
+      const hasProjectScope = columnExists(backupDb, "memories", "project_scope");
+      if (hasProjectScope) {
+        addProjectScopeFilter(clauses, params, input);
+      }
+
+      const projectScopeSelection = hasProjectScope ? "project_scope" : "'global' AS project_scope";
       const rows = backupDb
         .prepare(
-          `SELECT id, layer, summary, tags, source_type, source_ref, importance, confidence,
+          `SELECT id, layer, summary, tags, ${projectScopeSelection}, source_type, source_ref, importance, confidence,
                   created_at, updated_at, last_accessed_at, expires_at, status
            FROM memories
            WHERE ${clauses.join(" AND ")}
@@ -754,12 +763,16 @@ export class MemoryStore {
     }
 
     const projectScope = resolveProjectScope(input);
+    const scopeFilterApplied = !input.includeCrossProject && projectScope !== GLOBAL_PROJECT_SCOPE;
     this.recordEvent(results[0].memory.id, "retrieved", {
       query: input.query,
       ...(projectScope === GLOBAL_PROJECT_SCOPE ? {} : { projectScope }),
+      includeCrossProject: input.includeCrossProject ?? false,
+      scopeFilterApplied,
       ...payload,
       resultCount: results.length,
-      memoryIds: results.map((result) => result.memory.id)
+      memoryIds: results.map((result) => result.memory.id),
+      resultProjectScopes: uniqueProjectScopes(results)
     });
   }
 
@@ -845,6 +858,7 @@ function mapBackupMemorySummary(row: BackupMemorySummaryRow): BackupMemorySummar
     layer: row.layer,
     summary: row.summary,
     tags: safeParseTags(row.tags),
+    projectScope: row.project_scope ?? GLOBAL_PROJECT_SCOPE,
     sourceType: row.source_type,
     sourceRef: row.source_ref,
     importance: row.importance,
@@ -886,6 +900,11 @@ function tableExists(db: Database.Database, table: string): boolean {
     .prepare("SELECT 1 AS found FROM sqlite_master WHERE type IN ('table', 'virtual table') AND name = ?")
     .get(table) as { found: number } | undefined;
   return row?.found === 1;
+}
+
+function columnExists(db: Database.Database, table: string, column: string): boolean {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  return columns.some((item) => item.name === column);
 }
 
 function runIntegrityCheck(db: Database.Database, pragma: "quick_check" | "integrity_check"): string {
@@ -969,6 +988,10 @@ function resolveProjectScope(input: { projectScope?: string; projectPath?: strin
 function normalizeProjectScope(value: string | undefined): string | null {
   const normalized = value?.trim().replace(/\s+/g, "-").toLowerCase();
   return normalized || null;
+}
+
+function uniqueProjectScopes(results: SearchMemoryResult[]): string[] {
+  return [...new Set(results.map((result) => result.memory.projectScope))].sort();
 }
 
 function scoreKeywordRow(row: MemoryRow & { keyword_rank: number }): SearchMemoryResult {
