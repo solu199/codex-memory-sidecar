@@ -58,6 +58,18 @@ Ollama と `embeddinggemma` の疎通を確認する smoke test も実行でき�
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:ollama
 ```
 
+ローカル状態をブラウザで確認したい場合は、read-only dashboard を起動できます。`127.0.0.1` のみに bind し、メモリ本文や audit payload は表示しません。
+
+```powershell
+node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run dashboard
+```
+
+起動後、次の URL を開きます。
+
+```text
+http://127.0.0.1:3737
+```
+
 ## 設定
 
 デフォルト設定を上書きしたい場合は、`config/memory-sidecar.toml` を作成します。
