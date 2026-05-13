@@ -65,6 +65,7 @@ describe("MemoryStore", () => {
       tags: ["decision"],
       sourceType: "manual",
       sourceRef: "test",
+      embedding: [1, 0],
       importance: 0.5,
       confidence: 0.6
     });
@@ -72,10 +73,12 @@ describe("MemoryStore", () => {
     const updated = store.updateMemory({
       memoryId: created.id,
       newContent: "Use TypeScript for the memory sidecar.",
-      updateNote: "Design default changed."
+      updateNote: "Design default changed.",
+      embedding: [0, 1]
     });
 
     expect(updated.content).toBe("Use TypeScript for the memory sidecar.");
+    expect(updated.embedding).toEqual([0, 1]);
     expect(updated.updatedAt.getTime()).toBeGreaterThanOrEqual(created.updatedAt.getTime());
 
     const events = store.listEvents(created.id);

@@ -247,6 +247,30 @@ describe("MCP tool handlers", () => {
     expect(result.structuredContent.warnings).toEqual(["Embedding unavailable: Ollama offline"]);
   });
 
+  test("update_memory recalculates embedding from new content", async () => {
+    const embedder = {
+      embed: vi.fn().mockResolvedValueOnce([1, 0]).mockResolvedValueOnce([0, 1])
+    };
+    const tools = createToolHandlers(store, { embeddingProvider: embedder });
+    const created = await tools.writeMemory({
+      content: "Old semantic meaning.",
+      layer: "recall",
+      tags: ["embedding"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const updated = await tools.updateMemory({
+      memoryId: created.structuredContent.memory.id,
+      newContent: "New semantic meaning.",
+      updateNote: "semantic update"
+    });
+
+    expect(embedder.embed).toHaveBeenLastCalledWith("New semantic meaning.");
+    expect(updated.structuredContent.memory.embedding).toEqual([0, 1]);
+    expect(store.getMemory(created.structuredContent.memory.id)?.embedding).toEqual([0, 1]);
+  });
+
   test("health_check reports database and embedding readiness", async () => {
     const tools = createToolHandlers(store, {
       embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2, 0.3]) }

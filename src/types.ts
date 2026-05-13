@@ -48,6 +48,7 @@ export interface UpdateMemoryInput {
   updateNote: string;
   tags?: string[];
   summary?: string;
+  embedding?: number[] | null;
   allowSecret?: boolean;
 }
 

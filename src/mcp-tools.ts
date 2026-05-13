@@ -296,17 +296,20 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
     },
 
     async updateMemory(input: UpdateMemoryToolInput) {
+      const embedding = await tryEmbed(options.embeddingProvider, input.newContent);
       const memory = store.updateMemory({
         memoryId: input.memoryId,
         newContent: input.newContent,
         updateNote: input.updateNote,
         tags: input.tags,
+        embedding: embedding.value,
         allowSecret: input.allowSecret ?? false
       });
 
       return toolResult({
         memory: serializeMemory(memory),
-        event: "updated"
+        event: "updated",
+        warnings: embedding.warning ? [embedding.warning] : []
       });
     },
 

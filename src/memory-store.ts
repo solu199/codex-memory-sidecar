@@ -152,6 +152,7 @@ export class MemoryStore {
          SET content = @content,
              summary = @summary,
              tags = @tags,
+             embedding = @embedding,
              updated_at = @updatedAt
          WHERE id = @id`
       )
@@ -160,6 +161,7 @@ export class MemoryStore {
         content: input.newContent,
         summary: input.summary ?? summarize(input.newContent),
         tags: JSON.stringify(input.tags ?? existing.tags),
+        embedding: input.embedding ? JSON.stringify(input.embedding) : null,
         updatedAt: now.toISOString()
       });
 
