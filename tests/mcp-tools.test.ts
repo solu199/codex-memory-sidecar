@@ -315,6 +315,48 @@ describe("MCP tool handlers", () => {
     expect(result.structuredContent.database.eventCount).toBe(101);
   });
 
+  test("memory_stats returns aggregate metadata without memory content", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "Stats should not include this core content.",
+      layer: "core",
+      tags: ["stats"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const forgotten = await tools.writeMemory({
+      content: "Stats should not include this forgotten content.",
+      layer: "recall",
+      tags: ["stats"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    await tools.forgetMemory({
+      memoryId: forgotten.structuredContent.memory.id,
+      reason: "stats status test"
+    });
+
+    const result = await tools.memoryStats({});
+
+    expect(result.structuredContent).toMatchObject({
+      memoryCount: 2,
+      eventCount: 3,
+      byStatus: {
+        active: 1,
+        superseded: 0,
+        forgotten: 1
+      },
+      byLayer: {
+        core: 1,
+        recall: 1,
+        archival: 0
+      }
+    });
+    expect(result.structuredContent.updatedAtRange.newest).toEqual(expect.any(String));
+    expect(JSON.stringify(result.structuredContent)).not.toContain("Stats should not include this core content.");
+    expect(JSON.stringify(result.structuredContent)).not.toContain("Stats should not include this forgotten content.");
+  });
+
   test("forget_memory refuses hard delete without explicit confirmation", async () => {
     const tools = createToolHandlers(store);
     const created = await tools.writeMemory({

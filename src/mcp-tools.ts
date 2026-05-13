@@ -20,6 +20,8 @@ const writeMemorySchema = {
 
 const healthCheckSchema = {};
 
+const memoryStatsSchema = {};
+
 const readMemorySchema = {
   memoryId: z.number().int().positive(),
   includeForgotten: z.boolean().default(false)
@@ -107,6 +109,7 @@ interface WriteMemoryToolInput {
 }
 
 type HealthCheckToolInput = Record<string, never>;
+type MemoryStatsToolInput = Record<string, never>;
 
 interface ReadMemoryToolInput {
   memoryId: number;
@@ -229,6 +232,21 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           error: embedding.warning ? embedding.warning.replace(/^Embedding unavailable: /, "") : null
         },
         warnings
+      });
+    },
+
+    async memoryStats(_input: MemoryStatsToolInput) {
+      const stats = store.getStats();
+
+      return toolResult({
+        memoryCount: stats.memoryCount,
+        eventCount: stats.eventCount,
+        byStatus: stats.byStatus,
+        byLayer: stats.byLayer,
+        updatedAtRange: {
+          oldest: stats.updatedAtRange.oldest?.toISOString() ?? null,
+          newest: stats.updatedAtRange.newest?.toISOString() ?? null
+        }
       });
     },
 
@@ -420,6 +438,15 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
       inputSchema: healthCheckSchema
     },
     handlers.healthCheck
+  );
+
+  server.registerTool(
+    "memory_stats",
+    {
+      description: "Return aggregate memory database counts by status and layer without memory contents.",
+      inputSchema: memoryStatsSchema
+    },
+    handlers.memoryStats
   );
 
   server.registerTool(

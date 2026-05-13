@@ -8,6 +8,7 @@ Codex app のためのローカル MCP メモリサイドカーです。
 - `read_memory`
 - `list_memory_summaries`
 - `health_check`
+- `memory_stats`
 - `write_memory`
 - `update_memory`
 - `forget_memory`
@@ -31,6 +32,7 @@ Codex app のためのローカル MCP メモリサイドカーです。
 - `verify_backup` でバックアップファイルが読み取れることと、保存件数を確認できます。
 - `inspect_backup` でバックアップの件数とメモリ要約を read-only で確認できます。本文は返しません。
 - `health_check` でローカル DB と embedding provider の状態を確認できます。
+- `memory_stats` で本文なしの件数集計を確認できます。
 - `audit_memory` で最近の audit event を確認できます。
 - `consolidate_memory` は dry-run 提案を返すだけで、自動適用はしません。
 - 明らかな secret らしき内容は、明示 override なしでは保存を拒否します。

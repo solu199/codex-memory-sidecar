@@ -132,6 +132,15 @@ export interface MemoryStoreCounts {
   eventCount: number;
 }
 
+export interface MemoryStats extends MemoryStoreCounts {
+  byStatus: Record<MemoryStatus, number>;
+  byLayer: Record<MemoryLayer, number>;
+  updatedAtRange: {
+    oldest: Date | null;
+    newest: Date | null;
+  };
+}
+
 export interface ListRecentEventsInput {
   limit?: number;
   memoryId?: number;
