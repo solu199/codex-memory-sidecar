@@ -19,6 +19,7 @@ import type {
   MemoryEvent,
   MemoryEventType,
   MemoryLayer,
+  MemoryStats,
   BackupVerification,
   MemoryStoreCounts,
   SearchMemoryInput,
@@ -67,6 +68,16 @@ interface BackupMemorySummaryRow {
   last_accessed_at: string | null;
   expires_at: string | null;
   status: Memory["status"];
+}
+
+interface CountByValueRow<T extends string> {
+  value: T;
+  count: number;
+}
+
+interface UpdatedAtRangeRow {
+  oldest: string | null;
+  newest: string | null;
 }
 
 export class MemoryStore {
@@ -301,6 +312,47 @@ export class MemoryStore {
     return {
       memoryCount: countRows(this.db, "memories"),
       eventCount: countRows(this.db, "memory_events")
+    };
+  }
+
+  getStats(): MemoryStats {
+    const byStatus: MemoryStats["byStatus"] = {
+      active: 0,
+      superseded: 0,
+      forgotten: 0
+    };
+    const byLayer: MemoryStats["byLayer"] = {
+      core: 0,
+      recall: 0,
+      archival: 0
+    };
+
+    const statusRows = this.db
+      .prepare("SELECT status AS value, COUNT(*) AS count FROM memories GROUP BY status")
+      .all() as CountByValueRow<Memory["status"]>[];
+    for (const row of statusRows) {
+      byStatus[row.value] = row.count;
+    }
+
+    const layerRows = this.db
+      .prepare("SELECT layer AS value, COUNT(*) AS count FROM memories GROUP BY layer")
+      .all() as CountByValueRow<MemoryLayer>[];
+    for (const row of layerRows) {
+      byLayer[row.value] = row.count;
+    }
+
+    const updatedAtRange = this.db
+      .prepare("SELECT MIN(updated_at) AS oldest, MAX(updated_at) AS newest FROM memories")
+      .get() as UpdatedAtRangeRow;
+
+    return {
+      ...this.countRecords(),
+      byStatus,
+      byLayer,
+      updatedAtRange: {
+        oldest: updatedAtRange.oldest ? new Date(updatedAtRange.oldest) : null,
+        newest: updatedAtRange.newest ? new Date(updatedAtRange.newest) : null
+      }
     };
   }
 
