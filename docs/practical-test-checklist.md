@@ -57,6 +57,7 @@ Codex app に登録する場合も、上と同じ環境変数つきで起動さ�
 - `backup_memory`: backup path が作られる。
 - `verify_backup`: backup が `ok: true` になる。
 - `inspect_backup`: content ではなく summary だけが返る。
+- `repair_memory_index`: health warning が出た場合に、backup 作成後 FTS index を再構築できる。
 
 ## 4. Project Scope 確認
 

@@ -9,6 +9,7 @@ Codex app 向けのローカル MCP メモリサイドカーです。個人利�
 - `memory_digest` は作業前に関連しそうなメモリを短くまとめます。
 - `projectScope` / `projectPath` を使うと、同じプロジェクトのメモリと `global` メモリに絞り、別プロジェクトの混入を抑えます。
 - `backup_memory` / `verify_backup` / `inspect_backup` で SQLite バックアップを作成・確認できます。
+- `repair_memory_index` でバックアップ作成後に FTS index を再構築できます。
 - `planBackupRetention` は既定バックアップの保持計画を dry-run で返します。ファイル削除はしません。
 - `health_check`、`memory_stats`、read-only dashboard で状態を確認できます。
 - `audit_memory` で直近の作成・更新・削除・検索イベントを確認できます。
@@ -22,6 +23,7 @@ Codex app 向けのローカル MCP メモリサイドカーです。個人利�
 - `forget_memory` は既定で論理削除です。物理削除には `hardDelete: true` と `confirmHardDelete: true` が必要です。
 - 検索結果は既定で embedding 配列を返しません。必要な場合だけ `includeEmbedding: true` を指定します。
 - バックアップ確認や inspection は read-only で実行します。
+- `repair_memory_index` は既定で先に SQLite バックアップを作成し、検証してから FTS index だけを再構築します。
 - audit payload 内の長い文字列は上限付きで短縮され、ログの肥大化を抑えます。
 - 起動時メンテナンスは DB quick check、FTS 整合性確認、WAL checkpoint を軽く実行できます。
 
@@ -133,4 +135,5 @@ ollama pull embeddinggemma
 - 通常の `npm` shim が環境によって壊れる場合は、上記の `node ... npm-cli.js` 形式で実行します。
 - 作業プロトコルを Codex/AGENTS 系に組み込む場合は `AGENTS-memory-protocol.md` を参照してください。
 - 実用テスト前の確認手順は `docs/practical-test-checklist.md` を参照してください。
+- 日常運用の手順は `docs/daily-operations.md` を参照してください。
 - `memory_digest` の運用ルールは `docs/memory-digest-protocol.md` を参照してください。

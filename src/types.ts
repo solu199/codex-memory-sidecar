@@ -161,6 +161,21 @@ export interface BackupInspection extends BackupVerification {
   memories: BackupMemorySummary[];
 }
 
+export interface RepairMemoryIndexInput {
+  backupPath?: string;
+  createBackup?: boolean;
+}
+
+export interface MemoryIndexRepair {
+  repaired: boolean;
+  backupPath: string | null;
+  backupVerification: BackupVerification | null;
+  before: DatabaseHealth;
+  after: DatabaseHealth;
+  warnings: string[];
+  repairedAt: Date;
+}
+
 export interface MemoryStoreCounts {
   memoryCount: number;
   eventCount: number;

@@ -56,6 +56,14 @@ export interface DashboardStatus {
       newest: string | null;
     };
   };
+  maintenance: {
+    repairRecommended: boolean;
+    latestBackup: {
+      backupPath: string;
+      sizeBytes: number;
+      mtime: string;
+    } | null;
+  };
   embedding: {
     ok: boolean;
     dimensions: number;
@@ -84,6 +92,8 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
   const counts = store.countRecords();
   const databaseHealth = store.checkDatabaseHealth();
   const memoryStats = store.getStats();
+  const backupRetention = store.planBackupRetention();
+  const latestBackup = backupRetention.backups[0] ?? null;
   const embedding = options.embeddingProvider
     ? await probeEmbedding(options.embeddingProvider)
     : {
@@ -120,6 +130,16 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
         oldest: memoryStats.updatedAtRange.oldest?.toISOString() ?? null,
         newest: memoryStats.updatedAtRange.newest?.toISOString() ?? null
       }
+    },
+    maintenance: {
+      repairRecommended: !databaseHealth.ok && (databaseHealth.integrityCheck !== "ok" || !databaseHealth.fts.ok),
+      latestBackup: latestBackup
+        ? {
+            backupPath: latestBackup.backupPath,
+            sizeBytes: latestBackup.sizeBytes,
+            mtime: latestBackup.mtime.toISOString()
+          }
+        : null
     },
     embedding,
     recentMemories: store.listMemories({ limit: 10 }).map((memory) => ({
@@ -361,6 +381,21 @@ function renderDashboardHtml(): string {
         <ul class="stats-list" id="updated-stats"></ul>
       </div>
     </section>
+    <h2>Maintenance</h2>
+    <section class="stats-grid">
+      <div class="panel">
+        <p class="label">Index Repair</p>
+        <p class="value" id="repair">-</p>
+      </div>
+      <div class="panel">
+        <p class="label">Latest Backup</p>
+        <ul class="stats-list" id="backup-stats"></ul>
+      </div>
+      <div class="panel">
+        <p class="label">Warnings</p>
+        <ul class="stats-list" id="warnings"></ul>
+      </div>
+    </section>
     <h2>Project Scopes</h2>
     <table>
       <thead><tr><th>Scope</th><th>Active</th><th>Total</th><th>Latest</th></tr></thead>
@@ -396,6 +431,18 @@ function renderDashboardHtml(): string {
         oldest: status.memoryStats.updatedAtRange.oldest ?? "-",
         newest: status.memoryStats.updatedAtRange.newest ?? "-"
       });
+      document.getElementById("repair").textContent = status.maintenance.repairRecommended ? "Recommended" : "Not needed";
+      document.getElementById("repair").className = status.maintenance.repairRecommended ? "value status-warn" : "value status-ok";
+      document.getElementById("backup-stats").innerHTML = status.maintenance.latestBackup
+        ? renderStats({
+            path: status.maintenance.latestBackup.backupPath,
+            size: status.maintenance.latestBackup.sizeBytes,
+            modified: status.maintenance.latestBackup.mtime
+          })
+        : renderStats({ latest: "-" });
+      document.getElementById("warnings").innerHTML = status.warnings.length
+        ? status.warnings.map((warning) => "<li><span>" + escapeHtml(warning) + "</span></li>").join("")
+        : renderStats({ current: "none" });
       document.getElementById("project-scopes").innerHTML = status.memoryStats.byProjectScope.map((scope) => (
         "<tr><td class=\\"summary\\">" + escapeHtml(scope.projectScope) + "</td><td>" + scope.active + "</td><td>" + scope.total + "</td><td>" + escapeHtml(scope.latestUpdatedAt ?? "-") + "</td></tr>"
       )).join("");

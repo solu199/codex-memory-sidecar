@@ -26,6 +26,7 @@ describe("runMcpSmoke", () => {
     expect(result.toolNames).toContain("write_memory");
     expect(result.toolNames).toContain("inspect_backup");
     expect(result.toolNames).toContain("memory_stats");
+    expect(result.toolNames).toContain("repair_memory_index");
     expect(result.healthCheck.database.ok).toBe(true);
   });
 });

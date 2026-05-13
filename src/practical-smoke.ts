@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import Database from "better-sqlite3";
+
 import { createDashboardServer } from "./dashboard.js";
 import type { EmbeddingProvider } from "./embedding.js";
 import { createToolHandlers } from "./mcp-tools.js";
@@ -82,6 +84,13 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       projectPath,
       limit: 10
     });
+    const repairDb = new Database(databasePath);
+    try {
+      repairDb.prepare("DELETE FROM memories_fts WHERE rowid = ?").run(alpha.structuredContent.memory.id);
+    } finally {
+      repairDb.close();
+    }
+    const repair = await tools.repairMemoryIndex({});
     const audit = await tools.auditMemory({ limit: 20 });
     const dashboard = await fetchDashboardSnapshot(store, embeddingProvider);
     const counts = store.countRecords();
@@ -100,6 +109,10 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       inspectBackupScoped:
         inspection.structuredContent.memories.length === 1 &&
         inspection.structuredContent.memories[0]?.id === alpha.structuredContent.memory.id,
+      repairMemoryIndex:
+        repair.structuredContent.repaired === true &&
+        repair.structuredContent.before.fts.missingCount === 1 &&
+        repair.structuredContent.after.ok === true,
       auditRecorded: audit.structuredContent.events.some((event) => event.eventType === "retrieved"),
       dashboardShowsProjectScopes:
         dashboard.ok === true &&

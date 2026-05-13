@@ -205,6 +205,42 @@ describe("MemoryStore", () => {
     expect(health.warnings).toContain("FTS index is missing 1 active memory row(s).");
   });
 
+  test("repairs FTS index after creating a verified backup", async () => {
+    const created = store.createMemory({
+      content: "Repair should rebuild missing FTS rows.",
+      layer: "recall",
+      tags: ["repair"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8
+    });
+    const db = new Database(path.join(tempDir, "memory.sqlite"));
+    try {
+      db.prepare("DELETE FROM memories_fts WHERE rowid = ?").run(created.id);
+    } finally {
+      db.close();
+    }
+    expect(store.checkDatabaseHealth().ok).toBe(false);
+
+    const repair = await store.repairMemoryIndex({});
+
+    expect(repair.backupPath).not.toBeNull();
+    expect(repair.backupVerification).not.toBeNull();
+    expect(existsSync(repair.backupPath ?? "")).toBe(true);
+    expect(repair.backupVerification?.ok).toBe(true);
+    expect(repair.before.fts.missingCount).toBe(1);
+    expect(repair.after.ok).toBe(true);
+    expect(repair.after.fts).toMatchObject({
+      ok: true,
+      expectedCount: 1,
+      indexedCount: 1,
+      missingCount: 0,
+      orphanCount: 0
+    });
+    expect(store.searchMemory({ query: "Repair", limit: 1 })[0]?.memory.id).toBe(created.id);
+  });
+
   test("updates a memory while preserving event history", () => {
     const created = store.createMemory({
       content: "Use JavaScript for the memory sidecar.",

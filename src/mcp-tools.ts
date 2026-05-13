@@ -105,6 +105,11 @@ const inspectBackupSchema = {
   includeCrossProject: z.boolean().default(false)
 };
 
+const repairMemoryIndexSchema = {
+  backupPath: z.string().min(1).optional(),
+  createBackup: z.boolean().default(true)
+};
+
 const auditMemorySchema = {
   memoryId: z.number().int().positive().optional(),
   limit: z.number().int().min(1).max(100).default(20)
@@ -210,6 +215,11 @@ interface InspectBackupToolInput {
   projectScope?: string;
   projectPath?: string;
   includeCrossProject?: boolean;
+}
+
+interface RepairMemoryIndexToolInput {
+  backupPath?: string;
+  createBackup?: boolean;
 }
 
 interface AuditMemoryToolInput {
@@ -479,6 +489,34 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       });
     },
 
+    async repairMemoryIndex(input: RepairMemoryIndexToolInput) {
+      const repair = await store.repairMemoryIndex({
+        backupPath: input.backupPath,
+        createBackup: input.createBackup ?? true
+      });
+
+      return toolResult({
+        repaired: repair.repaired,
+        backupPath: repair.backupPath,
+        backupVerification: repair.backupVerification
+          ? {
+              backupPath: repair.backupVerification.backupPath,
+              ok: repair.backupVerification.ok,
+              memoryCount: repair.backupVerification.memoryCount,
+              eventCount: repair.backupVerification.eventCount,
+              integrityCheck: repair.backupVerification.integrityCheck,
+              schemaOk: repair.backupVerification.schemaOk,
+              warnings: repair.backupVerification.warnings,
+              checkedAt: repair.backupVerification.checkedAt.toISOString()
+            }
+          : null,
+        before: serializeDatabaseHealth(repair.before),
+        after: serializeDatabaseHealth(repair.after),
+        warnings: repair.warnings,
+        repairedAt: repair.repairedAt.toISOString()
+      });
+    },
+
     async auditMemory(input: AuditMemoryToolInput) {
       const events = store.listRecentEvents({
         memoryId: input.memoryId,
@@ -619,6 +657,15 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
   );
 
   server.registerTool(
+    "repair_memory_index",
+    {
+      description: "Create a safety backup, rebuild the SQLite FTS index, and report before/after health.",
+      inputSchema: repairMemoryIndexSchema
+    },
+    handlers.repairMemoryIndex
+  );
+
+  server.registerTool(
     "audit_memory",
     {
       description: "Read recent audit events without returning full memory contents.",
@@ -626,6 +673,17 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
     },
     handlers.auditMemory
   );
+}
+
+function serializeDatabaseHealth(health: ReturnType<MemoryStore["checkDatabaseHealth"]>) {
+  return {
+    ok: health.ok,
+    integrityCheck: health.integrityCheck,
+    fts: health.fts,
+    walCheckpoint: health.walCheckpoint,
+    warnings: health.warnings,
+    checkedAt: health.checkedAt.toISOString()
+  };
 }
 
 function toolResult<T extends Record<string, unknown>>(structuredContent: T): ToolResult<T> {
