@@ -9,9 +9,12 @@ import type {
   CreateMemoryInput,
   CreateBackupInput,
   ForgetMemoryInput,
+  InspectBackupInput,
   ListRecentEventsInput,
   ListMemoriesInput,
   Memory,
+  BackupInspection,
+  BackupMemorySummary,
   MemoryBackup,
   MemoryEvent,
   MemoryEventType,
@@ -48,6 +51,22 @@ interface EventRow {
   event_type: MemoryEventType;
   payload_json: string;
   created_at: string;
+}
+
+interface BackupMemorySummaryRow {
+  id: number;
+  layer: MemoryLayer;
+  summary: string;
+  tags: string;
+  source_type: string;
+  source_ref: string;
+  importance: number;
+  confidence: number;
+  created_at: string;
+  updated_at: string;
+  last_accessed_at: string | null;
+  expires_at: string | null;
+  status: Memory["status"];
 }
 
 export class MemoryStore {
@@ -316,6 +335,58 @@ export class MemoryStore {
     }
   }
 
+  inspectBackup(input: InspectBackupInput): BackupInspection {
+    if (!existsSync(input.backupPath)) {
+      throw new Error(`Backup file was not found: ${input.backupPath}`);
+    }
+
+    const limit = Math.max(1, Math.min(input.limit ?? 20, 100));
+    const backupDb = new Database(input.backupPath, { readonly: true, fileMustExist: true });
+    try {
+      const statuses: Memory["status"][] = ["active"];
+      if (input.includeSuperseded) {
+        statuses.push("superseded");
+      }
+      if (input.includeForgotten) {
+        statuses.push("forgotten");
+      }
+      const clauses = [`status IN (${statuses.map((_, index) => `@status${index}`).join(", ")})`];
+      const params: Record<string, unknown> = { limit };
+      statuses.forEach((status, index) => {
+        params[`status${index}`] = status;
+      });
+
+      if (input.layers?.length) {
+        clauses.push(`layer IN (${input.layers.map((_, index) => `@layer${index}`).join(", ")})`);
+        input.layers.forEach((layer, index) => {
+          params[`layer${index}`] = layer;
+        });
+      }
+
+      const rows = backupDb
+        .prepare(
+          `SELECT id, layer, summary, tags, source_type, source_ref, importance, confidence,
+                  created_at, updated_at, last_accessed_at, expires_at, status
+           FROM memories
+           WHERE ${clauses.join(" AND ")}
+           ORDER BY updated_at DESC, id DESC
+           LIMIT @limit`
+        )
+        .all(params) as BackupMemorySummaryRow[];
+
+      return {
+        backupPath: input.backupPath,
+        ok: true,
+        memoryCount: countRows(backupDb, "memories"),
+        eventCount: countRows(backupDb, "memory_events"),
+        checkedAt: new Date(),
+        memories: rows.map(mapBackupMemorySummary)
+      };
+    } finally {
+      backupDb.close();
+    }
+  }
+
   private defaultBackupPath(): string {
     const stamp = new Date()
       .toISOString()
@@ -492,6 +563,24 @@ function mapEvent(row: EventRow): MemoryEvent {
     eventType: row.event_type,
     payload: JSON.parse(row.payload_json) as Record<string, unknown>,
     createdAt: new Date(row.created_at)
+  };
+}
+
+function mapBackupMemorySummary(row: BackupMemorySummaryRow): BackupMemorySummary {
+  return {
+    id: row.id,
+    layer: row.layer,
+    summary: row.summary,
+    tags: safeParseTags(row.tags),
+    sourceType: row.source_type,
+    sourceRef: row.source_ref,
+    importance: row.importance,
+    confidence: row.confidence,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+    lastAccessedAt: row.last_accessed_at ? new Date(row.last_accessed_at) : null,
+    expiresAt: row.expires_at ? new Date(row.expires_at) : null,
+    status: row.status
   };
 }
 

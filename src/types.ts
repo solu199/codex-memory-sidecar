@@ -99,6 +99,34 @@ export interface BackupVerification {
   checkedAt: Date;
 }
 
+export interface BackupMemorySummary {
+  id: number;
+  layer: MemoryLayer;
+  summary: string;
+  tags: string[];
+  sourceType: string;
+  sourceRef: string;
+  importance: number;
+  confidence: number;
+  createdAt: Date;
+  updatedAt: Date;
+  lastAccessedAt: Date | null;
+  expiresAt: Date | null;
+  status: MemoryStatus;
+}
+
+export interface InspectBackupInput {
+  backupPath: string;
+  layers?: MemoryLayer[];
+  includeSuperseded?: boolean;
+  includeForgotten?: boolean;
+  limit?: number;
+}
+
+export interface BackupInspection extends BackupVerification {
+  memories: BackupMemorySummary[];
+}
+
 export interface MemoryStoreCounts {
   memoryCount: number;
   eventCount: number;

@@ -391,6 +391,56 @@ describe("MCP tool handlers", () => {
     expect(result.structuredContent.checkedAt).toEqual(expect.any(String));
   });
 
+  test("inspect_backup returns backup counts and summaries without full content", async () => {
+    const tools = createToolHandlers(store);
+    const longVisibleContent = `Backup inspection should show only a generated summary, not this full content. ${"private detail ".repeat(30)}`;
+    const visible = await tools.writeMemory({
+      content: longVisibleContent,
+      layer: "recall",
+      tags: ["backup"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const forgotten = await tools.writeMemory({
+      content: "Forgotten backup content should require opt-in.",
+      layer: "recall",
+      tags: ["backup-hidden"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    await tools.forgetMemory({
+      memoryId: forgotten.structuredContent.memory.id,
+      reason: "backup inspect filter test"
+    });
+    const backup = await tools.backupMemory({});
+
+    const result = await tools.inspectBackup({
+      backupPath: backup.structuredContent.backupPath,
+      limit: 10
+    });
+
+    expect(result.structuredContent.ok).toBe(true);
+    expect(result.structuredContent.memoryCount).toBe(2);
+    expect(result.structuredContent.eventCount).toBe(3);
+    expect(result.structuredContent.memories).toEqual([
+      expect.objectContaining({
+        id: visible.structuredContent.memory.id,
+        summary: expect.stringContaining("Backup inspection should show only a generated summary"),
+        status: "active",
+        tags: ["backup"]
+      })
+    ]);
+    expect(JSON.stringify(result.structuredContent)).not.toContain(longVisibleContent);
+    expect(JSON.stringify(result.structuredContent)).not.toContain("Forgotten backup content should require opt-in.");
+
+    const withForgotten = await tools.inspectBackup({
+      backupPath: backup.structuredContent.backupPath,
+      includeForgotten: true,
+      limit: 10
+    });
+    expect(withForgotten.structuredContent.memories.map((memory) => memory.status)).toEqual(["forgotten", "active"]);
+  });
+
   test("audit_memory returns recent audit events with optional memory filter", async () => {
     const tools = createToolHandlers(store);
     const first = await tools.writeMemory({
