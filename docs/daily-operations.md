@@ -4,9 +4,10 @@ Codex Memory Sidecar を毎日の開発で使うための短い手順です。�
 
 ## 開発開始時
 
-1. `health_check` を実行し、database と embedding が `ok: true` であることを確認します。
-2. 複数ファイルにまたがる作業や過去の判断が関係する作業では、`memory_digest` を `projectPath` 付きで呼びます。
-3. digest は参考情報として扱い、現在のユーザー指示と実ファイルを優先します。
+1. まず `start_memory_session` を `taskDescription` と `projectPath` 付きで呼びます。
+2. `ready: true` なら、返ってきた digest と memory summary を参考にします。
+3. `repairRecommended: true` の場合は、作業に入る前に `repair_memory_index` を検討します。
+4. digest は参考情報として扱い、現在のユーザー指示と実ファイルを優先します。
 
 ## 書き込みルール
 
@@ -18,6 +19,7 @@ Codex Memory Sidecar を毎日の開発で使うための短い手順です。�
 ## 検索ルール
 
 - 通常は `projectPath` を指定し、同一 project scope と `global` だけを検索します。
+- 作業開始時は個別の `health_check` と `memory_digest` より、まず `start_memory_session` を優先します。
 - 明示的に横断確認が必要なときだけ `includeCrossProject: true` を使います。
 - 検索結果は memory id と summary を根拠にし、必要に応じて `read_memory` や `audit_memory` で確認します。
 

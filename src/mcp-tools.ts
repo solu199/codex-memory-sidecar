@@ -86,6 +86,14 @@ const memoryDigestSchema = {
   maxTokens: z.number().int().min(50).max(4000).default(800)
 };
 
+const startMemorySessionSchema = {
+  taskDescription: z.string().min(1),
+  projectScope: z.string().min(1).optional(),
+  projectPath: z.string().optional(),
+  includeCrossProject: z.boolean().default(false),
+  maxTokens: z.number().int().min(50).max(4000).default(800)
+};
+
 const backupMemorySchema = {
   backupPath: z.string().min(1).optional()
 };
@@ -191,6 +199,14 @@ interface ConsolidateMemoryToolInput {
 }
 
 interface MemoryDigestToolInput {
+  taskDescription: string;
+  projectScope?: string;
+  projectPath?: string;
+  includeCrossProject?: boolean;
+  maxTokens?: number;
+}
+
+interface StartMemorySessionToolInput {
   taskDescription: string;
   projectScope?: string;
   projectPath?: string;
@@ -304,6 +320,12 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         eventCount: stats.eventCount,
         byStatus: stats.byStatus,
         byLayer: stats.byLayer,
+        byProjectScope: stats.byProjectScope.map((scope) => ({
+          projectScope: scope.projectScope,
+          total: scope.total,
+          active: scope.active,
+          latestUpdatedAt: scope.latestUpdatedAt?.toISOString() ?? null
+        })),
         updatedAtRange: {
           oldest: stats.updatedAtRange.oldest?.toISOString() ?? null,
           newest: stats.updatedAtRange.newest?.toISOString() ?? null
@@ -436,6 +458,68 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         digest,
         memories: serialized,
         warnings: embedding.warning ? [embedding.warning] : []
+      });
+    },
+
+    async startMemorySession(input: StartMemorySessionToolInput) {
+      const databaseHealth = store.checkDatabaseHealth();
+      const stats = store.getStats();
+      const embedding = await tryEmbed(options.embeddingProvider, input.taskDescription);
+      const database = {
+        ok: databaseHealth.ok,
+        integrityCheck: databaseHealth.integrityCheck,
+        fts: databaseHealth.fts,
+        walCheckpoint: databaseHealth.walCheckpoint
+      };
+      const embeddingStatus = {
+        ok: embedding.warning === null,
+        dimensions: embedding.value?.length ?? 0,
+        error: embedding.warning ? embedding.warning.replace(/^Embedding unavailable: /, "") : null
+      };
+      const repairRecommended =
+        !databaseHealth.ok && (databaseHealth.integrityCheck !== "ok" || !databaseHealth.fts.ok);
+      const warnings = [...databaseHealth.warnings, ...(embedding.warning ? [embedding.warning] : [])];
+
+      if (!databaseHealth.ok) {
+        return toolResult({
+          ready: false,
+          taskDescription: input.taskDescription,
+          health: {
+            database,
+            embedding: embeddingStatus
+          },
+          memoryStats: serializeMemoryStats(stats),
+          repairRecommended,
+          digest: "",
+          memories: [] as unknown[],
+          warnings,
+          startedAt: new Date().toISOString()
+        });
+      }
+
+      const results = store.searchMemory({
+        query: input.taskDescription,
+        queryEmbedding: embedding.value,
+        limit: 8,
+        projectScope: input.projectScope,
+        projectPath: input.projectPath,
+        includeCrossProject: input.includeCrossProject ?? false
+      });
+      const serialized = results.map((result) => serializeSearchResult(result));
+
+      return toolResult({
+        ready: true,
+        taskDescription: input.taskDescription,
+        health: {
+          database,
+          embedding: embeddingStatus
+        },
+        memoryStats: serializeMemoryStats(stats),
+        repairRecommended,
+        digest: compactDigest(serialized, input.maxTokens ?? 800),
+        memories: results.map(serializeSessionMemory),
+        warnings,
+        startedAt: new Date().toISOString()
       });
     },
 
@@ -630,6 +714,15 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
   );
 
   server.registerTool(
+    "start_memory_session",
+    {
+      description: "Check readiness and return compact project-scoped memory context for starting work.",
+      inputSchema: startMemorySessionSchema
+    },
+    handlers.startMemorySession
+  );
+
+  server.registerTool(
     "backup_memory",
     {
       description: "Create an explicit SQLite backup of the local memory database.",
@@ -683,6 +776,25 @@ function serializeDatabaseHealth(health: ReturnType<MemoryStore["checkDatabaseHe
     walCheckpoint: health.walCheckpoint,
     warnings: health.warnings,
     checkedAt: health.checkedAt.toISOString()
+  };
+}
+
+function serializeMemoryStats(stats: ReturnType<MemoryStore["getStats"]>) {
+  return {
+    memoryCount: stats.memoryCount,
+    eventCount: stats.eventCount,
+    byStatus: stats.byStatus,
+    byLayer: stats.byLayer,
+    byProjectScope: stats.byProjectScope.map((scope) => ({
+      projectScope: scope.projectScope,
+      total: scope.total,
+      active: scope.active,
+      latestUpdatedAt: scope.latestUpdatedAt?.toISOString() ?? null
+    })),
+    updatedAtRange: {
+      oldest: stats.updatedAtRange.oldest?.toISOString() ?? null,
+      newest: stats.updatedAtRange.newest?.toISOString() ?? null
+    }
   };
 }
 
@@ -743,6 +855,24 @@ function serializeMemorySummary(memory: Memory) {
     lastAccessedAt: memory.lastAccessedAt?.toISOString() ?? null,
     expiresAt: memory.expiresAt?.toISOString() ?? null,
     status: memory.status
+  };
+}
+
+function serializeSessionMemory(result: SearchMemoryResult) {
+  return {
+    id: result.memory.id,
+    layer: result.memory.layer,
+    summary: result.memory.summary,
+    tags: result.memory.tags,
+    projectScope: result.memory.projectScope,
+    sourceType: result.memory.sourceType,
+    sourceRef: result.memory.sourceRef,
+    importance: result.memory.importance,
+    confidence: result.memory.confidence,
+    updatedAt: result.memory.updatedAt.toISOString(),
+    status: result.memory.status,
+    score: result.score,
+    scoreBreakdown: result.scoreBreakdown
   };
 }
 

@@ -543,6 +543,66 @@ describe("MCP tool handlers", () => {
     expect(JSON.stringify(result.structuredContent)).not.toContain("Stats should not include this forgotten content.");
   });
 
+  test("start_memory_session returns health stats and digest without full memory content", async () => {
+    const tools = createToolHandlers(store);
+    store.createMemory({
+      content: "Daily startup private body should not be returned in session summaries.",
+      summary: "Use daily startup digest before multi-file work.",
+      layer: "core",
+      tags: ["daily"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectPath: tempDir
+    });
+
+    const result = await tools.startMemorySession({
+      taskDescription: "daily startup digest",
+      projectPath: tempDir,
+      maxTokens: 200
+    });
+
+    expect(result.structuredContent.ready).toBe(true);
+    expect(result.structuredContent.health.database.ok).toBe(true);
+    expect(result.structuredContent.memoryStats.memoryCount).toBe(1);
+    expect(result.structuredContent.digest).toContain("daily startup digest");
+    expect(result.structuredContent.memories).toEqual([
+      expect.objectContaining({
+        layer: "core",
+        summary: "Use daily startup digest before multi-file work.",
+        tags: ["daily"]
+      })
+    ]);
+    expect(JSON.stringify(result.structuredContent)).not.toContain("Daily startup private body");
+  });
+
+  test("start_memory_session skips digest and recommends repair when database health is not ok", async () => {
+    const tools = createToolHandlers(store);
+    const created = await tools.writeMemory({
+      content: "Broken FTS should not be queried during session start.",
+      layer: "recall",
+      tags: ["daily"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const db = new Database(path.join(tempDir, "memory.sqlite"));
+    try {
+      db.prepare("DELETE FROM memories_fts WHERE rowid = ?").run(created.structuredContent.memory.id);
+    } finally {
+      db.close();
+    }
+
+    const result = await tools.startMemorySession({
+      taskDescription: "broken FTS startup",
+      projectPath: tempDir
+    });
+
+    expect(result.structuredContent.ready).toBe(false);
+    expect(result.structuredContent.repairRecommended).toBe(true);
+    expect(result.structuredContent.digest).toBe("");
+    expect(result.structuredContent.memories).toEqual([]);
+    expect(result.structuredContent.warnings).toContain("FTS index is missing 1 active memory row(s).");
+  });
+
   test("forget_memory refuses hard delete without explicit confirmation", async () => {
     const tools = createToolHandlers(store);
     const created = await tools.writeMemory({

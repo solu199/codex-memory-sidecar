@@ -11,6 +11,7 @@ describe("runPracticalSmoke", () => {
       writeMemory: true,
       scopedSearchExcludesBeta: true,
       crossProjectSearchIncludesBeta: true,
+      startMemorySession: true,
       digestUsesScopedMemory: true,
       backupVerified: true,
       inspectBackupScoped: true,

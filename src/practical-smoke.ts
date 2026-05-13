@@ -71,6 +71,11 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       includeCrossProject: true,
       limit: 10
     });
+    const session = await tools.startMemorySession({
+      taskDescription: "Practical scoped memory",
+      projectPath,
+      maxTokens: 200
+    });
     const digest = await tools.memoryDigest({
       taskDescription: "Practical scoped memory",
       projectPath,
@@ -102,6 +107,10 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       writeMemory: alpha.structuredContent.memory.projectScope.startsWith("project:"),
       scopedSearchExcludesBeta: scopedIds.length === 1 && scopedIds[0] === alpha.structuredContent.memory.id,
       crossProjectSearchIncludesBeta: crossScopeNames.includes("beta"),
+      startMemorySession:
+        session.structuredContent.ready === true &&
+        session.structuredContent.digest.includes("alpha project") &&
+        !JSON.stringify(session.structuredContent).includes("beta project"),
       digestUsesScopedMemory:
         digest.structuredContent.digest.includes("alpha project") &&
         !digest.structuredContent.digest.includes("beta project"),
