@@ -3,6 +3,7 @@ import path from "node:path";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import Database from "better-sqlite3";
 
 import { MemoryStore } from "../src/memory-store.js";
 
@@ -56,6 +57,19 @@ describe("MemoryStore", () => {
 
     expect(created.status).toBe("active");
     nestedStore.close();
+  });
+
+  test("creates indexes for common status layer and recency queries", () => {
+    const db = new Database(path.join(tempDir, "memory.sqlite"), { readonly: true, fileMustExist: true });
+    try {
+      const indexes = db.prepare("PRAGMA index_list(memories)").all() as { name: string }[];
+
+      expect(indexes.map((index) => index.name)).toEqual(
+        expect.arrayContaining(["idx_memories_status_updated", "idx_memories_layer_status"])
+      );
+    } finally {
+      db.close();
+    }
   });
 
   test("updates a memory while preserving event history", () => {

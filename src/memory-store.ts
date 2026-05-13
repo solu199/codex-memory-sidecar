@@ -508,6 +508,12 @@ export class MemoryStore {
         summary,
         tags
       );
+
+      CREATE INDEX IF NOT EXISTS idx_memories_status_updated
+        ON memories(status, updated_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_memories_layer_status
+        ON memories(layer, status);
     `);
     this.addColumnIfMissing("memories", "embedding", "TEXT");
   }
