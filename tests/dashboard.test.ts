@@ -46,6 +46,18 @@ describe("dashboard", () => {
     expect(status.ok).toBe(true);
     expect(status.database.memoryCount).toBe(2);
     expect(status.database.eventCount).toBe(3);
+    expect(status.memoryStats).toMatchObject({
+      byStatus: {
+        active: 1,
+        superseded: 0,
+        forgotten: 1
+      },
+      byLayer: {
+        core: 2,
+        recall: 0,
+        archival: 0
+      }
+    });
     expect(status.embedding.dimensions).toBe(2);
     expect(status.recentMemories).toEqual([
       expect.objectContaining({
@@ -82,6 +94,7 @@ describe("dashboard", () => {
       expect(page.headers.get("content-type")).toContain("text/html");
       const html = await page.text();
       expect(html).toContain("Codex Memory Sidecar");
+      expect(html).toContain("Memory Stats");
       expect(html).toContain("Recent Memories");
 
       const response = await fetch(`${baseUrl}/api/status`);
@@ -90,6 +103,11 @@ describe("dashboard", () => {
         ok: true,
         database: {
           ok: true
+        },
+        memoryStats: {
+          byStatus: {
+            active: 0
+          }
         },
         recentMemories: []
       });

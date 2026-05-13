@@ -20,6 +20,22 @@ export interface DashboardStatus {
     memoryCount: number;
     eventCount: number;
   };
+  memoryStats: {
+    byStatus: {
+      active: number;
+      superseded: number;
+      forgotten: number;
+    };
+    byLayer: {
+      core: number;
+      recall: number;
+      archival: number;
+    };
+    updatedAtRange: {
+      oldest: string | null;
+      newest: string | null;
+    };
+  };
   embedding: {
     ok: boolean;
     dimensions: number;
@@ -46,6 +62,7 @@ export interface DashboardStatus {
 
 export async function buildDashboardStatus(store: MemoryStore, options: DashboardOptions = {}): Promise<DashboardStatus> {
   const counts = store.countRecords();
+  const memoryStats = store.getStats();
   const embedding = options.embeddingProvider
     ? await probeEmbedding(options.embeddingProvider)
     : {
@@ -62,6 +79,14 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
       ok: true,
       memoryCount: counts.memoryCount,
       eventCount: counts.eventCount
+    },
+    memoryStats: {
+      byStatus: memoryStats.byStatus,
+      byLayer: memoryStats.byLayer,
+      updatedAtRange: {
+        oldest: memoryStats.updatedAtRange.oldest?.toISOString() ?? null,
+        newest: memoryStats.updatedAtRange.newest?.toISOString() ?? null
+      }
     },
     embedding,
     recentMemories: store.listMemories({ limit: 10 }).map((memory) => ({
@@ -211,6 +236,25 @@ function renderDashboardHtml(): string {
       font-size: 13px;
       overflow-wrap: anywhere;
     }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .stats-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 14px;
+    }
+    .stats-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 6px 0;
+      border-bottom: 1px solid #e4e7eb;
+    }
     th, td {
       border-bottom: 1px solid #e4e7eb;
       padding: 10px;
@@ -250,6 +294,9 @@ function renderDashboardHtml(): string {
       .tags {
         color: #cbd5e1;
       }
+      .stats-list li {
+        border-color: #374151;
+      }
     }
   </style>
 </head>
@@ -264,6 +311,21 @@ function renderDashboardHtml(): string {
       <div class="panel"><p class="label">Memories</p><p class="value" id="memories">-</p></div>
       <div class="panel"><p class="label">Events</p><p class="value" id="events">-</p></div>
       <div class="panel"><p class="label">Embedding</p><p class="value" id="embedding">-</p></div>
+    </section>
+    <h2>Memory Stats</h2>
+    <section class="stats-grid">
+      <div class="panel">
+        <p class="label">Status</p>
+        <ul class="stats-list" id="status-stats"></ul>
+      </div>
+      <div class="panel">
+        <p class="label">Layer</p>
+        <ul class="stats-list" id="layer-stats"></ul>
+      </div>
+      <div class="panel">
+        <p class="label">Updated</p>
+        <ul class="stats-list" id="updated-stats"></ul>
+      </div>
     </section>
     <h2>Recent Memories</h2>
     <table>
@@ -285,11 +347,22 @@ function renderDashboardHtml(): string {
       document.getElementById("memories").textContent = String(status.database.memoryCount);
       document.getElementById("events").textContent = String(status.database.eventCount);
       document.getElementById("embedding").textContent = status.embedding.ok ? String(status.embedding.dimensions) : "Unavailable";
+      document.getElementById("status-stats").innerHTML = renderStats(status.memoryStats.byStatus);
+      document.getElementById("layer-stats").innerHTML = renderStats(status.memoryStats.byLayer);
+      document.getElementById("updated-stats").innerHTML = renderStats({
+        oldest: status.memoryStats.updatedAtRange.oldest ?? "-",
+        newest: status.memoryStats.updatedAtRange.newest ?? "-"
+      });
       document.getElementById("recent-memories").innerHTML = status.recentMemories.map((memory) => (
         "<tr><td>" + memory.id + "</td><td>" + escapeHtml(memory.layer) + "</td><td class=\\"summary\\">" + escapeHtml(memory.summary) + "</td><td class=\\"tags\\">" + escapeHtml(memory.tags.join(", ")) + "</td><td>" + escapeHtml(memory.updatedAt) + "</td></tr>"
       )).join("");
       document.getElementById("recent-events").innerHTML = status.recentEvents.map((event) => (
         "<tr><td>" + event.id + "</td><td>" + event.memoryId + "</td><td>" + event.eventType + "</td><td>" + event.createdAt + "</td></tr>"
+      )).join("");
+    }
+    function renderStats(values) {
+      return Object.entries(values).map(([key, value]) => (
+        "<li><span>" + escapeHtml(key) + "</span><strong>" + escapeHtml(value) + "</strong></li>"
       )).join("");
     }
     function escapeHtml(value) {
