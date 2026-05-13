@@ -7,6 +7,7 @@ import { loadConfig } from "./config.js";
 import type { EmbeddingProvider } from "./embedding.js";
 import { OllamaEmbeddingProvider } from "./embedding.js";
 import { MemoryStore } from "./memory-store.js";
+import { runStartupMaintenance } from "./startup-maintenance.js";
 
 export interface DashboardOptions {
   embeddingProvider?: EmbeddingProvider;
@@ -19,6 +20,19 @@ export interface DashboardStatus {
     ok: boolean;
     memoryCount: number;
     eventCount: number;
+    integrityCheck: string;
+    fts: {
+      ok: boolean;
+      expectedCount: number;
+      indexedCount: number;
+      missingCount: number;
+      orphanCount: number;
+    };
+    walCheckpoint: {
+      busy: number;
+      log: number;
+      checkpointed: number;
+    };
   };
   memoryStats: {
     byStatus: {
@@ -62,6 +76,7 @@ export interface DashboardStatus {
 
 export async function buildDashboardStatus(store: MemoryStore, options: DashboardOptions = {}): Promise<DashboardStatus> {
   const counts = store.countRecords();
+  const databaseHealth = store.checkDatabaseHealth();
   const memoryStats = store.getStats();
   const embedding = options.embeddingProvider
     ? await probeEmbedding(options.embeddingProvider)
@@ -70,15 +85,21 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
         dimensions: 0,
         error: "Embedding provider is not configured."
       };
-  const warnings = embedding.ok ? [] : [embedding.error ?? "Embedding provider is unavailable."];
+  const warnings = [
+    ...databaseHealth.warnings,
+    ...(embedding.ok ? [] : [embedding.error ?? "Embedding provider is unavailable."])
+  ];
 
   return {
-    ok: embedding.ok,
+    ok: databaseHealth.ok && embedding.ok,
     checkedAt: new Date().toISOString(),
     database: {
-      ok: true,
+      ok: databaseHealth.ok,
       memoryCount: counts.memoryCount,
-      eventCount: counts.eventCount
+      eventCount: counts.eventCount,
+      integrityCheck: databaseHealth.integrityCheck,
+      fts: databaseHealth.fts,
+      walCheckpoint: databaseHealth.walCheckpoint
     },
     memoryStats: {
       byStatus: memoryStats.byStatus,
@@ -310,6 +331,7 @@ function renderDashboardHtml(): string {
       <div class="panel"><p class="label">Status</p><p class="value" id="status">Loading</p></div>
       <div class="panel"><p class="label">Memories</p><p class="value" id="memories">-</p></div>
       <div class="panel"><p class="label">Events</p><p class="value" id="events">-</p></div>
+      <div class="panel"><p class="label">Database</p><p class="value" id="database">-</p></div>
       <div class="panel"><p class="label">Embedding</p><p class="value" id="embedding">-</p></div>
     </section>
     <h2>Memory Stats</h2>
@@ -346,6 +368,10 @@ function renderDashboardHtml(): string {
       document.getElementById("status").className = status.ok ? "value status-ok" : "value status-warn";
       document.getElementById("memories").textContent = String(status.database.memoryCount);
       document.getElementById("events").textContent = String(status.database.eventCount);
+      document.getElementById("database").textContent = status.database.ok
+        ? "OK"
+        : "FTS " + status.database.fts.missingCount + "/" + status.database.fts.orphanCount;
+      document.getElementById("database").className = status.database.ok ? "value status-ok" : "value status-warn";
       document.getElementById("embedding").textContent = status.embedding.ok ? String(status.embedding.dimensions) : "Unavailable";
       document.getElementById("status-stats").innerHTML = renderStats(status.memoryStats.byStatus);
       document.getElementById("layer-stats").innerHTML = renderStats(status.memoryStats.byLayer);
@@ -408,6 +434,10 @@ function sendText(response: ServerResponse, statusCode: number, body: string): v
 async function main(): Promise<void> {
   const config = loadConfig();
   const store = new MemoryStore(config.databasePath);
+  const startup = await runStartupMaintenance(store, config);
+  for (const warning of startup.warnings) {
+    console.error(`codex-memory-sidecar dashboard startup warning: ${warning}`);
+  }
   const port = Number(process.env.CODEX_MEMORY_DASHBOARD_PORT ?? 3737);
   const server = createDashboardServer(store, {
     embeddingProvider: new OllamaEmbeddingProvider({

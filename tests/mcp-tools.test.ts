@@ -361,6 +361,13 @@ describe("MCP tool handlers", () => {
     expect(result.structuredContent.ok).toBe(true);
     expect(result.structuredContent.database.ok).toBe(true);
     expect(result.structuredContent.database.memoryCount).toBe(1);
+    expect(result.structuredContent.database.integrityCheck).toBe("ok");
+    expect(result.structuredContent.database.fts).toMatchObject({
+      ok: true,
+      expectedCount: 1,
+      indexedCount: 1
+    });
+    expect(result.structuredContent.database.walCheckpoint.busy).toBe(0);
     expect(result.structuredContent.embedding.ok).toBe(true);
     expect(result.structuredContent.embedding.dimensions).toBe(3);
     expect(result.structuredContent.warnings).toEqual([]);

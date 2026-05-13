@@ -21,6 +21,8 @@ Codex app のためのローカル MCP メモリサイドカーです。
 
 メモリはローカルの SQLite に保存されます。キーワード検索には SQLite FTS を使います。Ollama が起動している場合は、書き込みと検索でローカル embedding も使い、ハイブリッド検索を行います。Ollama が使えない場合でも、ツールはキーワード検索にフォールバックし、warning を返します。
 
+Codex/AGENTS 系の作業手順に組み込むときは、[AGENTS-memory-protocol.md](AGENTS-memory-protocol.md) を参照してください。
+
 ## 安全性
 
 このツールは個人利用のローカルメモリを前提にしています。安全側の挙動として、次の方針を取ります。
@@ -32,6 +34,7 @@ Codex app のためのローカル MCP メモリサイドカーです。
 - `verify_backup` でバックアップファイルが読み取れることと、保存件数を確認できます。
 - `inspect_backup` でバックアップの件数とメモリ要約を read-only で確認できます。本文は返しません。
 - `health_check` でローカル DB と embedding provider の状態を確認できます。
+- 起動時に DB の quick check、FTS 整合性確認、WAL checkpoint を軽く実行します。`auto_backup_on_startup` を有効にした場合は、起動時バックアップを作成して即時検証します。
 - `memory_stats` で本文なしの件数集計を確認できます。
 - `audit_memory` で最近の audit event を確認できます。
 - `consolidate_memory` は dry-run 提案を返すだけで、自動適用はしません。
@@ -96,6 +99,10 @@ maintenance_model = "qwen3"
 database_path = "data/memory.sqlite"
 default_search_limit = 8
 consolidation_dry_run = true
+startup_integrity_check = true
+startup_fts_sanity_check = true
+startup_wal_checkpoint = true
+auto_backup_on_startup = false
 ```
 
 環境変数でも上書きできます。

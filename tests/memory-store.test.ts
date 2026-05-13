@@ -65,11 +65,72 @@ describe("MemoryStore", () => {
       const indexes = db.prepare("PRAGMA index_list(memories)").all() as { name: string }[];
 
       expect(indexes.map((index) => index.name)).toEqual(
-        expect.arrayContaining(["idx_memories_status_updated", "idx_memories_layer_status"])
+        expect.arrayContaining([
+          "idx_memories_status_updated",
+          "idx_memories_layer_status",
+          "idx_memories_active_embedding_candidates"
+        ])
       );
     } finally {
       db.close();
     }
+  });
+
+  test("checks active database integrity and FTS consistency", () => {
+    store.createMemory({
+      content: "Database health should include FTS consistency.",
+      layer: "recall",
+      tags: ["health"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8
+    });
+
+    const health = store.checkDatabaseHealth();
+
+    expect(health.ok).toBe(true);
+    expect(health.integrityCheck).toBe("ok");
+    expect(health.fts).toMatchObject({
+      ok: true,
+      expectedCount: 1,
+      indexedCount: 1,
+      missingCount: 0,
+      orphanCount: 0
+    });
+    expect(health.walCheckpoint.busy).toBe(0);
+    expect(health.warnings).toEqual([]);
+    expect(health.checkedAt).toBeInstanceOf(Date);
+  });
+
+  test("reports missing FTS rows in database health", () => {
+    const created = store.createMemory({
+      content: "Missing FTS rows should be visible.",
+      layer: "recall",
+      tags: ["health"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8
+    });
+    const db = new Database(path.join(tempDir, "memory.sqlite"));
+    try {
+      db.prepare("DELETE FROM memories_fts WHERE rowid = ?").run(created.id);
+    } finally {
+      db.close();
+    }
+
+    const health = store.checkDatabaseHealth();
+
+    expect(health.ok).toBe(false);
+    expect(health.fts).toMatchObject({
+      ok: false,
+      expectedCount: 1,
+      indexedCount: 0,
+      missingCount: 1,
+      orphanCount: 0
+    });
+    expect(health.warnings).toContain("FTS index is missing 1 active memory row(s).");
   });
 
   test("updates a memory while preserving event history", () => {
@@ -308,6 +369,70 @@ describe("MemoryStore", () => {
     expect(store.getMemory(second.id)?.lastAccessedAt).toBeInstanceOf(Date);
   });
 
+  test("caps the non-keyword hybrid candidate pool before vector scoring", () => {
+    const staleCandidate = store.createMemory({
+      content: "High importance but unrelated vector candidate.",
+      layer: "recall",
+      tags: ["candidate"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.9,
+      confidence: 0.9,
+      embedding: [0, 1, 0]
+    });
+    store.createMemory({
+      content: "Low importance vector-only note.",
+      layer: "recall",
+      tags: ["candidate"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.1,
+      confidence: 0.9,
+      embedding: [1, 0, 0]
+    });
+
+    const results = store.searchMemory({
+      query: "semantic lookup",
+      queryEmbedding: [1, 0, 0],
+      limit: 5,
+      hybridCandidateLimit: 1
+    });
+
+    expect(results.map((result) => result.memory.id)).toEqual([staleCandidate.id]);
+  });
+
+  test("keeps keyword matches in hybrid search even outside the vector candidate pool", () => {
+    store.createMemory({
+      content: "High importance unrelated vector candidate.",
+      layer: "recall",
+      tags: ["candidate"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.9,
+      confidence: 0.9,
+      embedding: [0, 1, 0]
+    });
+    const keywordCandidate = store.createMemory({
+      content: "Hybrid keyword rescue candidate.",
+      layer: "recall",
+      tags: ["candidate"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.1,
+      confidence: 0.9,
+      embedding: [1, 0, 0]
+    });
+
+    const results = store.searchMemory({
+      query: "hybrid keyword rescue",
+      queryEmbedding: [0, 1, 0],
+      limit: 5,
+      hybridCandidateLimit: 1
+    });
+
+    expect(results.map((result) => result.memory.id)).toContain(keywordCandidate.id);
+  });
+
   test("refuses to store likely secrets unless explicitly overridden", () => {
     expect(() =>
       store.createMemory({
@@ -399,8 +524,38 @@ describe("MemoryStore", () => {
     expect(result.ok).toBe(true);
     expect(result.memoryCount).toBe(1);
     expect(result.eventCount).toBe(1);
+    expect(result.integrityCheck).toBe("ok");
+    expect(result.schemaOk).toBe(true);
+    expect(result.warnings).toEqual([]);
     expect(result.checkedAt).toBeInstanceOf(Date);
     expect(store.getMemory(created.id)?.content).toBe("Backup verification should be read-only.");
+  });
+
+  test("reports invalid backup schema without modifying the active store", () => {
+    const created = store.createMemory({
+      content: "Backup schema verification should be read-only.",
+      layer: "recall",
+      tags: ["backup"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.6,
+      confidence: 0.9
+    });
+    const invalidBackupPath = path.join(tempDir, "invalid-backup.sqlite");
+    const invalidDb = new Database(invalidBackupPath);
+    invalidDb.exec("CREATE TABLE unrelated (id INTEGER PRIMARY KEY)");
+    invalidDb.close();
+
+    const result = store.verifyBackup({ backupPath: invalidBackupPath });
+
+    expect(result.ok).toBe(false);
+    expect(result.memoryCount).toBe(0);
+    expect(result.eventCount).toBe(0);
+    expect(result.integrityCheck).toBe("ok");
+    expect(result.schemaOk).toBe(false);
+    expect(result.warnings).toContain("Backup is missing required table: memories");
+    expect(result.warnings).toContain("Backup is missing required table: memory_events");
+    expect(store.getMemory(created.id)?.content).toBe("Backup schema verification should be read-only.");
   });
 
   test("lists recent audit events across memories", () => {

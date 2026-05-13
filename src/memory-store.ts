@@ -8,6 +8,7 @@ import { containsLikelySecret, isLikelySecretKey } from "./secret-detection.js";
 import type {
   CreateMemoryInput,
   CreateBackupInput,
+  DatabaseHealth,
   ForgetMemoryInput,
   InspectBackupInput,
   ListRecentEventsInput,
@@ -79,6 +80,9 @@ interface UpdatedAtRangeRow {
   oldest: string | null;
   newest: string | null;
 }
+
+const DEFAULT_HYBRID_CANDIDATE_LIMIT = 250;
+const MAX_HYBRID_CANDIDATE_LIMIT = 1000;
 
 export class MemoryStore {
   private readonly db: Database.Database;
@@ -315,6 +319,36 @@ export class MemoryStore {
     };
   }
 
+  checkDatabaseHealth(
+    input: {
+      integrityCheck?: boolean;
+      ftsSanityCheck?: boolean;
+      walCheckpoint?: boolean;
+    } = {}
+  ): DatabaseHealth {
+    const shouldCheckIntegrity = input.integrityCheck ?? true;
+    const shouldCheckFts = input.ftsSanityCheck ?? true;
+    const shouldCheckpointWal = input.walCheckpoint ?? true;
+    const integrityCheck = shouldCheckIntegrity ? runIntegrityCheck(this.db, "quick_check") : "skipped";
+    const fts = shouldCheckFts ? this.checkFtsConsistency() : skippedFtsHealth();
+    const walCheckpoint = shouldCheckpointWal ? checkpointWal(this.db) : { busy: 0, log: 0, checkpointed: 0 };
+    const warnings = [
+      ...(integrityCheck === "ok" ? [] : [`Database quick_check failed: ${integrityCheck}`]),
+      ...(fts.missingCount > 0 ? [`FTS index is missing ${fts.missingCount} active memory row(s).`] : []),
+      ...(fts.orphanCount > 0 ? [`FTS index contains ${fts.orphanCount} orphan or forgotten row(s).`] : []),
+      ...(walCheckpoint.busy > 0 ? [`WAL checkpoint reported ${walCheckpoint.busy} busy frame(s).`] : [])
+    ];
+
+    return {
+      ok: (integrityCheck === "ok" || integrityCheck === "skipped") && fts.ok && walCheckpoint.busy === 0,
+      integrityCheck,
+      fts,
+      walCheckpoint,
+      warnings,
+      checkedAt: new Date()
+    };
+  }
+
   getStats(): MemoryStats {
     const byStatus: MemoryStats["byStatus"] = {
       active: 0,
@@ -373,13 +407,21 @@ export class MemoryStore {
 
     const backupDb = new Database(input.backupPath, { readonly: true, fileMustExist: true });
     try {
-      const memoryCount = countRows(backupDb, "memories");
-      const eventCount = countRows(backupDb, "memory_events");
+      const integrityCheck = runIntegrityCheck(backupDb, "quick_check");
+      const requiredTables = ["memories", "memory_events", "memories_fts"];
+      const missingTables = requiredTables.filter((table) => !tableExists(backupDb, table));
+      const warnings = missingTables.map((table) => `Backup is missing required table: ${table}`);
+      const schemaOk = missingTables.length === 0;
+      const memoryCount = tableExists(backupDb, "memories") ? countRows(backupDb, "memories") : 0;
+      const eventCount = tableExists(backupDb, "memory_events") ? countRows(backupDb, "memory_events") : 0;
       return {
         backupPath: input.backupPath,
-        ok: true,
+        ok: integrityCheck === "ok" && schemaOk,
         memoryCount,
         eventCount,
+        integrityCheck,
+        schemaOk,
+        warnings,
         checkedAt: new Date()
       };
     } finally {
@@ -431,12 +473,44 @@ export class MemoryStore {
         ok: true,
         memoryCount: countRows(backupDb, "memories"),
         eventCount: countRows(backupDb, "memory_events"),
+        integrityCheck: runIntegrityCheck(backupDb, "quick_check"),
+        schemaOk: true,
+        warnings: [],
         checkedAt: new Date(),
         memories: rows.map(mapBackupMemorySummary)
       };
     } finally {
       backupDb.close();
     }
+  }
+
+  private checkFtsConsistency(): DatabaseHealth["fts"] {
+    const expectedCount = countRowsWhere(this.db, "memories", "status != 'forgotten'");
+    const indexedCount = countRows(this.db, "memories_fts");
+    const missing = this.db
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM memories m
+         LEFT JOIN memories_fts f ON f.rowid = m.id
+         WHERE m.status != 'forgotten' AND f.rowid IS NULL`
+      )
+      .get() as { count: number };
+    const orphan = this.db
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM memories_fts f
+         LEFT JOIN memories m ON m.id = f.rowid
+         WHERE m.id IS NULL OR m.status = 'forgotten'`
+      )
+      .get() as { count: number };
+
+    return {
+      ok: missing.count === 0 && orphan.count === 0,
+      expectedCount,
+      indexedCount,
+      missingCount: missing.count,
+      orphanCount: orphan.count
+    };
   }
 
   private defaultBackupPath(): string {
@@ -514,26 +588,52 @@ export class MemoryStore {
         ON memories(layer, status);
     `);
     this.addColumnIfMissing("memories", "embedding", "TEXT");
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_memories_active_embedding_candidates
+        ON memories(status, importance DESC, updated_at DESC)
+        WHERE embedding IS NOT NULL;
+    `);
   }
 
   private searchMemoryWithEmbedding(input: SearchMemoryInput): SearchMemoryResult[] {
     const limit = Math.max(1, Math.min(input.limit ?? 8, 50));
-    const clauses = [input.includeSuperseded ? "status != 'forgotten'" : "status = 'active'"];
-    const params: Record<string, unknown> = {};
+    const candidateLimit = Math.max(
+      1,
+      Math.min(input.hybridCandidateLimit ?? DEFAULT_HYBRID_CANDIDATE_LIMIT, MAX_HYBRID_CANDIDATE_LIMIT)
+    );
+    const vectorClauses = [input.includeSuperseded ? "status != 'forgotten'" : "status = 'active'", "embedding IS NOT NULL"];
+    const vectorParams: Record<string, unknown> = { candidateLimit };
 
     if (input.layers?.length) {
-      clauses.push(`layer IN (${input.layers.map((_, index) => `@layer${index}`).join(", ")})`);
+      vectorClauses.push(`layer IN (${input.layers.map((_, index) => `@layer${index}`).join(", ")})`);
       input.layers.forEach((layer, index) => {
-        params[`layer${index}`] = layer;
+        vectorParams[`layer${index}`] = layer;
       });
     }
 
-    const rows = this.db.prepare(`SELECT * FROM memories WHERE ${clauses.join(" AND ")}`).all(params) as MemoryRow[];
-    const filtered = input.tags?.length
-      ? rows.filter((row) => input.tags?.every((tag) => safeParseTags(row.tags).includes(tag)))
-      : rows;
+    if (input.tags?.length) {
+      input.tags.forEach((tag, index) => {
+        vectorClauses.push(`tags LIKE @tag${index} ESCAPE '\\'`);
+        vectorParams[`tag${index}`] = `%${escapeLikePattern(JSON.stringify(tag))}%`;
+      });
+    }
 
-    const results = filtered
+    const vectorRows = this.db
+      .prepare(
+        `SELECT * FROM memories
+         WHERE ${vectorClauses.join(" AND ")}
+         ORDER BY importance DESC, updated_at DESC, id DESC
+         LIMIT @candidateLimit`
+      )
+      .all(vectorParams) as MemoryRow[];
+
+    const keywordRows = this.hybridKeywordCandidateRows(input, candidateLimit);
+    const rowsById = new Map<number, MemoryRow>();
+    for (const row of [...vectorRows, ...keywordRows]) {
+      rowsById.set(row.id, row);
+    }
+
+    const results = [...rowsById.values()]
       .map((row) => scoreHybridRow(row, input.query, input.queryEmbedding ?? []))
       .filter((result) => result.score > 0)
       .sort((left, right) => right.score - left.score)
@@ -542,6 +642,45 @@ export class MemoryStore {
     this.recordSearchRetrieval(input, results, { hybrid: true });
 
     return results;
+  }
+
+  private hybridKeywordCandidateRows(input: SearchMemoryInput, candidateLimit: number): MemoryRow[] {
+    const clauses = ["memories_fts MATCH @query"];
+    const params: Record<string, unknown> = {
+      query: quoteFtsQuery(input.query),
+      candidateLimit
+    };
+
+    if (!input.includeSuperseded) {
+      clauses.push("m.status = 'active'");
+    } else {
+      clauses.push("m.status != 'forgotten'");
+    }
+
+    if (input.layers?.length) {
+      clauses.push(`m.layer IN (${input.layers.map((_, index) => `@layer${index}`).join(", ")})`);
+      input.layers.forEach((layer, index) => {
+        params[`layer${index}`] = layer;
+      });
+    }
+
+    if (input.tags?.length) {
+      input.tags.forEach((tag, index) => {
+        clauses.push(`m.tags LIKE @tag${index} ESCAPE '\\'`);
+        params[`tag${index}`] = `%${escapeLikePattern(JSON.stringify(tag))}%`;
+      });
+    }
+
+    return this.db
+      .prepare(
+        `SELECT m.*
+         FROM memories_fts
+         JOIN memories m ON m.id = memories_fts.rowid
+         WHERE ${clauses.join(" AND ")}
+         ORDER BY bm25(memories_fts) ASC, m.importance DESC, m.updated_at DESC
+         LIMIT @candidateLimit`
+      )
+      .all(params) as MemoryRow[];
   }
 
   private recordSearchRetrieval(
@@ -677,6 +816,47 @@ function clampScore(value: number): number {
 function countRows(db: Database.Database, table: string): number {
   const row = db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number };
   return row.count;
+}
+
+function countRowsWhere(db: Database.Database, table: string, where: string): number {
+  const row = db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${where}`).get() as { count: number };
+  return row.count;
+}
+
+function tableExists(db: Database.Database, table: string): boolean {
+  const row = db
+    .prepare("SELECT 1 AS found FROM sqlite_master WHERE type IN ('table', 'virtual table') AND name = ?")
+    .get(table) as { found: number } | undefined;
+  return row?.found === 1;
+}
+
+function runIntegrityCheck(db: Database.Database, pragma: "quick_check" | "integrity_check"): string {
+  const rows = db.prepare(`PRAGMA ${pragma}`).all() as Record<string, string>[];
+  const values = rows.flatMap((row) => Object.values(row));
+  return values.length === 1 && values[0] === "ok" ? "ok" : values.join("; ");
+}
+
+function checkpointWal(db: Database.Database): DatabaseHealth["walCheckpoint"] {
+  const row = db.prepare("PRAGMA wal_checkpoint(PASSIVE)").get() as {
+    busy: number;
+    log: number;
+    checkpointed: number;
+  };
+  return {
+    busy: row.busy,
+    log: row.log,
+    checkpointed: row.checkpointed
+  };
+}
+
+function skippedFtsHealth(): DatabaseHealth["fts"] {
+  return {
+    ok: true,
+    expectedCount: 0,
+    indexedCount: 0,
+    missingCount: 0,
+    orphanCount: 0
+  };
 }
 
 function quoteFtsQuery(query: string): string {

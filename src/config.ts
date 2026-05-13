@@ -8,6 +8,10 @@ export interface MemorySidecarConfig {
   databasePath: string;
   defaultSearchLimit: number;
   consolidationDryRun: boolean;
+  startupIntegrityCheck: boolean;
+  startupFtsSanityCheck: boolean;
+  startupWalCheckpoint: boolean;
+  autoBackupOnStartup: boolean;
 }
 
 interface LoadConfigOptions {
@@ -22,7 +26,11 @@ const DEFAULTS = {
   maintenanceModel: "qwen3",
   databasePath: "data/memory.sqlite",
   defaultSearchLimit: 8,
-  consolidationDryRun: true
+  consolidationDryRun: true,
+  startupIntegrityCheck: true,
+  startupFtsSanityCheck: true,
+  startupWalCheckpoint: true,
+  autoBackupOnStartup: false
 };
 
 export function loadConfig(options: LoadConfigOptions = {}): MemorySidecarConfig {
@@ -50,7 +58,23 @@ export function loadConfig(options: LoadConfigOptions = {}): MemorySidecarConfig
     consolidationDryRun:
       booleanValue(env.CODEX_MEMORY_CONSOLIDATION_DRY_RUN) ??
       booleanValue(fileConfig.consolidation_dry_run) ??
-      DEFAULTS.consolidationDryRun
+      DEFAULTS.consolidationDryRun,
+    startupIntegrityCheck:
+      booleanValue(env.CODEX_MEMORY_STARTUP_INTEGRITY_CHECK) ??
+      booleanValue(fileConfig.startup_integrity_check) ??
+      DEFAULTS.startupIntegrityCheck,
+    startupFtsSanityCheck:
+      booleanValue(env.CODEX_MEMORY_STARTUP_FTS_SANITY_CHECK) ??
+      booleanValue(fileConfig.startup_fts_sanity_check) ??
+      DEFAULTS.startupFtsSanityCheck,
+    startupWalCheckpoint:
+      booleanValue(env.CODEX_MEMORY_STARTUP_WAL_CHECKPOINT) ??
+      booleanValue(fileConfig.startup_wal_checkpoint) ??
+      DEFAULTS.startupWalCheckpoint,
+    autoBackupOnStartup:
+      booleanValue(env.CODEX_MEMORY_AUTO_BACKUP_ON_STARTUP) ??
+      booleanValue(fileConfig.auto_backup_on_startup) ??
+      DEFAULTS.autoBackupOnStartup
   };
 }
 
