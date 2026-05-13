@@ -228,6 +228,13 @@ export class MemoryStore {
       });
     }
 
+    if (input.tags?.length) {
+      input.tags.forEach((tag, index) => {
+        clauses.push(`m.tags LIKE @tag${index} ESCAPE '\\'`);
+        params[`tag${index}`] = `%${escapeLikePattern(JSON.stringify(tag))}%`;
+      });
+    }
+
     const rows = this.db
       .prepare(
         `SELECT m.*, bm25(memories_fts) AS keyword_rank
@@ -239,11 +246,7 @@ export class MemoryStore {
       )
       .all(params) as (MemoryRow & { keyword_rank: number })[];
 
-    const filtered = input.tags?.length
-      ? rows.filter((row) => input.tags?.every((tag) => safeParseTags(row.tags).includes(tag)))
-      : rows;
-
-    const results = filtered.map((row) => scoreKeywordRow(row));
+    const results = rows.map((row) => scoreKeywordRow(row));
 
     const now = new Date().toISOString();
     const markRetrieved = this.db.prepare("UPDATE memories SET last_accessed_at = ? WHERE id = ?");
@@ -670,6 +673,10 @@ function quoteFtsQuery(query: string): string {
     .map((term) => term.replace(/"/g, ""))
     .filter(Boolean);
   return terms.length ? terms.map((term) => `"${term}"`).join(" OR ") : '""';
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
 }
 
 function scoreKeywordRow(row: MemoryRow & { keyword_rank: number }): SearchMemoryResult {
