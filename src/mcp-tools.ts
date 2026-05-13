@@ -77,6 +77,14 @@ const verifyBackupSchema = {
   backupPath: z.string().min(1)
 };
 
+const inspectBackupSchema = {
+  backupPath: z.string().min(1),
+  layers: z.array(layerSchema).optional(),
+  includeSuperseded: z.boolean().default(false),
+  includeForgotten: z.boolean().default(false),
+  limit: z.number().int().min(1).max(100).default(20)
+};
+
 const auditMemorySchema = {
   memoryId: z.number().int().positive().optional(),
   limit: z.number().int().min(1).max(100).default(20)
@@ -155,6 +163,14 @@ interface BackupMemoryToolInput {
 
 interface VerifyBackupToolInput {
   backupPath: string;
+}
+
+interface InspectBackupToolInput {
+  backupPath: string;
+  layers?: MemoryLayer[];
+  includeSuperseded?: boolean;
+  includeForgotten?: boolean;
+  limit?: number;
 }
 
 interface AuditMemoryToolInput {
@@ -347,6 +363,25 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       });
     },
 
+    async inspectBackup(input: InspectBackupToolInput) {
+      const inspection = store.inspectBackup({
+        backupPath: input.backupPath,
+        layers: input.layers,
+        includeSuperseded: input.includeSuperseded ?? false,
+        includeForgotten: input.includeForgotten ?? false,
+        limit: input.limit ?? 20
+      });
+
+      return toolResult({
+        backupPath: inspection.backupPath,
+        ok: inspection.ok,
+        memoryCount: inspection.memoryCount,
+        eventCount: inspection.eventCount,
+        checkedAt: inspection.checkedAt.toISOString(),
+        memories: inspection.memories.map(serializeBackupMemorySummary)
+      });
+    },
+
     async auditMemory(input: AuditMemoryToolInput) {
       const events = store.listRecentEvents({
         memoryId: input.memoryId,
@@ -469,6 +504,15 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
   );
 
   server.registerTool(
+    "inspect_backup",
+    {
+      description: "Inspect a SQLite memory backup in read-only mode and return counts plus summaries without content.",
+      inputSchema: inspectBackupSchema
+    },
+    handlers.inspectBackup
+  );
+
+  server.registerTool(
     "audit_memory",
     {
       description: "Read recent audit events without returning full memory contents.",
@@ -519,6 +563,24 @@ function serializeMemory(memory: Memory) {
 }
 
 function serializeMemorySummary(memory: Memory) {
+  return {
+    id: memory.id,
+    layer: memory.layer,
+    summary: memory.summary,
+    tags: memory.tags,
+    sourceType: memory.sourceType,
+    sourceRef: memory.sourceRef,
+    importance: memory.importance,
+    confidence: memory.confidence,
+    createdAt: memory.createdAt.toISOString(),
+    updatedAt: memory.updatedAt.toISOString(),
+    lastAccessedAt: memory.lastAccessedAt?.toISOString() ?? null,
+    expiresAt: memory.expiresAt?.toISOString() ?? null,
+    status: memory.status
+  };
+}
+
+function serializeBackupMemorySummary(memory: ReturnType<MemoryStore["inspectBackup"]>["memories"][number]) {
   return {
     id: memory.id,
     layer: memory.layer,
