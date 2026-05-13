@@ -26,7 +26,11 @@ describe("createMemoryServer", () => {
       maintenanceModel: "qwen3",
       databasePath: path.join(tempDir, "memory.sqlite"),
       defaultSearchLimit: 8,
-      consolidationDryRun: true
+      consolidationDryRun: true,
+      startupIntegrityCheck: true,
+      startupFtsSanityCheck: true,
+      startupWalCheckpoint: true,
+      autoBackupOnStartup: false
     });
 
     expect(runtime.server.isConnected()).toBe(false);
@@ -42,7 +46,11 @@ describe("createMemoryServer", () => {
       maintenanceModel: "qwen3",
       databasePath: path.join(tempDir, "memory.sqlite"),
       defaultSearchLimit: 8,
-      consolidationDryRun: true
+      consolidationDryRun: true,
+      startupIntegrityCheck: true,
+      startupFtsSanityCheck: true,
+      startupWalCheckpoint: true,
+      autoBackupOnStartup: false
     });
     const client = new Client({
       name: "codex-memory-sidecar-test",

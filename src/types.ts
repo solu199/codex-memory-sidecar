@@ -66,6 +66,7 @@ export interface SearchMemoryInput {
   tags?: string[];
   limit?: number;
   includeSuperseded?: boolean;
+  hybridCandidateLimit?: number;
 }
 
 export interface SearchMemoryResult {
@@ -97,6 +98,9 @@ export interface BackupVerification {
   ok: boolean;
   memoryCount: number;
   eventCount: number;
+  integrityCheck: string;
+  schemaOk: boolean;
+  warnings: string[];
   checkedAt: Date;
 }
 
@@ -131,6 +135,25 @@ export interface BackupInspection extends BackupVerification {
 export interface MemoryStoreCounts {
   memoryCount: number;
   eventCount: number;
+}
+
+export interface DatabaseHealth {
+  ok: boolean;
+  integrityCheck: string;
+  fts: {
+    ok: boolean;
+    expectedCount: number;
+    indexedCount: number;
+    missingCount: number;
+    orphanCount: number;
+  };
+  walCheckpoint: {
+    busy: number;
+    log: number;
+    checkpointed: number;
+  };
+  warnings: string[];
+  checkedAt: Date;
 }
 
 export interface MemoryStats extends MemoryStoreCounts {

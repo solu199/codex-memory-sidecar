@@ -4,3 +4,7 @@ maintenance_model = "qwen3"
 database_path = "data/memory.sqlite"
 default_search_limit = 8
 consolidation_dry_run = true
+startup_integrity_check = true
+startup_fts_sanity_check = true
+startup_wal_checkpoint = true
+auto_backup_on_startup = false

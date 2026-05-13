@@ -221,12 +221,16 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
             warning: "Embedding provider is not configured."
           };
       const counts = store.countRecords();
+      const health = store.checkDatabaseHealth();
       const database = {
-        ok: true,
+        ok: health.ok,
         memoryCount: counts.memoryCount,
-        eventCount: counts.eventCount
+        eventCount: counts.eventCount,
+        integrityCheck: health.integrityCheck,
+        fts: health.fts,
+        walCheckpoint: health.walCheckpoint
       };
-      const warnings = embedding.warning ? [embedding.warning] : [];
+      const warnings = [...health.warnings, ...(embedding.warning ? [embedding.warning] : [])];
 
       return toolResult({
         ok: database.ok && warnings.length === 0,
@@ -385,6 +389,9 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         ok: verification.ok,
         memoryCount: verification.memoryCount,
         eventCount: verification.eventCount,
+        integrityCheck: verification.integrityCheck,
+        schemaOk: verification.schemaOk,
+        warnings: verification.warnings,
         checkedAt: verification.checkedAt.toISOString()
       });
     },
@@ -403,6 +410,9 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         ok: inspection.ok,
         memoryCount: inspection.memoryCount,
         eventCount: inspection.eventCount,
+        integrityCheck: inspection.integrityCheck,
+        schemaOk: inspection.schemaOk,
+        warnings: inspection.warnings,
         checkedAt: inspection.checkedAt.toISOString(),
         memories: inspection.memories.map(serializeBackupMemorySummary)
       });

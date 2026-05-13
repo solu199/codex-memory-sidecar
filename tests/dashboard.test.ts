@@ -46,6 +46,13 @@ describe("dashboard", () => {
     expect(status.ok).toBe(true);
     expect(status.database.memoryCount).toBe(2);
     expect(status.database.eventCount).toBe(3);
+    expect(status.database.integrityCheck).toBe("ok");
+    expect(status.database.fts).toMatchObject({
+      ok: true,
+      expectedCount: 1,
+      indexedCount: 1
+    });
+    expect(status.database.walCheckpoint.busy).toBe(0);
     expect(status.memoryStats).toMatchObject({
       byStatus: {
         active: 1,
