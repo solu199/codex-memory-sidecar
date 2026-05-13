@@ -22,6 +22,7 @@ Codex app 向けのローカル MCP メモリサイドカーです。個人利�
 - `forget_memory` は既定で論理削除です。物理削除には `hardDelete: true` と `confirmHardDelete: true` が必要です。
 - 検索結果は既定で embedding 配列を返しません。必要な場合だけ `includeEmbedding: true` を指定します。
 - バックアップ確認や inspection は read-only で実行します。
+- audit payload 内の長い文字列は上限付きで短縮され、ログの肥大化を抑えます。
 - 起動時メンテナンスは DB quick check、FTS 整合性確認、WAL checkpoint を軽く実行できます。
 
 ## セットアップ
