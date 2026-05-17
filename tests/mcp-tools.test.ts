@@ -120,6 +120,36 @@ describe("MCP tool handlers", () => {
     expect(store.countRecords().memoryCount).toBe(1);
   });
 
+  test("propose_memory_update detects near duplicates before writing", async () => {
+    const tools = createToolHandlers(store);
+    const existing = await tools.writeMemory({
+      content: "複数ファイル実装前に start_memory_session を呼ぶ。",
+      layer: "core",
+      tags: ["daily-operation"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectPath: tempDir
+    });
+
+    const result = await tools.proposeMemoryUpdate({
+      content: "複数 file 実装の前は start memory session を呼ぶ。",
+      taskContext: "daily operation rule",
+      projectPath: tempDir,
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    expect(result.structuredContent.recommendation).toBe("update");
+    expect(result.structuredContent.duplicateCandidates).toEqual([
+      expect.objectContaining({
+        memoryId: existing.structuredContent.memory.id,
+        reason: "near_duplicate_content",
+        confidence: expect.any(Number)
+      })
+    ]);
+    expect(store.countRecords().memoryCount).toBe(1);
+  });
+
   test("propose_memory_update rejects likely secrets without writing", async () => {
     const tools = createToolHandlers(store);
 

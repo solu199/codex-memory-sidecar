@@ -113,6 +113,13 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       sourceRef: "npm run smoke:practical",
       projectPath
     });
+    const nearDuplicateProposal = await tools.proposeMemoryUpdate({
+      content: "Call start memory session before multi file implementation work.",
+      taskContext: "daily operation rule",
+      sourceType: "smoke",
+      sourceRef: "npm run smoke:practical",
+      projectPath
+    });
     const consolidation = await tools.consolidateMemory({
       layers: ["core"],
       dryRun: true,
@@ -155,6 +162,11 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
             proposal.memoryIds.includes(duplicateRule.structuredContent.memory.id) &&
             proposal.memoryIds.includes(nearDuplicateRule.structuredContent.memory.id)
         ) && store.getMemory(nearDuplicateRule.structuredContent.memory.id)?.status === "active",
+      proposeNearDuplicate:
+        nearDuplicateProposal.structuredContent.recommendation === "update" &&
+        nearDuplicateProposal.structuredContent.duplicateCandidates.some(
+          (candidate) => candidate.reason === "near_duplicate_content"
+        ),
       digestUsesScopedMemory:
         digest.structuredContent.digest.includes("alpha project") &&
         !digest.structuredContent.digest.includes("beta project"),

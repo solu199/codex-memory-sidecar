@@ -326,7 +326,8 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           projectScope: input.projectScope,
           projectPath: input.projectPath,
           includeCrossProject: false
-        })
+        }),
+        proposal.layer
       );
       const reasons = [...proposal.reasons];
       let recommendation: "create" | "update" | "skip" = duplicateCandidates.length ? "update" : "create";
@@ -1162,7 +1163,7 @@ function findNearDuplicateMergeProposals(memories: Memory[], excludedPairs: Set<
 
 function findDuplicateCandidatesForMemory(memory: Memory, candidates: Memory[]) {
   const key = normalizeMemoryContent(memory.content);
-  return candidates
+  const exactCandidates = candidates
     .filter((candidate) => candidate.id !== memory.id && normalizeMemoryContent(candidate.content) === key)
     .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || left.id - right.id)
     .slice(0, 5)
@@ -1171,11 +1172,19 @@ function findDuplicateCandidatesForMemory(memory: Memory, candidates: Memory[]) 
       reason: "duplicate_content",
       summary: candidate.summary
     }));
+  if (exactCandidates.length >= 5) {
+    return exactCandidates;
+  }
+
+  return [
+    ...exactCandidates,
+    ...findNearDuplicateCandidates(memory.content, memory.layer, candidates, new Set([memory.id, ...exactCandidates.map((candidate) => candidate.memoryId)]))
+  ].slice(0, 5);
 }
 
-function findDuplicateCandidatesForContent(content: string, candidates: Memory[]) {
+function findDuplicateCandidatesForContent(content: string, candidates: Memory[], layer?: MemoryLayer) {
   const key = normalizeMemoryContent(content);
-  return candidates
+  const exactCandidates = candidates
     .filter((candidate) => normalizeMemoryContent(candidate.content) === key)
     .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || left.id - right.id)
     .slice(0, 5)
@@ -1183,6 +1192,37 @@ function findDuplicateCandidatesForContent(content: string, candidates: Memory[]
       memoryId: candidate.id,
       reason: "duplicate_content",
       summary: candidate.summary
+    }));
+  if (exactCandidates.length >= 5) {
+    return exactCandidates;
+  }
+
+  return [
+    ...exactCandidates,
+    ...findNearDuplicateCandidates(content, layer, candidates, new Set(exactCandidates.map((candidate) => candidate.memoryId)))
+  ].slice(0, 5);
+}
+
+function findNearDuplicateCandidates(content: string, layer: MemoryLayer | undefined, candidates: Memory[], excludedIds: Set<number>) {
+  return candidates
+    .filter((candidate) => !excludedIds.has(candidate.id) && (!layer || candidate.layer === layer))
+    .map((candidate) => ({
+      candidate,
+      confidence: contentSimilarity(content, candidate.content)
+    }))
+    .filter((entry) => entry.confidence >= 0.72)
+    .sort(
+      (left, right) =>
+        right.confidence - left.confidence ||
+        right.candidate.updatedAt.getTime() - left.candidate.updatedAt.getTime() ||
+        left.candidate.id - right.candidate.id
+    )
+    .slice(0, 5)
+    .map(({ candidate, confidence }) => ({
+      memoryId: candidate.id,
+      reason: "near_duplicate_content",
+      summary: candidate.summary,
+      confidence: Number(confidence.toFixed(4))
     }));
 }
 
