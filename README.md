@@ -51,7 +51,7 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:ollama
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:practical
 ```
 
-- `smoke:mcp` は MCP server 登録と `health_check` を確認します。
+- `smoke:mcp` は MCP server 登録、`health_check`、`start_memory_session` を確認します。
 - `smoke:ollama` は Ollama / `embeddinggemma` を使った embedding 検索を確認します。
 - `smoke:practical` は一時 DB で write/search/digest/backup/retention/restore-plan/dashboard/repair/consolidation の最小実用フローを確認します。
 
