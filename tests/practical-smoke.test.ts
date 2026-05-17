@@ -13,6 +13,7 @@ describe("runPracticalSmoke", () => {
       scopedSearchExcludesBeta: true,
       crossProjectSearchIncludesBeta: true,
       startMemorySession: true,
+      startMemorySessionBackupRetention: true,
       consolidateNearDuplicate: true,
       proposeNearDuplicate: true,
       digestUsesScopedMemory: true,

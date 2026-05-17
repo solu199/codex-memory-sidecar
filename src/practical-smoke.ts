@@ -155,6 +155,12 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         session.structuredContent.ready === true &&
         session.structuredContent.digest.includes("alpha project") &&
         !JSON.stringify(session.structuredContent).includes("beta project"),
+      startMemorySessionBackupRetention:
+        session.structuredContent.backupRetention.backupDir === path.join(tempDir, "backups") &&
+        session.structuredContent.backupRetention.keepCount === 10 &&
+        session.structuredContent.backupRetention.backupCount === 0 &&
+        session.structuredContent.backupRetention.prunableCount === 0 &&
+        session.structuredContent.backupRetention.wouldDelete === false,
       consolidateNearDuplicate:
         consolidation.structuredContent.proposedMerges.some(
           (proposal) =>
