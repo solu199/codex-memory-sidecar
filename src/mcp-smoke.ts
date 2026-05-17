@@ -29,6 +29,14 @@ export interface McpSmokeResult {
     };
     warnings: string[];
   };
+  startMemorySession: {
+    ready: boolean;
+    backupRetention: {
+      backupCount: number;
+      prunableCount: number;
+      wouldDelete: boolean;
+    };
+  };
 }
 
 export async function runMcpSmoke(options: McpSmokeOptions = {}): Promise<McpSmokeResult> {
@@ -51,11 +59,20 @@ export async function runMcpSmoke(options: McpSmokeOptions = {}): Promise<McpSmo
       arguments: {}
     });
     const healthCheck = health.structuredContent as McpSmokeResult["healthCheck"];
+    const session = await client.callTool({
+      name: "start_memory_session",
+      arguments: {
+        taskDescription: "MCP smoke session startup",
+        maxTokens: 100
+      }
+    });
+    const startMemorySession = session.structuredContent as McpSmokeResult["startMemorySession"];
 
     return {
-      ok: tools.tools.length > 0 && healthCheck.database.ok,
+      ok: tools.tools.length > 0 && healthCheck.database.ok && startMemorySession.ready,
       toolNames: tools.tools.map((tool) => tool.name).sort(),
-      healthCheck
+      healthCheck,
+      startMemorySession
     };
   } finally {
     await client.close();

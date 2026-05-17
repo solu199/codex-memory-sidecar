@@ -32,5 +32,11 @@ describe("runMcpSmoke", () => {
     expect(result.toolNames).toContain("repair_memory_index");
     expect(result.toolNames).toContain("start_memory_session");
     expect(result.healthCheck.database.ok).toBe(true);
+    expect(result.startMemorySession.ready).toBe(true);
+    expect(result.startMemorySession.backupRetention).toMatchObject({
+      backupCount: 0,
+      prunableCount: 0,
+      wouldDelete: false
+    });
   }, 20_000);
 });
