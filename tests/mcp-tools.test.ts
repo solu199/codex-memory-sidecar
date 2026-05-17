@@ -780,6 +780,55 @@ describe("MCP tool handlers", () => {
     expect(result.structuredContent.checkedAt).toEqual(expect.any(String));
   });
 
+  test("plan_backup_restore compares current database with a backup without restoring", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "Backup restore plan should inspect the backup.",
+      layer: "recall",
+      tags: ["backup"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const backup = await tools.backupMemory({});
+    await tools.writeMemory({
+      content: "Current database has newer data after the backup.",
+      layer: "recall",
+      tags: ["backup"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const result = await tools.planBackupRestore({
+      backupPath: backup.structuredContent.backupPath
+    });
+
+    expect(result.structuredContent).toMatchObject({
+      backupPath: backup.structuredContent.backupPath,
+      ok: true,
+      wouldRestore: false,
+      requiresMcpRestart: true,
+      current: {
+        databaseOk: true,
+        memoryCount: 2,
+        eventCount: 2
+      },
+      backup: {
+        ok: true,
+        memoryCount: 1,
+        eventCount: 1
+      },
+      warnings: []
+    });
+    expect(result.structuredContent.steps).toEqual([
+      expect.stringContaining("Stop"),
+      expect.stringContaining("Create"),
+      expect.stringContaining("Replace"),
+      expect.stringContaining("Restart"),
+      expect.stringContaining("health_check")
+    ]);
+    expect(store.countRecords().memoryCount).toBe(2);
+  });
+
   test("repair_memory_index rebuilds FTS and returns backup details", async () => {
     const tools = createToolHandlers(store);
     const created = await tools.writeMemory({
