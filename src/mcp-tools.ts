@@ -550,6 +550,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
     async startMemorySession(input: StartMemorySessionToolInput) {
       const databaseHealth = store.checkDatabaseHealth();
       const stats = store.getStats();
+      const backupRetention = serializeBackupRetentionSummary(store.planBackupRetention());
       const embedding = await tryEmbed(options.embeddingProvider, input.taskDescription);
       const database = {
         ok: databaseHealth.ok,
@@ -575,6 +576,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
             embedding: embeddingStatus
           },
           memoryStats: serializeMemoryStats(stats),
+          backupRetention,
           repairRecommended,
           digest: "",
           memories: [] as unknown[],
@@ -601,6 +603,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           embedding: embeddingStatus
         },
         memoryStats: serializeMemoryStats(stats),
+        backupRetention,
         repairRecommended,
         digest: compactDigest(serialized, input.maxTokens ?? 800),
         memories: results.map(serializeSessionMemory),
@@ -970,6 +973,23 @@ function serializeBackupRetentionEntry(entry: ReturnType<MemoryStore["planBackup
     backupPath: entry.backupPath,
     sizeBytes: entry.sizeBytes,
     mtime: entry.mtime.toISOString()
+  };
+}
+
+function serializeBackupRetentionSummary(plan: ReturnType<MemoryStore["planBackupRetention"]>) {
+  const latestBackup = plan.backups[0] ?? null;
+
+  return {
+    backupDir: plan.backupDir,
+    keepCount: plan.keepCount,
+    backupCount: plan.backups.length,
+    keptCount: plan.kept.length,
+    prunableCount: plan.prunable.length,
+    prunableSizeBytes: plan.prunable.reduce((total, backup) => total + backup.sizeBytes, 0),
+    latestBackup: latestBackup ? serializeBackupRetentionEntry(latestBackup) : null,
+    prunable: plan.prunable.map(serializeBackupRetentionEntry),
+    wouldDelete: false,
+    plannedAt: plan.plannedAt.toISOString()
   };
 }
 

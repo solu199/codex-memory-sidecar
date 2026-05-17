@@ -669,6 +669,41 @@ describe("MCP tool handlers", () => {
     expect(JSON.stringify(result.structuredContent)).not.toContain("Daily startup private body");
   });
 
+  test("start_memory_session reports backup retention summary without deleting backups", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeMemory({
+      content: "Session startup should surface backup retention status.",
+      layer: "recall",
+      tags: ["daily", "backup"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const first = await tools.backupMemory({});
+    const second = await tools.backupMemory({});
+
+    const result = await tools.startMemorySession({
+      taskDescription: "daily backup status",
+      projectPath: tempDir
+    });
+
+    expect(result.structuredContent.backupRetention).toMatchObject({
+      backupDir: path.join(tempDir, "backups"),
+      keepCount: 10,
+      backupCount: 2,
+      keptCount: 2,
+      prunableCount: 0,
+      prunableSizeBytes: 0,
+      wouldDelete: false,
+      latestBackup: expect.objectContaining({
+        backupPath: second.structuredContent.backupPath,
+        sizeBytes: expect.any(Number),
+        mtime: expect.any(String)
+      })
+    });
+    expect(existsSync(first.structuredContent.backupPath)).toBe(true);
+    expect(existsSync(second.structuredContent.backupPath)).toBe(true);
+  });
+
   test("start_memory_session skips digest and recommends repair when database health is not ok", async () => {
     const tools = createToolHandlers(store);
     const created = await tools.writeMemory({
