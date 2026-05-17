@@ -63,6 +63,24 @@ export interface DashboardStatus {
       sizeBytes: number;
       mtime: string;
     } | null;
+    backupRetention: {
+      backupDir: string;
+      keepCount: number;
+      backupCount: number;
+      keptCount: number;
+      prunableCount: number;
+      prunableSizeBytes: number;
+      latestBackup: {
+        backupPath: string;
+        sizeBytes: number;
+        mtime: string;
+      } | null;
+      prunable: Array<{
+        backupPath: string;
+        sizeBytes: number;
+        mtime: string;
+      }>;
+    };
   };
   embedding: {
     ok: boolean;
@@ -133,13 +151,17 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
     },
     maintenance: {
       repairRecommended: !databaseHealth.ok && (databaseHealth.integrityCheck !== "ok" || !databaseHealth.fts.ok),
-      latestBackup: latestBackup
-        ? {
-            backupPath: latestBackup.backupPath,
-            sizeBytes: latestBackup.sizeBytes,
-            mtime: latestBackup.mtime.toISOString()
-          }
-        : null
+      latestBackup: latestBackup ? serializeDashboardBackup(latestBackup) : null,
+      backupRetention: {
+        backupDir: backupRetention.backupDir,
+        keepCount: backupRetention.keepCount,
+        backupCount: backupRetention.backups.length,
+        keptCount: backupRetention.kept.length,
+        prunableCount: backupRetention.prunable.length,
+        prunableSizeBytes: backupRetention.prunable.reduce((total, backup) => total + backup.sizeBytes, 0),
+        latestBackup: latestBackup ? serializeDashboardBackup(latestBackup) : null,
+        prunable: backupRetention.prunable.map(serializeDashboardBackup)
+      }
     },
     embedding,
     recentMemories: store.listMemories({ limit: 10 }).map((memory) => ({
@@ -159,6 +181,14 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
       createdAt: event.createdAt.toISOString()
     })),
     warnings
+  };
+}
+
+function serializeDashboardBackup(backup: ReturnType<MemoryStore["planBackupRetention"]>["backups"][number]) {
+  return {
+    backupPath: backup.backupPath,
+    sizeBytes: backup.sizeBytes,
+    mtime: backup.mtime.toISOString()
   };
 }
 
@@ -392,6 +422,10 @@ function renderDashboardHtml(): string {
         <ul class="stats-list" id="backup-stats"></ul>
       </div>
       <div class="panel">
+        <p class="label">Backup Retention</p>
+        <ul class="stats-list" id="retention-stats"></ul>
+      </div>
+      <div class="panel">
         <p class="label">Warnings</p>
         <ul class="stats-list" id="warnings"></ul>
       </div>
@@ -440,6 +474,13 @@ function renderDashboardHtml(): string {
             modified: status.maintenance.latestBackup.mtime
           })
         : renderStats({ latest: "-" });
+      document.getElementById("retention-stats").innerHTML = renderStats({
+        directory: status.maintenance.backupRetention.backupDir,
+        backups: status.maintenance.backupRetention.backupCount,
+        kept: status.maintenance.backupRetention.keptCount + " / " + status.maintenance.backupRetention.keepCount,
+        prunable: status.maintenance.backupRetention.prunableCount,
+        prunableBytes: status.maintenance.backupRetention.prunableSizeBytes
+      });
       document.getElementById("warnings").innerHTML = status.warnings.length
         ? status.warnings.map((warning) => "<li><span>" + escapeHtml(warning) + "</span></li>").join("")
         : renderStats({ current: "none" });
