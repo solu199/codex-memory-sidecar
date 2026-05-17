@@ -119,6 +119,7 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       projectPath,
       maxCandidates: 10
     });
+    const restorePlan = await tools.planBackupRestore({ backupPath });
     const repairDb = new Database(databasePath);
     try {
       repairDb.prepare("DELETE FROM memories_fts WHERE rowid = ?").run(alpha.structuredContent.memory.id);
@@ -161,6 +162,11 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       backupRetentionDryRun:
         retention.structuredContent.wouldDelete === false &&
         retention.structuredContent.prunable.some((entry) => entry.backupPath === backupPath) &&
+        existsSync(backupPath),
+      backupRestoreDryRun:
+        restorePlan.structuredContent.ok === true &&
+        restorePlan.structuredContent.wouldRestore === false &&
+        restorePlan.structuredContent.backup.memoryCount < restorePlan.structuredContent.current.memoryCount &&
         existsSync(backupPath),
       inspectBackupScoped:
         inspection.structuredContent.memories.length === 1 &&

@@ -116,6 +116,10 @@ const verifyBackupSchema = {
   backupPath: z.string().min(1)
 };
 
+const planBackupRestoreSchema = {
+  backupPath: z.string().min(1)
+};
+
 const inspectBackupSchema = {
   backupPath: z.string().min(1),
   layers: z.array(layerSchema).optional(),
@@ -247,6 +251,10 @@ interface PlanBackupRetentionToolInput {
 }
 
 interface VerifyBackupToolInput {
+  backupPath: string;
+}
+
+interface PlanBackupRestoreToolInput {
   backupPath: string;
 }
 
@@ -640,6 +648,45 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       });
     },
 
+    async planBackupRestore(input: PlanBackupRestoreToolInput) {
+      const currentHealth = store.checkDatabaseHealth();
+      const currentCounts = store.countRecords();
+      const backupVerification = store.verifyBackup({ backupPath: input.backupPath });
+      const warnings = [...currentHealth.warnings, ...backupVerification.warnings];
+
+      return toolResult({
+        backupPath: backupVerification.backupPath,
+        ok: currentHealth.ok && backupVerification.ok,
+        wouldRestore: false,
+        requiresMcpRestart: true,
+        current: {
+          databaseOk: currentHealth.ok,
+          memoryCount: currentCounts.memoryCount,
+          eventCount: currentCounts.eventCount,
+          integrityCheck: currentHealth.integrityCheck,
+          fts: currentHealth.fts,
+          walCheckpoint: currentHealth.walCheckpoint
+        },
+        backup: {
+          ok: backupVerification.ok,
+          memoryCount: backupVerification.memoryCount,
+          eventCount: backupVerification.eventCount,
+          integrityCheck: backupVerification.integrityCheck,
+          schemaOk: backupVerification.schemaOk,
+          checkedAt: backupVerification.checkedAt.toISOString()
+        },
+        note: "This is a dry-run restore plan. No database files were changed.",
+        steps: [
+          "Stop the Codex Memory Sidecar MCP server before replacing the database file.",
+          "Create a fresh safety backup of the current database and verify it.",
+          "Replace the current database file with the selected backup file outside the running MCP process.",
+          "Restart the Codex Memory Sidecar MCP server.",
+          "Run health_check and verify warnings is empty before resuming normal use."
+        ],
+        warnings
+      });
+    },
+
     async inspectBackup(input: InspectBackupToolInput) {
       const inspection = store.inspectBackup({
         backupPath: input.backupPath,
@@ -848,6 +895,15 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
       inputSchema: verifyBackupSchema
     },
     handlers.verifyBackup
+  );
+
+  server.registerTool(
+    "plan_backup_restore",
+    {
+      description: "Dry-run a backup restore by comparing current database health/counts with a verified backup.",
+      inputSchema: planBackupRestoreSchema
+    },
+    handlers.planBackupRestore
   );
 
   server.registerTool(

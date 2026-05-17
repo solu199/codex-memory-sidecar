@@ -17,6 +17,7 @@ describe("runPracticalSmoke", () => {
       digestUsesScopedMemory: true,
       backupVerified: true,
       backupRetentionDryRun: true,
+      backupRestoreDryRun: true,
       inspectBackupScoped: true,
       repairMemoryIndex: true,
       auditRecorded: true,

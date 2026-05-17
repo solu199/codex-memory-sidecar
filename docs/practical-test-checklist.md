@@ -25,7 +25,7 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:practic
 - build は TypeScript error なし。
 - `smoke:mcp` は `ok: true`。
 - `smoke:ollama` は `embeddingDimensions` が 0 より大きく、warnings が空。
-- `smoke:practical` は一時 DB で write/search/digest/backup/retention/dashboard/repair/consolidation の流れを確認し、`ok: true`。
+- `smoke:practical` は一時 DB で write/search/digest/backup/retention/restore-plan/dashboard/repair/consolidation の流れを確認し、`ok: true`。
 
 ## 2. Codex MCP 登録
 
@@ -61,6 +61,7 @@ Codex app から起動する stdio server には、Codex app の MCP 登録側�
 - `audit_memory`: 作成、検索イベントが確認でき、長い payload や secret が露出しない。
 - `backup_memory`: backup path が作られる。
 - `plan_backup_retention`: kept/prunable を返すが、`wouldDelete: false` でファイルは削除しない。
+- `plan_backup_restore`: 現在 DB と backup を比較するが、`wouldRestore: false` で DB 置換はしない。
 - `verify_backup`: backup が `ok: true` になる。
 - `inspect_backup`: content ではなく summary だけが返る。
 - `repair_memory_index`: health warning が出た場合に、backup 作成後 FTS index を再構築できる。
