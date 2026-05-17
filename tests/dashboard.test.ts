@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -125,6 +125,37 @@ describe("dashboard", () => {
     expect(status.warnings).toContain("FTS index is missing 1 active memory row(s).");
   });
 
+  test("buildDashboardStatus reports backup retention totals without deleting backups", async () => {
+    const backupDir = path.join(tempDir, "backups");
+    mkdirSync(backupDir, { recursive: true });
+    const oldestBackup = path.join(backupDir, "memory-20260514-010000-000.sqlite");
+
+    for (let index = 0; index < 11; index += 1) {
+      const backupPath = path.join(backupDir, `memory-20260514-${String(index + 1).padStart(2, "0")}0000-000.sqlite`);
+      writeFileSync(backupPath, `backup-${index}`);
+    }
+
+    const status = await buildDashboardStatus(store, {
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) }
+    });
+
+    expect(status.maintenance.backupRetention).toMatchObject({
+      backupDir,
+      keepCount: 10,
+      backupCount: 11,
+      keptCount: 10,
+      prunableCount: 1,
+      prunableSizeBytes: 8
+    });
+    expect(status.maintenance.backupRetention.latestBackup?.backupPath).toContain("memory-20260514-110000-000.sqlite");
+    expect(status.maintenance.backupRetention.prunable).toEqual([
+      expect.objectContaining({
+        backupPath: oldestBackup,
+        sizeBytes: 8
+      })
+    ]);
+  });
+
   test("serves HTML and JSON status over HTTP", async () => {
     const server = createDashboardServer(store, {
       embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) }
@@ -144,6 +175,7 @@ describe("dashboard", () => {
       expect(html).toContain("Codex Memory Sidecar");
       expect(html).toContain("Memory Stats");
       expect(html).toContain("Maintenance");
+      expect(html).toContain("Backup Retention");
       expect(html).toContain("Warnings");
       expect(html).toContain("Project Scopes");
       expect(html).toContain("Recent Memories");

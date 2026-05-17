@@ -58,6 +58,7 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:practic
 ## Dashboard
 
 ローカル状態をブラウザで確認できます。`127.0.0.1` のみに bind し、メモリ本文や audit payload は表示しません。
+メモリ件数、プロジェクト scope、修復推奨、最新バックアップに加えて、既定バックアップの保持件数と削除候補件数も確認できます。
 
 ```powershell
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run dashboard
