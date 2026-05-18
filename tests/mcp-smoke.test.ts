@@ -24,6 +24,10 @@ describe("runMcpSmoke", () => {
 
     expect(result.ok).toBe(true);
     expect(result.toolNames).toContain("write_memory");
+    expect(result.toolNames).toContain("write_directive");
+    expect(result.toolNames).toContain("list_directives");
+    expect(result.toolNames).toContain("propose_directive_update");
+    expect(result.toolNames).toContain("disable_directive");
     expect(result.toolNames).toContain("inspect_backup");
     expect(result.toolNames).toContain("memory_stats");
     expect(result.toolNames).toContain("plan_backup_retention");

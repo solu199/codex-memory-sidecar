@@ -67,6 +67,23 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       sourceRef: "npm run smoke:practical",
       projectScope: "beta"
     });
+    const directiveProposal = await tools.proposeDirectiveUpdate({
+      content: "For practical smoke runs, directive memory must be visible in start_memory_session and Dashboard.",
+      taskContext: "project directive practical smoke",
+      sourceType: "smoke",
+      sourceRef: "npm run smoke:practical",
+      projectPath
+    });
+    const directive = await tools.writeDirective({
+      content: "For practical smoke runs, directive memory must be visible in start_memory_session and Dashboard.",
+      scope: "project",
+      projectPath,
+      rationale: "Practical smoke validates directive memory surfaces.",
+      tags: ["practical", "directive"],
+      sourceType: "smoke",
+      sourceRef: "npm run smoke:practical"
+    });
+    const listedDirectives = await tools.listDirectives({ projectPath });
 
     const scopedSearch = await tools.searchMemory({
       query: "Practical scoped memory",
@@ -158,9 +175,17 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       startMemorySession:
         session.structuredContent.ready === true &&
         session.structuredContent.digest.includes("alpha project") &&
+        session.structuredContent.directives.some((item) => item.id === directive.structuredContent.directive.id) &&
         !JSON.stringify(session.structuredContent).includes("beta project") &&
         session.structuredContent.sessionGuidance.memoryUse === "supporting_context" &&
-        session.structuredContent.sessionGuidance.suggestedNextTools.includes("audit_memory"),
+        session.structuredContent.sessionGuidance.priorityOrder.includes("directive_memory") &&
+        session.structuredContent.sessionGuidance.suggestedNextTools.includes("list_directives"),
+      directiveMemory:
+        directiveProposal.structuredContent.recommendation === "ask_user" &&
+        directiveProposal.structuredContent.scopeGuidance.requiresUserChoice === true &&
+        listedDirectives.structuredContent.directives.some(
+          (item) => item.id === directive.structuredContent.directive.id && item.scope === "project"
+        ),
       startMemorySessionBackupRetention:
         session.structuredContent.backupRetention.backupDir === path.join(tempDir, "backups") &&
         session.structuredContent.backupRetention.keepCount === 10 &&
@@ -205,7 +230,10 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         dashboard.ok === true &&
         dashboardProjectScopes.includes(alpha.structuredContent.memory.projectScope) &&
         dashboardProjectScopes.includes("beta") &&
-        dashboardRecentSources.includes("smoke:npm run smoke:practical")
+        dashboardRecentSources.includes("smoke:npm run smoke:practical"),
+      dashboardShowsDirectiveMemory:
+        dashboard.directives.some((item) => item.content.includes("directive memory must be visible")) &&
+        dashboard.directives.some((item) => item.id === directive.structuredContent.directive.id)
     };
 
     return {
@@ -247,6 +275,7 @@ async function fetchDashboardSnapshot(store: MemoryStore, embeddingProvider: Emb
         byProjectScope: Array<{ projectScope: string }>;
       };
       recentMemories: Array<{ sourceType: string; sourceRef: string }>;
+      directives: Array<{ id: number; content: string }>;
     };
   } finally {
     await new Promise<void>((resolve, reject) => {

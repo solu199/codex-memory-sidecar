@@ -142,6 +142,31 @@ describe("dashboard", () => {
     ]);
   });
 
+  test("buildDashboardStatus includes directive memory contents for inspection", async () => {
+    store.createDirective({
+      content: "Directive memory should be visible on the dashboard.",
+      scope: "global",
+      rationale: "User needs to audit strong memory.",
+      tags: ["dashboard"],
+      sourceType: "manual",
+      sourceRef: "AGENTS-memory-protocol.md"
+    });
+
+    const status = await buildDashboardStatus(store, {
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) }
+    });
+
+    expect(status.directives).toEqual([
+      expect.objectContaining({
+        scope: "global",
+        projectScope: "global",
+        content: "Directive memory should be visible on the dashboard.",
+        rationale: "User needs to audit strong memory.",
+        status: "active"
+      })
+    ]);
+  });
+
   test("buildDashboardStatus reports backup retention totals without deleting backups", async () => {
     const backupDir = path.join(tempDir, "backups");
     mkdirSync(backupDir, { recursive: true });
@@ -191,6 +216,8 @@ describe("dashboard", () => {
       const html = await page.text();
       expect(html).toContain("Codex Memory Sidecar");
       expect(html).toContain("メモリ統計");
+      expect(html).toContain("Directive Memory");
+      expect(html).toContain("指示内容");
       expect(html).toContain("メンテナンス");
       expect(html).toContain("バックアップ保持");
       expect(html).toContain("警告と対応");

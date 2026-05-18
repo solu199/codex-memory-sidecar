@@ -3,9 +3,18 @@ import { z } from "zod";
 
 import type { EmbeddingProvider } from "./embedding.js";
 import { MemoryStore } from "./memory-store.js";
-import type { Memory, MemoryLayer, SearchMemoryResult } from "./types.js";
+import type { Directive, DirectiveScope, Memory, MemoryLayer, SearchMemoryResult } from "./types.js";
 
 const layerSchema = z.enum(["core", "recall", "archival"]);
+const directiveScopeSchema = z.enum(["global", "project"]);
+const directivePriorityOrder = [
+  "system/developer",
+  "latest_user_instruction",
+  "AGENTS.md",
+  "directive_memory",
+  "normal_memory",
+  "inference"
+];
 
 const writeMemorySchema = {
   content: z.string().min(1),
@@ -28,6 +37,44 @@ const proposeMemoryUpdateSchema = {
   sourceType: z.string().min(1),
   sourceRef: z.string().min(1),
   allowSecret: z.boolean().default(false)
+};
+
+const writeDirectiveSchema = {
+  content: z.string().min(1),
+  scope: directiveScopeSchema,
+  projectScope: z.string().min(1).optional(),
+  projectPath: z.string().min(1).optional(),
+  rationale: z.string().min(1),
+  tags: z.array(z.string()).default([]),
+  sourceType: z.string().min(1),
+  sourceRef: z.string().min(1),
+  priority: z.number().min(0).max(1).default(0.75),
+  allowSecret: z.boolean().default(false)
+};
+
+const listDirectivesSchema = {
+  projectScope: z.string().min(1).optional(),
+  projectPath: z.string().min(1).optional(),
+  includeGlobal: z.boolean().default(true),
+  includeProject: z.boolean().default(true),
+  includeDisabled: z.boolean().default(false),
+  limit: z.number().int().min(1).max(100).default(20)
+};
+
+const proposeDirectiveUpdateSchema = {
+  content: z.string().min(1),
+  taskContext: z.string().min(1).optional(),
+  projectScope: z.string().min(1).optional(),
+  projectPath: z.string().min(1).optional(),
+  preferredScope: directiveScopeSchema.optional(),
+  sourceType: z.string().min(1),
+  sourceRef: z.string().min(1),
+  allowSecret: z.boolean().default(false)
+};
+
+const disableDirectiveSchema = {
+  directiveId: z.number().int().positive(),
+  reason: z.string().min(1)
 };
 
 const healthCheckSchema = {};
@@ -167,6 +214,44 @@ interface ProposeMemoryUpdateToolInput {
   sourceType: string;
   sourceRef: string;
   allowSecret?: boolean;
+}
+
+interface WriteDirectiveToolInput {
+  content: string;
+  scope: DirectiveScope;
+  projectScope?: string;
+  projectPath?: string;
+  rationale: string;
+  tags?: string[];
+  sourceType: string;
+  sourceRef: string;
+  priority?: number;
+  allowSecret?: boolean;
+}
+
+interface ListDirectivesToolInput {
+  projectScope?: string;
+  projectPath?: string;
+  includeGlobal?: boolean;
+  includeProject?: boolean;
+  includeDisabled?: boolean;
+  limit?: number;
+}
+
+interface ProposeDirectiveUpdateToolInput {
+  content: string;
+  taskContext?: string;
+  projectScope?: string;
+  projectPath?: string;
+  preferredScope?: DirectiveScope;
+  sourceType: string;
+  sourceRef: string;
+  allowSecret?: boolean;
+}
+
+interface DisableDirectiveToolInput {
+  directiveId: number;
+  reason: string;
 }
 
 type HealthCheckToolInput = Record<string, never>;
@@ -371,6 +456,116 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       });
     },
 
+    async writeDirective(input: WriteDirectiveToolInput) {
+      const directive = store.createDirective({
+        content: input.content,
+        scope: input.scope,
+        projectScope: input.projectScope,
+        projectPath: input.projectPath,
+        rationale: input.rationale,
+        tags: input.tags,
+        sourceType: input.sourceType,
+        sourceRef: input.sourceRef,
+        priority: input.priority,
+        allowSecret: input.allowSecret ?? false
+      });
+
+      return toolResult({
+        directive: serializeDirective(directive),
+        priorityOrder: directivePriorityOrder,
+        warnings: [] as string[]
+      });
+    },
+
+    async listDirectives(input: ListDirectivesToolInput) {
+      const directives = store.listDirectives({
+        projectScope: input.projectScope,
+        projectPath: input.projectPath,
+        includeGlobal: input.includeGlobal ?? true,
+        includeProject: input.includeProject ?? true,
+        includeDisabled: input.includeDisabled ?? false,
+        limit: input.limit ?? 20
+      });
+
+      return toolResult({
+        directives: directives.map(serializeDirective),
+        priorityOrder: directivePriorityOrder,
+        guidance: "Directive memory is stronger than normal memory but never overrides system/developer instructions, the latest user instruction, or AGENTS.md."
+      });
+    },
+
+    async proposeDirectiveUpdate(input: ProposeDirectiveUpdateToolInput) {
+      const directives = store.listDirectives({
+        projectScope: input.projectScope,
+        projectPath: input.projectPath,
+        includeDisabled: false,
+        limit: 100
+      });
+      const duplicateCandidates = findDuplicateCandidatesForDirectiveContent(input.content, directives);
+      const reasons: string[] = [];
+      const warnings: string[] = [];
+      let recommendation: "create" | "update" | "skip" | "ask_user" = duplicateCandidates.length ? "update" : "create";
+
+      if (!input.allowSecret && looksLikeSecret(input.content)) {
+        recommendation = "skip";
+        reasons.push("Content looks like a secret; do not store as directive memory.");
+      }
+      if (isEphemeralMemory(input.content, input.taskContext)) {
+        recommendation = "skip";
+        reasons.push("Content looks temporary and is too strong for directive memory.");
+      }
+      if (!looksLikeDirective(input.content, input.taskContext)) {
+        warnings.push("Directive memory should contain a durable instruction, preference, or policy. Consider normal memory instead.");
+      }
+      const scopeGuidance = buildDirectiveScopeGuidance(input);
+      if (recommendation === "create" && scopeGuidance.requiresUserChoice) {
+        recommendation = "ask_user";
+        reasons.push("Project context is present; ask the user whether this belongs in global or project directive memory.");
+      }
+
+      const provenance = analyzeProvenance(input.sourceType, input.sourceRef);
+
+      return toolResult({
+        recommendation,
+        wouldWrite: false,
+        proposed: {
+          content: input.content,
+          suggestedScope: input.preferredScope ?? scopeGuidance.defaultScope,
+          projectScope: input.projectScope ?? null,
+          projectPath: input.projectPath ?? null,
+          sourceType: input.sourceType,
+          sourceRef: input.sourceRef,
+          priority: 0.75
+        },
+        scopeGuidance,
+        priorityOrder: directivePriorityOrder,
+        provenance,
+        duplicateCandidates,
+        reasons,
+        warnings,
+        nextAction:
+          recommendation === "ask_user"
+            ? "Ask the user whether to store this as a global directive or a project directive, then call write_directive with the chosen scope."
+            : recommendation === "create"
+              ? "Call write_directive with the chosen scope if the user approves."
+              : recommendation === "update"
+                ? "Disable or supersede the matching directive before writing a replacement."
+                : "Do not write this directive unless the user explicitly overrides the recommendation."
+      });
+    },
+
+    async disableDirective(input: DisableDirectiveToolInput) {
+      const directive = store.disableDirective({
+        directiveId: input.directiveId,
+        reason: input.reason
+      });
+
+      return toolResult({
+        directive: serializeDirective(directive),
+        event: "disabled"
+      });
+    },
+
     async healthCheck(_input: HealthCheckToolInput) {
       const embedding = options.embeddingProvider
         ? await tryEmbed(options.embeddingProvider, "codex memory sidecar health check")
@@ -571,6 +766,11 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         !databaseHealth.ok && (databaseHealth.integrityCheck !== "ok" || !databaseHealth.fts.ok);
       const warnings = [...databaseHealth.warnings, ...(embedding.warning ? [embedding.warning] : [])];
       const sessionGuidance = buildSessionGuidance();
+      const directives = store.listDirectives({
+        projectScope: input.projectScope,
+        projectPath: input.projectPath,
+        limit: 20
+      });
 
       if (!databaseHealth.ok) {
         return toolResult({
@@ -584,6 +784,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           backupRetention,
           repairRecommended,
           sessionGuidance,
+          directives: directives.map(serializeDirective),
           digest: "",
           memories: [] as unknown[],
           warnings,
@@ -612,6 +813,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         backupRetention,
         repairRecommended,
         sessionGuidance,
+        directives: directives.map(serializeDirective),
         digest: compactDigest(serialized, input.maxTokens ?? 800),
         memories: results.map(serializeSessionMemory),
         warnings,
@@ -789,6 +991,42 @@ export function registerMemoryTools(server: McpServer, store: MemoryStore, optio
       inputSchema: proposeMemoryUpdateSchema
     },
     handlers.proposeMemoryUpdate
+  );
+
+  server.registerTool(
+    "write_directive",
+    {
+      description: "Create a strong directive memory after explicit user approval.",
+      inputSchema: writeDirectiveSchema
+    },
+    handlers.writeDirective
+  );
+
+  server.registerTool(
+    "list_directives",
+    {
+      description: "List active directive memories, including contents, so strong memory can be audited.",
+      inputSchema: listDirectivesSchema
+    },
+    handlers.listDirectives
+  );
+
+  server.registerTool(
+    "propose_directive_update",
+    {
+      description: "Dry-run a directive memory write/update decision and require scope choice when needed.",
+      inputSchema: proposeDirectiveUpdateSchema
+    },
+    handlers.proposeDirectiveUpdate
+  );
+
+  server.registerTool(
+    "disable_directive",
+    {
+      description: "Disable a directive memory without hard deleting it.",
+      inputSchema: disableDirectiveSchema
+    },
+    handlers.disableDirective
   );
 
   server.registerTool(
@@ -1023,11 +1261,14 @@ function serializeSearchResult(result: SearchMemoryResult, options: { includeEmb
 function buildSessionGuidance() {
   return {
     memoryUse: "supporting_context",
+    priorityOrder: directivePriorityOrder,
     canAnswer: [
+      "Directive memory can provide durable operating instructions for this project.",
       "Relevant saved memory summaries and their sourceRefs can inform this task.",
       "Health, embedding, FTS, WAL, backup retention, and recent project memory availability are reflected in this session."
     ],
     mustVerify: [
+      "Directive memory is below system/developer instructions, the user's latest instruction, and AGENTS.md.",
       "Validate memory-derived claims against the user's latest instruction, README/docs, actual files, or git history before treating them as facts.",
       "Use read_memory or audit_memory when a memory summary affects an important decision."
     ],
@@ -1035,7 +1276,7 @@ function buildSessionGuidance() {
       "The digest may omit relevant memories when the query is too narrow or the database has not captured the decision yet.",
       "Memory can be stale, incomplete, or less precise than current repository files."
     ],
-    suggestedNextTools: ["read_memory", "search_memory", "audit_memory"]
+    suggestedNextTools: ["list_directives", "read_memory", "search_memory", "audit_memory", "propose_directive_update"]
   };
 }
 
@@ -1112,6 +1353,23 @@ function serializeMemory(memory: Memory, options: { includeEmbedding?: boolean }
     lastAccessedAt: memory.lastAccessedAt?.toISOString() ?? null,
     expiresAt: memory.expiresAt?.toISOString() ?? null,
     status: memory.status
+  };
+}
+
+function serializeDirective(directive: Directive) {
+  return {
+    id: directive.id,
+    scope: directive.scope,
+    projectScope: directive.projectScope,
+    content: directive.content,
+    rationale: directive.rationale,
+    tags: directive.tags,
+    sourceType: directive.sourceType,
+    sourceRef: directive.sourceRef,
+    priority: directive.priority,
+    createdAt: directive.createdAt.toISOString(),
+    updatedAt: directive.updatedAt.toISOString(),
+    status: directive.status
   };
 }
 
@@ -1302,6 +1560,76 @@ function findDuplicateCandidatesForContent(content: string, candidates: Memory[]
     ...exactCandidates,
     ...findNearDuplicateCandidates(content, layer, candidates, new Set(exactCandidates.map((candidate) => candidate.memoryId)))
   ].slice(0, 5);
+}
+
+function findDuplicateCandidatesForDirectiveContent(content: string, candidates: Directive[]) {
+  const key = normalizeMemoryContent(content);
+  const exactCandidates = candidates
+    .filter((candidate) => normalizeMemoryContent(candidate.content) === key)
+    .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || left.id - right.id)
+    .slice(0, 5)
+    .map((candidate) => ({
+      directiveId: candidate.id,
+      reason: "duplicate_content",
+      scope: candidate.scope,
+      projectScope: candidate.projectScope,
+      content: candidate.content
+    }));
+  if (exactCandidates.length >= 5) {
+    return exactCandidates;
+  }
+
+  return [
+    ...exactCandidates,
+    ...candidates
+      .filter((candidate) => !exactCandidates.some((exact) => exact.directiveId === candidate.id))
+      .map((candidate) => ({
+        candidate,
+        confidence: contentSimilarity(content, candidate.content)
+      }))
+      .filter((entry) => entry.confidence >= 0.72)
+      .sort((left, right) => right.confidence - left.confidence || left.candidate.id - right.candidate.id)
+      .slice(0, 5)
+      .map(({ candidate, confidence }) => ({
+        directiveId: candidate.id,
+        reason: "near_duplicate_content",
+        scope: candidate.scope,
+        projectScope: candidate.projectScope,
+        content: candidate.content,
+        confidence: Number(confidence.toFixed(4))
+      }))
+  ].slice(0, 5);
+}
+
+function buildDirectiveScopeGuidance(input: ProposeDirectiveUpdateToolInput) {
+  const hasProjectContext = Boolean(input.projectScope?.trim() || input.projectPath?.trim());
+  const defaultScope: DirectiveScope = hasProjectContext ? "project" : "global";
+  const requiresUserChoice = hasProjectContext && !input.preferredScope;
+
+  return {
+    requiresUserChoice,
+    defaultScope: input.preferredScope ?? defaultScope,
+    question: requiresUserChoice
+      ? "Store this as a project directive for the current project, or as a global directive for all projects?"
+      : null,
+    options: [
+      {
+        scope: "project" as const,
+        when: "Use for repository-specific rules, workflows, paths, tools, or documentation preferences."
+      },
+      {
+        scope: "global" as const,
+        when: "Use for durable user-wide behavior that should apply across projects."
+      }
+    ]
+  };
+}
+
+function looksLikeDirective(content: string, taskContext: string | undefined): boolean {
+  const combined = `${taskContext ?? ""} ${content}`.toLowerCase();
+  return /\b(always|never|must|should|prefer|priority|policy|directive|instruction|rule|必ず|常に|禁止|優先|方針|ルール|指示)\b/i.test(
+    combined
+  );
 }
 
 function findNearDuplicateCandidates(content: string, layer: MemoryLayer | undefined, candidates: Memory[], excludedIds: Set<number>) {

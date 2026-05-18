@@ -8,10 +8,15 @@ import { cosineSimilarity } from "./embedding.js";
 import { containsLikelySecret, isLikelySecretKey } from "./secret-detection.js";
 import type {
   CreateMemoryInput,
+  CreateDirectiveInput,
   CreateBackupInput,
   DatabaseHealth,
+  Directive,
+  DirectiveEventType,
   ForgetMemoryInput,
   InspectBackupInput,
+  DisableDirectiveInput,
+  ListDirectivesInput,
   ListRecentEventsInput,
   ListMemoriesInput,
   Memory,
@@ -59,6 +64,21 @@ interface EventRow {
   event_type: MemoryEventType;
   payload_json: string;
   created_at: string;
+}
+
+interface DirectiveRow {
+  id: number;
+  scope: Directive["scope"];
+  project_scope: string;
+  content: string;
+  rationale: string;
+  tags: string;
+  source_type: string;
+  source_ref: string;
+  priority: number;
+  created_at: string;
+  updated_at: string;
+  status: Directive["status"];
 }
 
 interface BackupMemorySummaryRow {
@@ -334,6 +354,99 @@ export class MemoryStore {
       .prepare(`SELECT * FROM memories WHERE ${clauses.join(" AND ")} ORDER BY updated_at DESC, id DESC LIMIT @limit`)
       .all(params) as MemoryRow[];
     return rows.map(mapMemory);
+  }
+
+  createDirective(input: CreateDirectiveInput): Directive {
+    this.assertStorable(input.content, input.allowSecret);
+    if (!input.rationale.trim()) {
+      throw new Error("Directive rationale cannot be empty.");
+    }
+
+    const now = new Date();
+    const projectScope = input.scope === "global" ? GLOBAL_PROJECT_SCOPE : resolveProjectScope(input);
+    const result = this.db
+      .prepare(
+        `INSERT INTO directives (
+          scope, project_scope, content, rationale, tags, source_type, source_ref,
+          priority, created_at, updated_at, status
+        ) VALUES (
+          @scope, @projectScope, @content, @rationale, @tags, @sourceType, @sourceRef,
+          @priority, @createdAt, @updatedAt, 'active'
+        )`
+      )
+      .run({
+        scope: input.scope,
+        projectScope,
+        content: input.content,
+        rationale: input.rationale,
+        tags: JSON.stringify(input.tags ?? []),
+        sourceType: input.sourceType,
+        sourceRef: input.sourceRef,
+        priority: clampScore(input.priority ?? 0.75),
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString()
+      });
+
+    const directive = this.requireDirective(Number(result.lastInsertRowid));
+    this.recordDirectiveEvent(directive.id, "created", {
+      scope: directive.scope,
+      projectScope: directive.projectScope,
+      sourceType: directive.sourceType,
+      sourceRef: directive.sourceRef
+    });
+    return directive;
+  }
+
+  listDirectives(input: ListDirectivesInput = {}): Directive[] {
+    const limit = Math.max(1, Math.min(input.limit ?? 100, 500));
+    const includeGlobal = input.includeGlobal ?? true;
+    const includeProject = input.includeProject ?? true;
+    const projectScope = resolveProjectScope(input);
+    const clauses: string[] = [];
+    const params: Record<string, unknown> = { limit };
+
+    if (!input.includeDisabled) {
+      clauses.push("status = 'active'");
+    }
+
+    const scopeClauses: string[] = [];
+    if (includeGlobal) {
+      scopeClauses.push("(scope = 'global' AND project_scope = @globalProjectScope)");
+      params.globalProjectScope = GLOBAL_PROJECT_SCOPE;
+    }
+    if (includeProject && projectScope !== GLOBAL_PROJECT_SCOPE) {
+      scopeClauses.push("(scope = 'project' AND project_scope = @projectScope)");
+      params.projectScope = projectScope;
+    } else if (includeProject && !includeGlobal) {
+      scopeClauses.push("scope = 'project'");
+    }
+    if (!scopeClauses.length) {
+      return [];
+    }
+    clauses.push(`(${scopeClauses.join(" OR ")})`);
+
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM directives
+         WHERE ${clauses.join(" AND ")}
+         ORDER BY CASE scope WHEN 'project' THEN 0 ELSE 1 END, priority DESC, updated_at DESC, id DESC
+         LIMIT @limit`
+      )
+      .all(params) as DirectiveRow[];
+
+    return rows.map(mapDirective);
+  }
+
+  disableDirective(input: DisableDirectiveInput): Directive {
+    const existing = this.requireDirective(input.directiveId);
+    this.db
+      .prepare("UPDATE directives SET status = 'disabled', updated_at = ? WHERE id = ?")
+      .run(new Date().toISOString(), input.directiveId);
+    this.recordDirectiveEvent(input.directiveId, "disabled", {
+      reason: input.reason,
+      previousStatus: existing.status
+    });
+    return this.requireDirective(input.directiveId);
   }
 
   countRecords(): MemoryStoreCounts {
@@ -714,6 +827,31 @@ export class MemoryStore {
         tags
       );
 
+      CREATE TABLE IF NOT EXISTS directives (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scope TEXT NOT NULL CHECK (scope IN ('global', 'project')),
+        project_scope TEXT NOT NULL DEFAULT 'global',
+        content TEXT NOT NULL,
+        rationale TEXT NOT NULL DEFAULT '',
+        tags TEXT NOT NULL DEFAULT '[]',
+        source_type TEXT NOT NULL,
+        source_ref TEXT NOT NULL,
+        priority REAL NOT NULL DEFAULT 0.75,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled', 'superseded'))
+      );
+
+      CREATE TABLE IF NOT EXISTS directive_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        directive_id INTEGER NOT NULL,
+        event_type TEXT NOT NULL CHECK (
+          event_type IN ('created', 'updated', 'disabled', 'retrieved')
+        ),
+        payload_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_memories_status_updated
         ON memories(status, updated_at DESC);
 
@@ -729,6 +867,9 @@ export class MemoryStore {
       CREATE INDEX IF NOT EXISTS idx_memories_active_embedding_candidates
         ON memories(status, importance DESC, updated_at DESC)
         WHERE embedding IS NOT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_directives_scope_status_updated
+        ON directives(scope, project_scope, status, priority DESC, updated_at DESC);
     `);
   }
 
@@ -868,6 +1009,14 @@ export class MemoryStore {
     return memory;
   }
 
+  private requireDirective(directiveId: number): Directive {
+    const row = this.db.prepare("SELECT * FROM directives WHERE id = ?").get(directiveId) as DirectiveRow | undefined;
+    if (!row) {
+      throw new Error(`Directive ${directiveId} was not found.`);
+    }
+    return mapDirective(row);
+  }
+
   private assertStorable(content: string, allowSecret = false): void {
     if (!content.trim()) {
       throw new Error("Memory content cannot be empty.");
@@ -895,6 +1044,15 @@ export class MemoryStore {
          VALUES (?, ?, ?, ?)`
       )
       .run(memoryId, eventType, JSON.stringify(redactEventPayload(payload)), new Date().toISOString());
+  }
+
+  private recordDirectiveEvent(directiveId: number, eventType: DirectiveEventType, payload: Record<string, unknown>): void {
+    this.db
+      .prepare(
+        `INSERT INTO directive_events (directive_id, event_type, payload_json, created_at)
+         VALUES (?, ?, ?, ?)`
+      )
+      .run(directiveId, eventType, JSON.stringify(redactEventPayload(payload)), new Date().toISOString());
   }
 }
 
@@ -926,6 +1084,23 @@ function mapEvent(row: EventRow): MemoryEvent {
     eventType: row.event_type,
     payload: JSON.parse(row.payload_json) as Record<string, unknown>,
     createdAt: new Date(row.created_at)
+  };
+}
+
+function mapDirective(row: DirectiveRow): Directive {
+  return {
+    id: row.id,
+    scope: row.scope,
+    projectScope: row.project_scope ?? GLOBAL_PROJECT_SCOPE,
+    content: row.content,
+    rationale: row.rationale,
+    tags: safeParseTags(row.tags),
+    sourceType: row.source_type,
+    sourceRef: row.source_ref,
+    priority: row.priority,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+    status: row.status
   };
 }
 
