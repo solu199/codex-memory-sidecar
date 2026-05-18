@@ -4,7 +4,13 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { buildDashboardStatus, createDashboardServer, openDashboardUrl, shouldOpenDashboardBrowser } from "../src/dashboard.js";
+import {
+  buildDashboardStatus,
+  createDashboardServer,
+  openDashboardUrl,
+  probeOllamaStatus,
+  shouldOpenDashboardBrowser
+} from "../src/dashboard.js";
 import { MemoryStore } from "../src/memory-store.js";
 
 describe("dashboard", () => {
@@ -180,6 +186,7 @@ describe("dashboard", () => {
       expect(html).toContain("Maintenance");
       expect(html).toContain("Backup Retention");
       expect(html).toContain("Warnings");
+      expect(html).toContain("Ollama Models");
       expect(html).toContain("Project Scopes");
       expect(html).toContain("Recent Memories");
       expect(html).toContain("Source");
@@ -256,5 +263,68 @@ describe("dashboard", () => {
     } finally {
       warn.mockRestore();
     }
+  });
+
+  test("probeOllamaStatus reports configured model availability from Ollama tags", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          models: [
+            { name: "embeddinggemma:latest" },
+            { name: "qwen3:latest" },
+            { name: "llama3.2:latest" }
+          ]
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      )
+    );
+
+    const status = await probeOllamaStatus({
+      baseUrl: "http://localhost:11434",
+      embeddingModel: "embeddinggemma",
+      maintenanceModel: "qwen3",
+      fetch: fetchImpl
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith("http://localhost:11434/api/tags");
+    expect(status).toEqual({
+      ok: true,
+      baseUrl: "http://localhost:11434",
+      embeddingModel: "embeddinggemma",
+      maintenanceModel: "qwen3",
+      embeddingModelAvailable: true,
+      maintenanceModelAvailable: true,
+      modelNames: ["embeddinggemma:latest", "qwen3:latest", "llama3.2:latest"],
+      error: null
+    });
+  });
+
+  test("buildDashboardStatus includes Ollama model status and warning when a configured model is missing", async () => {
+    const status = await buildDashboardStatus(store, {
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) },
+      ollama: {
+        baseUrl: "http://localhost:11434",
+        embeddingModel: "embeddinggemma",
+        maintenanceModel: "qwen3",
+        fetch: vi.fn(async () =>
+          new Response(JSON.stringify({ models: [{ name: "embeddinggemma:latest" }] }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          })
+        )
+      }
+    });
+
+    expect(status.ok).toBe(false);
+    expect(status.ollama).toMatchObject({
+      ok: false,
+      embeddingModelAvailable: true,
+      maintenanceModelAvailable: false,
+      modelNames: ["embeddinggemma:latest"]
+    });
+    expect(status.warnings).toContain("Ollama model is not available: qwen3");
   });
 });

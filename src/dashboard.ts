@@ -12,6 +12,14 @@ import { runStartupMaintenance } from "./startup-maintenance.js";
 
 export interface DashboardOptions {
   embeddingProvider?: EmbeddingProvider;
+  ollama?: OllamaStatusOptions;
+}
+
+export interface OllamaStatusOptions {
+  baseUrl: string;
+  embeddingModel: string;
+  maintenanceModel: string;
+  fetch?: typeof globalThis.fetch;
 }
 
 type DashboardBrowserProcess = {
@@ -103,6 +111,16 @@ export interface DashboardStatus {
     dimensions: number;
     error: string | null;
   };
+  ollama: {
+    ok: boolean;
+    baseUrl: string;
+    embeddingModel: string;
+    maintenanceModel: string;
+    embeddingModelAvailable: boolean;
+    maintenanceModelAvailable: boolean;
+    modelNames: string[];
+    error: string | null;
+  } | null;
   recentMemories: Array<{
     id: number;
     layer: string;
@@ -138,13 +156,15 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
         dimensions: 0,
         error: "Embedding provider is not configured."
       };
+  const ollama = options.ollama ? await probeOllamaStatus(options.ollama) : null;
   const warnings = [
     ...databaseHealth.warnings,
-    ...(embedding.ok ? [] : [embedding.error ?? "Embedding provider is unavailable."])
+    ...(embedding.ok ? [] : [embedding.error ?? "Embedding provider is unavailable."]),
+    ...ollamaWarnings(ollama)
   ];
 
   return {
-    ok: databaseHealth.ok && embedding.ok,
+    ok: databaseHealth.ok && embedding.ok && (!ollama || ollama.ok),
     checkedAt: new Date().toISOString(),
     database: {
       ok: databaseHealth.ok,
@@ -183,6 +203,7 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
       }
     },
     embedding,
+    ollama,
     recentMemories: store.listMemories({ limit: 10 }).map((memory) => ({
       id: memory.id,
       layer: memory.layer,
@@ -274,6 +295,84 @@ export function openDashboardUrl(url: string, opener: DashboardBrowserOpener = s
     console.warn(`codex-memory-sidecar dashboard browser open failed: ${message}`);
     return false;
   }
+}
+
+export async function probeOllamaStatus(options: OllamaStatusOptions): Promise<NonNullable<DashboardStatus["ollama"]>> {
+  const baseUrl = options.baseUrl.replace(/\/$/, "");
+  const fetchImpl = options.fetch ?? globalThis.fetch;
+
+  try {
+    const response = await fetchImpl(`${baseUrl}/api/tags`);
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Ollama tags request failed (${response.status}): ${body}`);
+    }
+
+    const json = (await response.json()) as unknown;
+    const modelNames = readOllamaModelNames(json);
+    const embeddingModelAvailable = hasOllamaModel(modelNames, options.embeddingModel);
+    const maintenanceModelAvailable = hasOllamaModel(modelNames, options.maintenanceModel);
+
+    return {
+      ok: embeddingModelAvailable && maintenanceModelAvailable,
+      baseUrl,
+      embeddingModel: options.embeddingModel,
+      maintenanceModel: options.maintenanceModel,
+      embeddingModelAvailable,
+      maintenanceModelAvailable,
+      modelNames,
+      error: null
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      baseUrl,
+      embeddingModel: options.embeddingModel,
+      maintenanceModel: options.maintenanceModel,
+      embeddingModelAvailable: false,
+      maintenanceModelAvailable: false,
+      modelNames: [],
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+function ollamaWarnings(ollama: DashboardStatus["ollama"]): string[] {
+  if (!ollama) {
+    return [];
+  }
+  if (ollama.error) {
+    return [`Ollama model status unavailable: ${ollama.error}`];
+  }
+  const warnings: string[] = [];
+  if (!ollama.embeddingModelAvailable) {
+    warnings.push(`Ollama model is not available: ${ollama.embeddingModel}`);
+  }
+  if (!ollama.maintenanceModelAvailable) {
+    warnings.push(`Ollama model is not available: ${ollama.maintenanceModel}`);
+  }
+  return warnings;
+}
+
+function readOllamaModelNames(json: unknown): string[] {
+  if (!isRecord(json) || !Array.isArray(json.models)) {
+    return [];
+  }
+
+  return json.models.flatMap((model) => {
+    if (!isRecord(model) || typeof model.name !== "string") {
+      return [];
+    }
+    return [model.name];
+  });
+}
+
+function hasOllamaModel(modelNames: string[], configuredModel: string): boolean {
+  return modelNames.some((name) => name === configuredModel || name === `${configuredModel}:latest` || name.split(":")[0] === configuredModel);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 async function probeEmbedding(provider: EmbeddingProvider): Promise<DashboardStatus["embedding"]> {
@@ -487,6 +586,21 @@ function renderDashboardHtml(): string {
         <ul class="stats-list" id="warnings"></ul>
       </div>
     </section>
+    <h2>Ollama Models</h2>
+    <section class="stats-grid">
+      <div class="panel">
+        <p class="label">Connection</p>
+        <p class="value" id="ollama-status">-</p>
+      </div>
+      <div class="panel">
+        <p class="label">Configured Models</p>
+        <ul class="stats-list" id="ollama-configured"></ul>
+      </div>
+      <div class="panel">
+        <p class="label">Available Models</p>
+        <ul class="stats-list" id="ollama-models"></ul>
+      </div>
+    </section>
     <h2>Project Scopes</h2>
     <table>
       <thead><tr><th>Scope</th><th>Active</th><th>Total</th><th>Latest</th></tr></thead>
@@ -541,6 +655,20 @@ function renderDashboardHtml(): string {
       document.getElementById("warnings").innerHTML = status.warnings.length
         ? status.warnings.map((warning) => "<li><span>" + escapeHtml(warning) + "</span></li>").join("")
         : renderStats({ current: "none" });
+      document.getElementById("ollama-status").textContent = status.ollama
+        ? (status.ollama.ok ? "OK" : "Needs attention")
+        : "Not configured";
+      document.getElementById("ollama-status").className = status.ollama && status.ollama.ok ? "value status-ok" : "value status-warn";
+      document.getElementById("ollama-configured").innerHTML = status.ollama
+        ? renderStats({
+            endpoint: status.ollama.baseUrl,
+            embedding: status.ollama.embeddingModel + " / " + (status.ollama.embeddingModelAvailable ? "available" : "missing"),
+            maintenance: status.ollama.maintenanceModel + " / " + (status.ollama.maintenanceModelAvailable ? "available" : "missing")
+          })
+        : renderStats({ status: "not configured" });
+      document.getElementById("ollama-models").innerHTML = status.ollama && status.ollama.modelNames.length
+        ? status.ollama.modelNames.map((name) => "<li><span>" + escapeHtml(name) + "</span></li>").join("")
+        : renderStats({ models: "-" });
       document.getElementById("project-scopes").innerHTML = status.memoryStats.byProjectScope.map((scope) => (
         "<tr><td class=\\"summary\\">" + escapeHtml(scope.projectScope) + "</td><td>" + scope.active + "</td><td>" + scope.total + "</td><td>" + escapeHtml(scope.latestUpdatedAt ?? "-") + "</td></tr>"
       )).join("");
@@ -608,7 +736,12 @@ async function main(): Promise<void> {
     embeddingProvider: new OllamaEmbeddingProvider({
       baseUrl: config.ollamaBaseUrl,
       model: config.embeddingModel
-    })
+    }),
+    ollama: {
+      baseUrl: config.ollamaBaseUrl,
+      embeddingModel: config.embeddingModel,
+      maintenanceModel: config.maintenanceModel
+    }
   });
 
   server.listen(port, "127.0.0.1", () => {
