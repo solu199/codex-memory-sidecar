@@ -17,6 +17,7 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run build
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:mcp
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:ollama
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:practical
+node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:comparison
 ```
 
 期待値:
@@ -26,6 +27,7 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:practic
 - `smoke:mcp` は `ok: true`。
 - `smoke:ollama` は `embeddingDimensions` が 0 より大きく、warnings が空。
 - `smoke:practical` は一時 DB で write/search/digest/backup/retention/restore-plan/dashboard/repair/consolidation の流れを確認し、`ok: true`。
+- `smoke:comparison` は一時 DB で MCP なし、開始セッションのみ、MCP フル運用の比較評価観点を確認し、`ok: true`。
 
 ## 2. Codex MCP 登録
 
