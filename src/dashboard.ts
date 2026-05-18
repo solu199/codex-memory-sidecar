@@ -141,6 +141,13 @@ export interface DashboardStatus {
     createdAt: string;
   }>;
   warnings: string[];
+  warningActions: Array<{
+    severity: "warning" | "error";
+    title: string;
+    message: string;
+    action: string;
+    tools: string[];
+  }>;
 }
 
 export async function buildDashboardStatus(store: MemoryStore, options: DashboardOptions = {}): Promise<DashboardStatus> {
@@ -162,6 +169,7 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
     ...(embedding.ok ? [] : [embedding.error ?? "Embedding provider is unavailable."]),
     ...ollamaWarnings(ollama)
   ];
+  const warningActions = buildWarningActions({ warnings, repairRecommended: !databaseHealth.ok && (databaseHealth.integrityCheck !== "ok" || !databaseHealth.fts.ok), ollama });
 
   return {
     ok: databaseHealth.ok && embedding.ok && (!ollama || ollama.ok),
@@ -223,7 +231,8 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
       eventType: event.eventType,
       createdAt: event.createdAt.toISOString()
     })),
-    warnings
+    warnings,
+    warningActions
   };
 }
 
@@ -352,6 +361,75 @@ function ollamaWarnings(ollama: DashboardStatus["ollama"]): string[] {
     warnings.push(`Ollama model is not available: ${ollama.maintenanceModel}`);
   }
   return warnings;
+}
+
+function buildWarningActions(options: {
+  warnings: string[];
+  repairRecommended: boolean;
+  ollama: DashboardStatus["ollama"];
+}): DashboardStatus["warningActions"] {
+  const actions: DashboardStatus["warningActions"] = [];
+
+  if (
+    options.repairRecommended ||
+    options.warnings.some((warning) => warning.includes("FTS index is missing") || warning.includes("FTS index has"))
+  ) {
+    actions.push({
+      severity: "warning",
+      title: "検索インデックスの修復が必要です",
+      message: "全文検索インデックスとメモリDBの内容に差分があります。",
+      action: "MCP tool の repair_memory_index を実行してください。",
+      tools: ["backup_memory", "repair_memory_index", "health_check"]
+    });
+  }
+
+  if (options.warnings.some((warning) => warning.includes("Embedding provider") || warning.includes("Embedding unavailable"))) {
+    actions.push({
+      severity: "warning",
+      title: "Embedding が利用できません",
+      message: "検索の意味ベクトル処理が使えないため、検索品質が下がる可能性があります。",
+      action: "Ollama アプリの起動状態と embedding model のインストール状態を確認してください。",
+      tools: ["health_check"]
+    });
+  }
+
+  if (options.ollama?.error) {
+    actions.push({
+      severity: "warning",
+      title: "Ollama に接続できません",
+      message: options.ollama.error,
+      action: "Ollama アプリを起動し、OLLAMA_BASE_URL の endpoint が正しいか確認してください。",
+      tools: ["health_check"]
+    });
+  }
+
+  if (options.ollama && !options.ollama.error) {
+    const missingModels = [
+      ...(options.ollama.embeddingModelAvailable ? [] : [options.ollama.embeddingModel]),
+      ...(options.ollama.maintenanceModelAvailable ? [] : [options.ollama.maintenanceModel])
+    ];
+    for (const model of missingModels) {
+      actions.push({
+        severity: "warning",
+        title: "Ollama モデルが見つかりません",
+        message: `設定済みモデル ${model} が Ollama のモデル一覧にありません。`,
+        action: `Ollama に不足モデルを追加してください: ollama pull ${model}`,
+        tools: ["health_check"]
+      });
+    }
+  }
+
+  if (options.warnings.length > 0 && actions.length === 0) {
+    actions.push({
+      severity: "warning",
+      title: "確認が必要な警告があります",
+      message: options.warnings.join(" / "),
+      action: "README と health_check の結果を確認し、必要ならバックアップを作成してから対応してください。",
+      tools: ["health_check", "backup_memory"]
+    });
+  }
+
+  return actions;
 }
 
 function readOllamaModelNames(json: unknown): string[] {
@@ -494,6 +572,19 @@ function renderDashboardHtml(): string {
       padding: 6px 0;
       border-bottom: 1px solid #e4e7eb;
     }
+    .action-list li {
+      display: block;
+    }
+    .action-title {
+      display: block;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .action-body {
+      display: block;
+      color: #52606d;
+      line-height: 1.5;
+    }
     th, td {
       border-bottom: 1px solid #e4e7eb;
       padding: 10px;
@@ -536,6 +627,9 @@ function renderDashboardHtml(): string {
       .stats-list li {
         border-color: #374151;
       }
+      .action-body {
+        color: #cbd5e1;
+      }
     }
   </style>
 </head>
@@ -543,77 +637,77 @@ function renderDashboardHtml(): string {
   <main>
     <header>
       <h1>Codex Memory Sidecar</h1>
-      <button type="button" id="refresh">Refresh</button>
+      <button type="button" id="refresh">更新</button>
     </header>
     <section class="grid">
-      <div class="panel"><p class="label">Status</p><p class="value" id="status">Loading</p></div>
-      <div class="panel"><p class="label">Memories</p><p class="value" id="memories">-</p></div>
-      <div class="panel"><p class="label">Events</p><p class="value" id="events">-</p></div>
-      <div class="panel"><p class="label">Database</p><p class="value" id="database">-</p></div>
+      <div class="panel"><p class="label">状態</p><p class="value" id="status">読み込み中</p></div>
+      <div class="panel"><p class="label">メモリ</p><p class="value" id="memories">-</p></div>
+      <div class="panel"><p class="label">イベント</p><p class="value" id="events">-</p></div>
+      <div class="panel"><p class="label">データベース</p><p class="value" id="database">-</p></div>
       <div class="panel"><p class="label">Embedding</p><p class="value" id="embedding">-</p></div>
     </section>
-    <h2>Memory Stats</h2>
+    <h2>メモリ統計</h2>
     <section class="stats-grid">
       <div class="panel">
-        <p class="label">Status</p>
+        <p class="label">状態別</p>
         <ul class="stats-list" id="status-stats"></ul>
       </div>
       <div class="panel">
-        <p class="label">Layer</p>
+        <p class="label">レイヤー別</p>
         <ul class="stats-list" id="layer-stats"></ul>
       </div>
       <div class="panel">
-        <p class="label">Updated</p>
+        <p class="label">更新日時</p>
         <ul class="stats-list" id="updated-stats"></ul>
       </div>
     </section>
-    <h2>Maintenance</h2>
+    <h2>メンテナンス</h2>
     <section class="stats-grid">
       <div class="panel">
-        <p class="label">Index Repair</p>
+        <p class="label">インデックス修復</p>
         <p class="value" id="repair">-</p>
       </div>
       <div class="panel">
-        <p class="label">Latest Backup</p>
+        <p class="label">最新バックアップ</p>
         <ul class="stats-list" id="backup-stats"></ul>
       </div>
       <div class="panel">
-        <p class="label">Backup Retention</p>
+        <p class="label">バックアップ保持</p>
         <ul class="stats-list" id="retention-stats"></ul>
       </div>
       <div class="panel">
-        <p class="label">Warnings</p>
-        <ul class="stats-list" id="warnings"></ul>
+        <p class="label">警告と対応</p>
+        <ul class="stats-list action-list" id="warnings"></ul>
       </div>
     </section>
-    <h2>Ollama Models</h2>
+    <h2>Ollama モデル</h2>
     <section class="stats-grid">
       <div class="panel">
-        <p class="label">Connection</p>
+        <p class="label">接続</p>
         <p class="value" id="ollama-status">-</p>
       </div>
       <div class="panel">
-        <p class="label">Configured Models</p>
+        <p class="label">設定済みモデル</p>
         <ul class="stats-list" id="ollama-configured"></ul>
       </div>
       <div class="panel">
-        <p class="label">Available Models</p>
+        <p class="label">利用可能なモデル</p>
         <ul class="stats-list" id="ollama-models"></ul>
       </div>
     </section>
-    <h2>Project Scopes</h2>
+    <h2>プロジェクトスコープ</h2>
     <table>
-      <thead><tr><th>Scope</th><th>Active</th><th>Total</th><th>Latest</th></tr></thead>
+      <thead><tr><th>スコープ</th><th>有効</th><th>合計</th><th>最新</th></tr></thead>
       <tbody id="project-scopes"></tbody>
     </table>
-    <h2>Recent Memories</h2>
+    <h2>最近のメモリ</h2>
     <table>
-      <thead><tr><th>ID</th><th>Layer</th><th>Summary</th><th>Source</th><th>Scope</th><th>Tags</th><th>Updated</th></tr></thead>
+      <thead><tr><th>ID</th><th>レイヤー</th><th>要約</th><th>情報源</th><th>スコープ</th><th>タグ</th><th>更新</th></tr></thead>
       <tbody id="recent-memories"></tbody>
     </table>
-    <h2>Recent Events</h2>
+    <h2>最近のイベント</h2>
     <table>
-      <thead><tr><th>ID</th><th>Memory</th><th>Type</th><th>Created</th></tr></thead>
+      <thead><tr><th>ID</th><th>メモリ</th><th>種類</th><th>作成</th></tr></thead>
       <tbody id="recent-events"></tbody>
     </table>
   </main>
@@ -621,7 +715,7 @@ function renderDashboardHtml(): string {
     async function refresh() {
       const response = await fetch("/api/status");
       const status = await response.json();
-      document.getElementById("status").textContent = status.ok ? "OK" : "Needs attention";
+      document.getElementById("status").textContent = status.ok ? "正常" : "要確認";
       document.getElementById("status").className = status.ok ? "value status-ok" : "value status-warn";
       document.getElementById("memories").textContent = String(status.database.memoryCount);
       document.getElementById("events").textContent = String(status.database.eventCount);
@@ -629,43 +723,51 @@ function renderDashboardHtml(): string {
         ? "OK"
         : "FTS " + status.database.fts.missingCount + "/" + status.database.fts.orphanCount;
       document.getElementById("database").className = status.database.ok ? "value status-ok" : "value status-warn";
-      document.getElementById("embedding").textContent = status.embedding.ok ? String(status.embedding.dimensions) : "Unavailable";
-      document.getElementById("status-stats").innerHTML = renderStats(status.memoryStats.byStatus);
-      document.getElementById("layer-stats").innerHTML = renderStats(status.memoryStats.byLayer);
-      document.getElementById("updated-stats").innerHTML = renderStats({
-        oldest: status.memoryStats.updatedAtRange.oldest ?? "-",
-        newest: status.memoryStats.updatedAtRange.newest ?? "-"
+      document.getElementById("embedding").textContent = status.embedding.ok ? String(status.embedding.dimensions) : "利用不可";
+      document.getElementById("status-stats").innerHTML = renderStats({
+        active: status.memoryStats.byStatus.active,
+        superseded: status.memoryStats.byStatus.superseded,
+        forgotten: status.memoryStats.byStatus.forgotten
       });
-      document.getElementById("repair").textContent = status.maintenance.repairRecommended ? "Recommended" : "Not needed";
+      document.getElementById("layer-stats").innerHTML = renderStats({
+        core: status.memoryStats.byLayer.core,
+        recall: status.memoryStats.byLayer.recall,
+        archival: status.memoryStats.byLayer.archival
+      });
+      document.getElementById("updated-stats").innerHTML = renderStats({
+        最古: status.memoryStats.updatedAtRange.oldest ?? "-",
+        最新: status.memoryStats.updatedAtRange.newest ?? "-"
+      });
+      document.getElementById("repair").textContent = status.maintenance.repairRecommended ? "推奨" : "不要";
       document.getElementById("repair").className = status.maintenance.repairRecommended ? "value status-warn" : "value status-ok";
       document.getElementById("backup-stats").innerHTML = status.maintenance.latestBackup
         ? renderStats({
-            path: status.maintenance.latestBackup.backupPath,
-            size: status.maintenance.latestBackup.sizeBytes,
-            modified: status.maintenance.latestBackup.mtime
+            パス: status.maintenance.latestBackup.backupPath,
+            サイズ: status.maintenance.latestBackup.sizeBytes,
+            更新: status.maintenance.latestBackup.mtime
           })
-        : renderStats({ latest: "-" });
+        : renderStats({ 最新: "-" });
       document.getElementById("retention-stats").innerHTML = renderStats({
-        directory: status.maintenance.backupRetention.backupDir,
-        backups: status.maintenance.backupRetention.backupCount,
-        kept: status.maintenance.backupRetention.keptCount + " / " + status.maintenance.backupRetention.keepCount,
-        prunable: status.maintenance.backupRetention.prunableCount,
-        prunableBytes: status.maintenance.backupRetention.prunableSizeBytes
+        ディレクトリ: status.maintenance.backupRetention.backupDir,
+        バックアップ数: status.maintenance.backupRetention.backupCount,
+        保持: status.maintenance.backupRetention.keptCount + " / " + status.maintenance.backupRetention.keepCount,
+        削除候補: status.maintenance.backupRetention.prunableCount,
+        削除候補バイト: status.maintenance.backupRetention.prunableSizeBytes
       });
       document.getElementById("warnings").innerHTML = status.warnings.length
-        ? status.warnings.map((warning) => "<li><span>" + escapeHtml(warning) + "</span></li>").join("")
-        : renderStats({ current: "none" });
+        ? renderWarningActions(status.warningActions, status.warnings)
+        : renderStats({ 現在: "なし" });
       document.getElementById("ollama-status").textContent = status.ollama
-        ? (status.ollama.ok ? "OK" : "Needs attention")
-        : "Not configured";
+        ? (status.ollama.ok ? "正常" : "要確認")
+        : "未設定";
       document.getElementById("ollama-status").className = status.ollama && status.ollama.ok ? "value status-ok" : "value status-warn";
       document.getElementById("ollama-configured").innerHTML = status.ollama
         ? renderStats({
-            endpoint: status.ollama.baseUrl,
-            embedding: status.ollama.embeddingModel + " / " + (status.ollama.embeddingModelAvailable ? "available" : "missing"),
-            maintenance: status.ollama.maintenanceModel + " / " + (status.ollama.maintenanceModelAvailable ? "available" : "missing")
-          })
-        : renderStats({ status: "not configured" });
+          endpoint: status.ollama.baseUrl,
+          embedding: status.ollama.embeddingModel + " / " + (status.ollama.embeddingModelAvailable ? "利用可" : "不足"),
+          maintenance: status.ollama.maintenanceModel + " / " + (status.ollama.maintenanceModelAvailable ? "利用可" : "不足")
+        })
+        : renderStats({ 状態: "未設定" });
       document.getElementById("ollama-models").innerHTML = status.ollama && status.ollama.modelNames.length
         ? status.ollama.modelNames.map((name) => "<li><span>" + escapeHtml(name) + "</span></li>").join("")
         : renderStats({ models: "-" });
@@ -683,6 +785,18 @@ function renderDashboardHtml(): string {
       return Object.entries(values).map(([key, value]) => (
         "<li><span>" + escapeHtml(key) + "</span><strong>" + escapeHtml(value) + "</strong></li>"
       )).join("");
+    }
+    function renderWarningActions(actions, warnings) {
+      if (actions && actions.length) {
+        return actions.map((item) => (
+          "<li><span class=\\"action-title\\">" + escapeHtml(item.title) + "</span>"
+          + "<span class=\\"action-body\\">" + escapeHtml(item.message) + "</span>"
+          + "<span class=\\"action-body\\">対応: " + escapeHtml(item.action) + "</span>"
+          + (item.tools && item.tools.length ? "<span class=\\"action-body\\">関連ツール: " + escapeHtml(item.tools.join(", ")) + "</span>" : "")
+          + "</li>"
+        )).join("");
+      }
+      return warnings.map((warning) => "<li><span>" + escapeHtml(warning) + "</span></li>").join("");
     }
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, (char) => ({
