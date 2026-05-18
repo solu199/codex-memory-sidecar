@@ -55,14 +55,15 @@ export async function startDashboardCompanion(options: DashboardCompanionOptions
     }
   });
 
-  return await listenDashboardServer(server, port, env, options.opener);
+  return await listenDashboardServer(server, port, env, options.opener, options.fetch);
 }
 
 async function listenDashboardServer(
   server: http.Server,
   port: number,
   env: Record<string, string | undefined>,
-  opener: Parameters<typeof openDashboardUrl>[1]
+  opener: Parameters<typeof openDashboardUrl>[1],
+  fetchImpl: typeof globalThis.fetch = globalThis.fetch
 ): Promise<DashboardCompanionResult> {
   return await new Promise((resolve) => {
     const close = async () => {
@@ -77,13 +78,30 @@ async function listenDashboardServer(
       server.off("error", onError);
       resolve(result);
     };
-    const onError = (error: Error) => {
-      finish({
-        started: false,
-        url: null,
-        warnings: [`Dashboard companion did not start: ${error.message}`],
-        close
-      });
+    const onError = (error: NodeJS.ErrnoException) => {
+      void (async () => {
+        const existingUrl = error.code === "EADDRINUSE" ? await findExistingSidecarDashboard(port, fetchImpl) : null;
+        if (existingUrl) {
+          console.error(`codex-memory-sidecar dashboard companion reused existing dashboard: ${existingUrl}`);
+          if (shouldOpenDashboardBrowser(env.CODEX_MEMORY_DASHBOARD_OPEN)) {
+            openDashboardUrl(existingUrl, opener);
+          }
+          finish({
+            started: false,
+            url: existingUrl,
+            warnings: [`Dashboard companion reused existing sidecar dashboard: ${existingUrl}`],
+            close
+          });
+          return;
+        }
+
+        finish({
+          started: false,
+          url: null,
+          warnings: [`Dashboard companion did not start: ${error.message}`],
+          close
+        });
+      })();
     };
 
     server.once("error", onError);
@@ -103,4 +121,25 @@ async function listenDashboardServer(
       });
     });
   });
+}
+
+async function findExistingSidecarDashboard(port: number, fetchImpl: typeof globalThis.fetch): Promise<string | null> {
+  const url = `http://127.0.0.1:${port}`;
+  try {
+    const response = await fetchImpl(`${url}/api/status`);
+    if (!response.ok) {
+      return null;
+    }
+    const status = (await response.json()) as unknown;
+    if (!isRecord(status) || !isRecord(status.database) || !isRecord(status.embedding)) {
+      return null;
+    }
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
