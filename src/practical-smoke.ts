@@ -18,6 +18,7 @@ export interface PracticalSmokeResult {
   memoryCount: number;
   eventCount: number;
   dashboardProjectScopes: string[];
+  dashboardRecentSources: string[];
   backupPath: string;
   warnings: string[];
 }
@@ -141,6 +142,7 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
     const scopedIds = scopedSearch.structuredContent.memories.map((memory) => memory.id);
     const crossScopeNames = crossProjectSearch.structuredContent.memories.map((memory) => memory.projectScope);
     const dashboardProjectScopes = dashboard.memoryStats.byProjectScope.map((scope) => scope.projectScope);
+    const dashboardRecentSources = dashboard.recentMemories.map((memory) => `${memory.sourceType}:${memory.sourceRef}`);
     const checks = {
       writeMemory: alpha.structuredContent.memory.projectScope.startsWith("project:"),
       proposeMemoryUpdate:
@@ -202,7 +204,8 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       dashboardShowsProjectScopes:
         dashboard.ok === true &&
         dashboardProjectScopes.includes(alpha.structuredContent.memory.projectScope) &&
-        dashboardProjectScopes.includes("beta")
+        dashboardProjectScopes.includes("beta") &&
+        dashboardRecentSources.includes("smoke:npm run smoke:practical")
     };
 
     return {
@@ -212,6 +215,7 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       memoryCount: counts.memoryCount,
       eventCount: counts.eventCount,
       dashboardProjectScopes,
+      dashboardRecentSources,
       backupPath,
       warnings: [...alpha.structuredContent.warnings, ...scopedSearch.structuredContent.warnings]
     };
@@ -242,6 +246,7 @@ async function fetchDashboardSnapshot(store: MemoryStore, embeddingProvider: Emb
       memoryStats: {
         byProjectScope: Array<{ projectScope: string }>;
       };
+      recentMemories: Array<{ sourceType: string; sourceRef: string }>;
     };
   } finally {
     await new Promise<void>((resolve, reject) => {
