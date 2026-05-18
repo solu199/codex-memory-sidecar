@@ -85,7 +85,10 @@ describe("dashboard", () => {
         summary: "Dashboard-safe summary",
         layer: "core",
         status: "active",
-        tags: ["dashboard"]
+        tags: ["dashboard"],
+        projectScope: "alpha",
+        sourceType: "manual",
+        sourceRef: "test"
       })
     ]);
     expect(status.recentEvents[0]).toMatchObject({
@@ -179,6 +182,7 @@ describe("dashboard", () => {
       expect(html).toContain("Warnings");
       expect(html).toContain("Project Scopes");
       expect(html).toContain("Recent Memories");
+      expect(html).toContain("Source");
 
       const response = await fetch(`${baseUrl}/api/status`);
       expect(response.headers.get("content-type")).toContain("application/json");

@@ -92,6 +92,9 @@ export interface DashboardStatus {
     layer: string;
     summary: string;
     tags: string[];
+    projectScope: string;
+    sourceType: string;
+    sourceRef: string;
     importance: number;
     confidence: number;
     status: string;
@@ -169,6 +172,9 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
       layer: memory.layer,
       summary: memory.summary,
       tags: memory.tags,
+      projectScope: memory.projectScope,
+      sourceType: memory.sourceType,
+      sourceRef: memory.sourceRef,
       importance: memory.importance,
       confidence: memory.confidence,
       status: memory.status,
@@ -437,7 +443,7 @@ function renderDashboardHtml(): string {
     </table>
     <h2>Recent Memories</h2>
     <table>
-      <thead><tr><th>ID</th><th>Layer</th><th>Summary</th><th>Tags</th><th>Updated</th></tr></thead>
+      <thead><tr><th>ID</th><th>Layer</th><th>Summary</th><th>Source</th><th>Scope</th><th>Tags</th><th>Updated</th></tr></thead>
       <tbody id="recent-memories"></tbody>
     </table>
     <h2>Recent Events</h2>
@@ -488,7 +494,7 @@ function renderDashboardHtml(): string {
         "<tr><td class=\\"summary\\">" + escapeHtml(scope.projectScope) + "</td><td>" + scope.active + "</td><td>" + scope.total + "</td><td>" + escapeHtml(scope.latestUpdatedAt ?? "-") + "</td></tr>"
       )).join("");
       document.getElementById("recent-memories").innerHTML = status.recentMemories.map((memory) => (
-        "<tr><td>" + memory.id + "</td><td>" + escapeHtml(memory.layer) + "</td><td class=\\"summary\\">" + escapeHtml(memory.summary) + "</td><td class=\\"tags\\">" + escapeHtml(memory.tags.join(", ")) + "</td><td>" + escapeHtml(memory.updatedAt) + "</td></tr>"
+        "<tr><td>" + memory.id + "</td><td>" + escapeHtml(memory.layer) + "</td><td class=\\"summary\\">" + escapeHtml(memory.summary) + "</td><td class=\\"tags\\">" + escapeHtml(memory.sourceType + ': ' + memory.sourceRef) + "</td><td class=\\"tags\\">" + escapeHtml(memory.projectScope) + "</td><td class=\\"tags\\">" + escapeHtml(memory.tags.join(", ")) + "</td><td>" + escapeHtml(memory.updatedAt) + "</td></tr>"
       )).join("");
       document.getElementById("recent-events").innerHTML = status.recentEvents.map((event) => (
         "<tr><td>" + event.id + "</td><td>" + event.memoryId + "</td><td>" + event.eventType + "</td><td>" + event.createdAt + "</td></tr>"
