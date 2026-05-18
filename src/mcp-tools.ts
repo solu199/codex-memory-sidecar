@@ -570,6 +570,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       const repairRecommended =
         !databaseHealth.ok && (databaseHealth.integrityCheck !== "ok" || !databaseHealth.fts.ok);
       const warnings = [...databaseHealth.warnings, ...(embedding.warning ? [embedding.warning] : [])];
+      const sessionGuidance = buildSessionGuidance();
 
       if (!databaseHealth.ok) {
         return toolResult({
@@ -582,6 +583,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           memoryStats: serializeMemoryStats(stats),
           backupRetention,
           repairRecommended,
+          sessionGuidance,
           digest: "",
           memories: [] as unknown[],
           warnings,
@@ -609,6 +611,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         memoryStats: serializeMemoryStats(stats),
         backupRetention,
         repairRecommended,
+        sessionGuidance,
         digest: compactDigest(serialized, input.maxTokens ?? 800),
         memories: results.map(serializeSessionMemory),
         warnings,
@@ -1014,6 +1017,25 @@ function serializeSearchResult(result: SearchMemoryResult, options: { includeEmb
     ...serializeMemory(result.memory, options),
     score: result.score,
     scoreBreakdown: result.scoreBreakdown
+  };
+}
+
+function buildSessionGuidance() {
+  return {
+    memoryUse: "supporting_context",
+    canAnswer: [
+      "Relevant saved memory summaries and their sourceRefs can inform this task.",
+      "Health, embedding, FTS, WAL, backup retention, and recent project memory availability are reflected in this session."
+    ],
+    mustVerify: [
+      "Validate memory-derived claims against the user's latest instruction, README/docs, actual files, or git history before treating them as facts.",
+      "Use read_memory or audit_memory when a memory summary affects an important decision."
+    ],
+    limitations: [
+      "The digest may omit relevant memories when the query is too narrow or the database has not captured the decision yet.",
+      "Memory can be stale, incomplete, or less precise than current repository files."
+    ],
+    suggestedNextTools: ["read_memory", "search_memory", "audit_memory"]
   };
 }
 

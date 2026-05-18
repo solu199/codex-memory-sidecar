@@ -156,7 +156,9 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       startMemorySession:
         session.structuredContent.ready === true &&
         session.structuredContent.digest.includes("alpha project") &&
-        !JSON.stringify(session.structuredContent).includes("beta project"),
+        !JSON.stringify(session.structuredContent).includes("beta project") &&
+        session.structuredContent.sessionGuidance.memoryUse === "supporting_context" &&
+        session.structuredContent.sessionGuidance.suggestedNextTools.includes("audit_memory"),
       startMemorySessionBackupRetention:
         session.structuredContent.backupRetention.backupDir === path.join(tempDir, "backups") &&
         session.structuredContent.backupRetention.keepCount === 10 &&

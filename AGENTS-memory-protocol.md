@@ -32,9 +32,10 @@
 2. `ready: true` なら、返ってきた digest と memory summary を参考にします。
 3. `repairRecommended: true` の場合は、作業に入る前に `repair_memory_index` を検討します。
 4. `backupRetention.prunableCount` が増えている場合は、作業の区切りで `plan_backup_retention` を確認します。
-5. 返ってきた内容を、現在のユーザー指示と実ファイルで検証します。
-6. 設計や方針に関する判断が残る場合は `search_memory` で関連メモリを絞り込みます。
-7. メモリが古い、曖昧、矛盾している場合は推測として扱い、必要ならユーザーに確認します。
+5. `sessionGuidance` を確認し、メモリで分かること、分からないこと、追加確認すべき情報源を切り分けます。
+6. 返ってきた内容を、現在のユーザー指示、README/docs、実ファイル、git 履歴で検証します。
+7. 設計や方針に関する判断が残る場合は `search_memory` で関連メモリを絞り込みます。
+8. メモリが古い、曖昧、矛盾している場合は推測として扱い、必要ならユーザーに確認します。
 
 ## 作業後プロトコル
 
@@ -84,6 +85,7 @@
 ## Memory protocol
 
 - 非自明な作業の前に `start_memory_session(taskDescription, projectPath)` を呼ぶ。
+- `start_memory_session` の `sessionGuidance` を確認し、メモリを補助情報として扱う。
 - 設計判断や過去方針の確認が必要なときは `search_memory` で関連する `core` / `recall` メモリを探す。
 - メモリ由来の主張は memory id などで出所を監査可能にする。
 - 作業後、次回に有用な知見だけ `propose_memory_update` で確認し、`write_memory` / `update_memory` で保存を検討する。

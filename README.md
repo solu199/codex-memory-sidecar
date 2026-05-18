@@ -9,7 +9,7 @@ Codex app 向けのローカル MCP メモリサイドカーです。個人利�
 - `consolidate_memory` は完全一致の重複と、近い内容の重複候補を dry-run で提案します。
 - `search_memory` は SQLite FTS と、Ollama が使える場合はローカル embedding を組み合わせて検索します。
 - `memory_digest` は作業前に関連しそうなメモリを短くまとめます。
-- `start_memory_session` は作業開始時に health、stats、backup retention、digest、修復推奨をまとめて確認します。
+- `start_memory_session` は作業開始時に health、stats、backup retention、digest、修復推奨、メモリ過信防止の guidance をまとめて確認します。
 - `projectScope` / `projectPath` を使うと、同じプロジェクトのメモリと `global` メモリに絞り、別プロジェクトの混入を抑えます。
 - `backup_memory` / `verify_backup` / `inspect_backup` で SQLite バックアップを作成、確認できます。
 - `plan_backup_retention` は既定バックアップの保持計画を dry-run で返します。ファイル削除はしません。
@@ -143,7 +143,7 @@ ollama pull embeddinggemma
 
 ## 日常運用
 
-1. 作業開始時に `start_memory_session` を呼び、health、stats、backup retention、digest、修復推奨を確認します。
+1. 作業開始時に `start_memory_session` を呼び、health、stats、backup retention、digest、修復推奨、session guidance を確認します。
 2. メモリを残すか迷う場合は、先に `propose_memory_update` を使い、完全一致または近い重複候補、推奨 layer、sourceRef/provenance の品質を確認します。
 3. 同じ内容が増えてきたと感じたら `consolidate_memory` を dry-run で実行し、完全一致または近い重複候補を確認します。
 4. 大きな変更や削除前には `backup_memory` と `verify_backup` を実行します。

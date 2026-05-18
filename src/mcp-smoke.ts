@@ -31,6 +31,10 @@ export interface McpSmokeResult {
   };
   startMemorySession: {
     ready: boolean;
+    sessionGuidance: {
+      memoryUse: string;
+      suggestedNextTools: string[];
+    };
     backupRetention: {
       backupCount: number;
       prunableCount: number;
