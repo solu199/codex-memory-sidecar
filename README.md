@@ -60,7 +60,13 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:compari
 ## Dashboard
 
 ローカル状態をブラウザで確認できます。`127.0.0.1` のみに bind し、メモリ本文や audit payload は表示しません。
-メモリ件数、プロジェクト scope、recent memory の sourceRef、修復推奨、最新バックアップに加えて、既定バックアップの保持件数と削除候補件数も確認できます。
+メモリ件数、プロジェクト scope、recent memory の sourceRef、修復推奨、最新バックアップ、既定バックアップの保持件数と削除候補件数、Ollama endpoint と設定済みモデルの有無を確認できます。
+
+Codex app から MCP server が起動されると、Dashboard も同じプロセス内で自動起動します。起動に失敗しても MCP server は継続し、warning だけを stderr に出します。
+
+MCP server 起動時の Dashboard 自動起動を止めたい場合は、Codex app の MCP 登録に環境変数 `CODEX_MEMORY_DASHBOARD_ON_MCP_START=false` を追加します。
+
+手動で開く場合:
 
 ```powershell
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run dashboard
@@ -110,6 +116,7 @@ auto_backup_on_startup = false
 - `CODEX_MEMORY_AUTO_BACKUP_ON_STARTUP`
 - `CODEX_MEMORY_DASHBOARD_PORT`
 - `CODEX_MEMORY_DASHBOARD_OPEN`
+- `CODEX_MEMORY_DASHBOARD_ON_MCP_START`
 
 ## Codex MCP 登録
 
