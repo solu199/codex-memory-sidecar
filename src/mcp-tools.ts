@@ -340,6 +340,8 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         recommendation = "skip";
         reasons.push("Content looks temporary and is unlikely to help future work.");
       }
+      const curation = buildCurationGuidance(proposal.layer, recommendation, reasons);
+      const provenance = analyzeProvenance(input.sourceType, input.sourceRef);
 
       return toolResult({
         recommendation,
@@ -355,6 +357,8 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           importance: proposal.importance,
           confidence: proposal.confidence
         },
+        curation,
+        provenance,
         duplicateCandidates,
         reasons,
         nextAction:
@@ -1010,6 +1014,61 @@ function serializeSearchResult(result: SearchMemoryResult, options: { includeEmb
     ...serializeMemory(result.memory, options),
     score: result.score,
     scoreBreakdown: result.scoreBreakdown
+  };
+}
+
+function buildCurationGuidance(
+  recommendedLayer: MemoryLayer,
+  recommendation: "create" | "update" | "skip",
+  rationale: string[]
+) {
+  return {
+    recommendedLayer,
+    durability:
+      recommendation === "skip"
+        ? "skip"
+        : recommendedLayer === "core"
+          ? "durable"
+          : recommendedLayer === "archival"
+            ? "archival"
+            : "task_recall",
+    shouldPromoteToCore: recommendation !== "skip" && recommendedLayer === "core",
+    rationale
+  };
+}
+
+function analyzeProvenance(sourceType: string, sourceRef: string) {
+  const recognizedRefs: string[] = [];
+  if (/\b(?:pr|pull request)\s*#?\d+\b/i.test(sourceRef)) {
+    recognizedRefs.push("pr");
+  }
+  if (/\bissue\s*#?\d+\b/i.test(sourceRef)) {
+    recognizedRefs.push("issue");
+  }
+  if (/\b[0-9a-f]{7,40}\b/i.test(sourceRef)) {
+    recognizedRefs.push("commit");
+  }
+  if (/(?:^|[\\/])(?:docs|src|tests|config)[\\/][^\s]+|[^\s]+\.(?:md|ts|tsx|js|json|toml)\b/i.test(sourceRef)) {
+    recognizedRefs.push("doc_path");
+  }
+  if (/\b(?:chat|evaluation|smoke|test)[:-][a-z0-9_.-]+/i.test(sourceRef)) {
+    recognizedRefs.push("named_run");
+  }
+
+  const genericRefs = new Set(["test", "manual", "chat", "codex-chat", "note", "memory"]);
+  const suggestions: string[] = [];
+  if (!recognizedRefs.length || genericRefs.has(sourceRef.trim().toLowerCase())) {
+    suggestions.push(
+      "Use a sourceRef that points to a doc path, commit hash, PR number, issue number, or named chat/evaluation id."
+    );
+  }
+
+  return {
+    sourceType,
+    sourceRef,
+    quality: suggestions.length ? "weak" : "strong",
+    recognizedRefs,
+    suggestions
   };
 }
 

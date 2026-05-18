@@ -148,7 +148,9 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         proposal.structuredContent.wouldWrite === false &&
         proposal.structuredContent.duplicateCandidates.some(
           (candidate) => candidate.memoryId === alpha.structuredContent.memory.id
-        ),
+        ) &&
+        proposal.structuredContent.curation.recommendedLayer === "recall" &&
+        proposal.structuredContent.provenance.recognizedRefs.includes("named_run"),
       scopedSearchExcludesBeta: scopedIds.length === 1 && scopedIds[0] === alpha.structuredContent.memory.id,
       crossProjectSearchIncludesBeta: crossScopeNames.includes("beta"),
       startMemorySession:
@@ -172,7 +174,8 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         nearDuplicateProposal.structuredContent.recommendation === "update" &&
         nearDuplicateProposal.structuredContent.duplicateCandidates.some(
           (candidate) => candidate.reason === "near_duplicate_content"
-        ),
+        ) &&
+        nearDuplicateProposal.structuredContent.curation.shouldPromoteToCore === true,
       digestUsesScopedMemory:
         digest.structuredContent.digest.includes("alpha project") &&
         !digest.structuredContent.digest.includes("beta project"),
