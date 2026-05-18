@@ -6,9 +6,9 @@
 
 - メモリは「作業を速く安全にする補助情報」です。現在のリポジトリ、ユーザーの最新指示、実ファイルの内容より優先しません。
 - 参照・書き込みはローカル MCP ツール経由で行います。外部サービスへ自動送信しません。
-- 非自明な作業では、最初に `memory_digest(taskDescription, projectPath)` を呼び、関連しそうな背景や過去の判断を確認します。
+- 非自明な作業では、最初に `start_memory_session(taskDescription, projectPath)` を呼び、health、stats、backup retention、digest、修復推奨をまとめて確認します。
 - 設計判断、仕様解釈、既存方針の確認が必要なときは `search_memory` で関連する `core` / `recall` メモリを探します。
-- 作業後、次回以降の助けになる知見がある場合だけ `write_memory` または `update_memory` を検討します。
+- 作業後、次回以降の助けになる知見がある場合だけ `propose_memory_update` を先に使い、重複候補を確認してから `write_memory` または `update_memory` を検討します。
 
 ## 使うとよい場面
 
@@ -26,12 +26,15 @@
 
 ## 作業前プロトコル
 
-1. タスクが非自明なら `memory_digest` を呼びます。
+1. タスクが非自明なら `start_memory_session` を呼びます。
    - `taskDescription`: 今回の作業を 1 文で具体的に書きます。
    - `projectPath`: 対象リポジトリの絶対パスを渡します。
-2. 返ってきた内容を、現在のユーザー指示と実ファイルで検証します。
-3. 設計や方針に関する判断が残る場合は `search_memory` で関連メモリを絞り込みます。
-4. メモリが古い、曖昧、矛盾している場合は推測として扱い、必要ならユーザーに確認します。
+2. `ready: true` なら、返ってきた digest と memory summary を参考にします。
+3. `repairRecommended: true` の場合は、作業に入る前に `repair_memory_index` を検討します。
+4. `backupRetention.prunableCount` が増えている場合は、作業の区切りで `plan_backup_retention` を確認します。
+5. 返ってきた内容を、現在のユーザー指示と実ファイルで検証します。
+6. 設計や方針に関する判断が残る場合は `search_memory` で関連メモリを絞り込みます。
+7. メモリが古い、曖昧、矛盾している場合は推測として扱い、必要ならユーザーに確認します。
 
 ## 作業後プロトコル
 
@@ -47,13 +50,14 @@
   - すぐ失効する状態
   - 秘密情報、トークン、個人情報の詳細
   - 実ファイルや git 履歴で十分に追跡できる内容
-- 既存メモリの更新で足りる場合は、新規作成より `update_memory` を優先します。
+- 保存に迷う場合は、まず `propose_memory_update` を使います。
+- `propose_memory_update` が `update` を推奨する場合は、新規作成より `update_memory` を優先します。
 
 ## projectScope
 
 - `projectPath` を渡すと、ローカルパスを hash 化した project scope が使われます。
 - 検索時に scope が指定された場合、既定では同じ scope と `global` のメモリだけを返します。
-- `memory_digest` は `projectPath` を検索文に混ぜず、scope の判定だけに使います。
+- `start_memory_session` / `memory_digest` は `projectPath` を検索文に混ぜず、scope の判定だけに使います。
 - 明示的に横断検索したいときだけ `includeCrossProject: true` を使います。
 - 個人パスをそのまま保存したくない場合は `projectPath` を使います。人間が読める scope 名が必要な場合だけ `projectScope` を使います。
 
@@ -64,14 +68,23 @@
 - `search_memory` の結果を根拠にした場合は、該当 id、検索意図、現在のファイル確認結果を区別します。
 - メモリと実ファイルが矛盾した場合は、実ファイルとユーザーの最新指示を優先し、必要に応じて古いメモリを更新します。
 
+## バックアップと修復
+
+- 作業開始時の `start_memory_session.backupRetention` で、既定バックアップの件数と削除候補を確認します。
+- 大きな変更、削除、修復の前には `backup_memory` と `verify_backup` を使います。
+- バックアップが増えてきたら `plan_backup_retention` を dry-run で確認します。ファイル削除は自動実行しません。
+- 復元が必要になりそうな場合は `plan_backup_restore` で現在 DB とバックアップの差分感と手順を確認します。DB 置換は自動実行しません。
+- `health_check`、`start_memory_session`、Dashboard が FTS warning を出した場合は、`repair_memory_index` を検討します。既定ではバックアップ作成と検証後に FTS index だけを再構築します。
+
 ## 最小テンプレート
 
 ```md
 ## Memory protocol
 
-- 非自明な作業の前に `memory_digest(taskDescription, projectPath)` を呼ぶ。
+- 非自明な作業の前に `start_memory_session(taskDescription, projectPath)` を呼ぶ。
 - 設計判断や過去方針の確認が必要なときは `search_memory` で関連する `core` / `recall` メモリを探す。
 - メモリ由来の主張は memory id などで出所を監査可能にする。
-- 作業後、次回に有用な知見だけ `write_memory` / `update_memory` で保存を検討する。
+- 作業後、次回に有用な知見だけ `propose_memory_update` で確認し、`write_memory` / `update_memory` で保存を検討する。
+- `backupRetention`、`repairRecommended`、`warnings` が出た場合は作業前後の区切りで確認する。
 - 単純作業では過剰に呼び出さない。秘密情報や個人情報の詳細は保存しない。
 ```

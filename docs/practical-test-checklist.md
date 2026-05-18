@@ -55,7 +55,7 @@ Codex app から起動する stdio server には、Codex app の MCP 登録側�
 - `write_memory`: `projectPath` を付けて短い recall memory を保存する。
 - `search_memory`: 同じ `projectPath` で保存した memory が返る。
 - `memory_digest`: 同じ `projectPath` で digest に保存内容が入る。
-- `start_memory_session`: health、stats、digest、repair 推奨をまとめて返す。
+- `start_memory_session`: health、stats、backup retention、digest、repair 推奨をまとめて返す。
 - `consolidate_memory`: 完全一致または近い重複候補を dry-run で返す。
 - `list_memory_summaries`: 本文ではなく summary と metadata だけが返る。
 - `audit_memory`: 作成、検索イベントが確認でき、長い payload や secret が露出しない。
