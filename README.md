@@ -95,7 +95,7 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run dashboard
 
 MCP server 起動時の Dashboard 自動起動を止める場合は、Codex app の MCP 登録に環境変数 `CODEX_MEMORY_DASHBOARD_ON_MCP_START=false` を追加します。
 
-Dashboard は directive memory の内容を表示します。これは強い記憶をユーザーが監査できるようにするためです。通常メモリの本文や audit payload は表示せず、要約とメタデータだけを表示します。
+Dashboard は active directive memory と無効化済み directive memory の内容を表示します。これは強い記憶をユーザーが監査できるようにするためです。通常メモリの本文や audit payload は表示せず、要約とメタデータだけを表示します。
 
 ## 設定
 

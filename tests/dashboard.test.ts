@@ -151,6 +151,16 @@ describe("dashboard", () => {
       sourceType: "manual",
       sourceRef: "AGENTS-memory-protocol.md"
     });
+    const disabled = store.createDirective({
+      content: "Disabled directive memory should stay inspectable.",
+      scope: "project",
+      projectScope: "alpha",
+      rationale: "User should be able to confirm disabled directives.",
+      tags: ["dashboard"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    store.disableDirective({ directiveId: disabled.id, reason: "Dashboard disabled visibility test." });
 
     const status = await buildDashboardStatus(store, {
       embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) }
@@ -163,6 +173,15 @@ describe("dashboard", () => {
         content: "Directive memory should be visible on the dashboard.",
         rationale: "User needs to audit strong memory.",
         status: "active"
+      })
+    ]);
+    expect(status.disabledDirectives).toEqual([
+      expect.objectContaining({
+        id: disabled.id,
+        scope: "project",
+        projectScope: "alpha",
+        content: "Disabled directive memory should stay inspectable.",
+        status: "disabled"
       })
     ]);
   });
@@ -217,6 +236,7 @@ describe("dashboard", () => {
       expect(html).toContain("Codex Memory Sidecar");
       expect(html).toContain("メモリ統計");
       expect(html).toContain("Directive Memory");
+      expect(html).toContain("無効化済み Directive Memory");
       expect(html).toContain("指示内容");
       expect(html).toContain("メンテナンス");
       expect(html).toContain("バックアップ保持");

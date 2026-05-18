@@ -134,6 +134,19 @@ export interface DashboardStatus {
     status: string;
     updatedAt: string;
   }>;
+  disabledDirectives: Array<{
+    id: number;
+    scope: string;
+    projectScope: string;
+    content: string;
+    rationale: string;
+    tags: string[];
+    sourceType: string;
+    sourceRef: string;
+    priority: number;
+    status: string;
+    updatedAt: string;
+  }>;
   recentMemories: Array<{
     id: number;
     layer: string;
@@ -225,22 +238,16 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
     },
     embedding,
     ollama,
-    directives: [
+    directives: serializeDashboardDirectives([
       ...store.listDirectives({ includeGlobal: false, includeProject: true, limit: 50 }),
       ...store.listDirectives({ includeGlobal: true, includeProject: false, limit: 50 })
-    ].map((directive) => ({
-      id: directive.id,
-      scope: directive.scope,
-      projectScope: directive.projectScope,
-      content: directive.content,
-      rationale: directive.rationale,
-      tags: directive.tags,
-      sourceType: directive.sourceType,
-      sourceRef: directive.sourceRef,
-      priority: directive.priority,
-      status: directive.status,
-      updatedAt: directive.updatedAt.toISOString()
-    })),
+    ]),
+    disabledDirectives: serializeDashboardDirectives(
+      [
+        ...store.listDirectives({ includeGlobal: false, includeProject: true, includeDisabled: true, limit: 100 }),
+        ...store.listDirectives({ includeGlobal: true, includeProject: false, includeDisabled: true, limit: 100 })
+      ].filter((directive) => directive.status !== "active")
+    ),
     recentMemories: store.listMemories({ limit: 10 }).map((memory) => ({
       id: memory.id,
       layer: memory.layer,
@@ -271,6 +278,22 @@ function serializeDashboardBackup(backup: ReturnType<MemoryStore["planBackupRete
     sizeBytes: backup.sizeBytes,
     mtime: backup.mtime.toISOString()
   };
+}
+
+function serializeDashboardDirectives(directives: ReturnType<MemoryStore["listDirectives"]>): DashboardStatus["directives"] {
+  return directives.map((directive) => ({
+    id: directive.id,
+    scope: directive.scope,
+    projectScope: directive.projectScope,
+    content: directive.content,
+    rationale: directive.rationale,
+    tags: directive.tags,
+    sourceType: directive.sourceType,
+    sourceRef: directive.sourceRef,
+    priority: directive.priority,
+    status: directive.status,
+    updatedAt: directive.updatedAt.toISOString()
+  }));
 }
 
 export function createDashboardServer(store: MemoryStore, options: DashboardOptions = {}): http.Server {
@@ -734,6 +757,11 @@ function renderDashboardHtml(): string {
       <thead><tr><th>ID</th><th>範囲</th><th>スコープ</th><th>指示内容</th><th>理由</th><th>情報源</th><th>更新</th></tr></thead>
       <tbody id="directives"></tbody>
     </table>
+    <h2>無効化済み Directive Memory</h2>
+    <table>
+      <thead><tr><th>ID</th><th>範囲</th><th>スコープ</th><th>指示内容</th><th>理由</th><th>情報源</th><th>更新</th></tr></thead>
+      <tbody id="disabled-directives"></tbody>
+    </table>
     <h2>最近のメモリ</h2>
     <table>
       <thead><tr><th>ID</th><th>レイヤー</th><th>要約</th><th>情報源</th><th>スコープ</th><th>タグ</th><th>更新</th></tr></thead>
@@ -809,10 +837,11 @@ function renderDashboardHtml(): string {
         "<tr><td class=\\"summary\\">" + escapeHtml(scope.projectScope) + "</td><td>" + scope.active + "</td><td>" + scope.total + "</td><td>" + escapeHtml(scope.latestUpdatedAt ?? "-") + "</td></tr>"
       )).join("");
       document.getElementById("directives").innerHTML = status.directives.length
-        ? status.directives.map((directive) => (
-          "<tr><td>" + directive.id + "</td><td>" + escapeHtml(directive.scope) + "</td><td class=\\"tags\\">" + escapeHtml(directive.projectScope) + "</td><td class=\\"summary\\">" + escapeHtml(directive.content) + "</td><td class=\\"summary\\">" + escapeHtml(directive.rationale) + "</td><td class=\\"tags\\">" + escapeHtml(directive.sourceType + ': ' + directive.sourceRef) + "</td><td>" + escapeHtml(directive.updatedAt) + "</td></tr>"
-        )).join("")
+        ? renderDirectiveRows(status.directives)
         : "<tr><td colspan=\\"7\\">保存済み directive memory はありません</td></tr>";
+      document.getElementById("disabled-directives").innerHTML = status.disabledDirectives.length
+        ? renderDirectiveRows(status.disabledDirectives)
+        : "<tr><td colspan=\\"7\\">無効化済み directive memory はありません</td></tr>";
       document.getElementById("recent-memories").innerHTML = status.recentMemories.map((memory) => (
         "<tr><td>" + memory.id + "</td><td>" + escapeHtml(memory.layer) + "</td><td class=\\"summary\\">" + escapeHtml(memory.summary) + "</td><td class=\\"tags\\">" + escapeHtml(memory.sourceType + ': ' + memory.sourceRef) + "</td><td class=\\"tags\\">" + escapeHtml(memory.projectScope) + "</td><td class=\\"tags\\">" + escapeHtml(memory.tags.join(", ")) + "</td><td>" + escapeHtml(memory.updatedAt) + "</td></tr>"
       )).join("");
@@ -836,6 +865,11 @@ function renderDashboardHtml(): string {
         )).join("");
       }
       return warnings.map((warning) => "<li><span>" + escapeHtml(warning) + "</span></li>").join("");
+    }
+    function renderDirectiveRows(directives) {
+      return directives.map((directive) => (
+        "<tr><td>" + directive.id + "</td><td>" + escapeHtml(directive.scope) + "</td><td class=\\"tags\\">" + escapeHtml(directive.projectScope) + "</td><td class=\\"summary\\">" + escapeHtml(directive.content) + "</td><td class=\\"summary\\">" + escapeHtml(directive.rationale) + "</td><td class=\\"tags\\">" + escapeHtml(directive.sourceType + ': ' + directive.sourceRef) + "</td><td>" + escapeHtml(directive.updatedAt) + "</td></tr>"
+      )).join("");
     }
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, (char) => ({
