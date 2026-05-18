@@ -91,6 +91,86 @@ describe("MCP tool handlers", () => {
     expect(store.countRecords().memoryCount).toBe(0);
   });
 
+  test("propose_memory_update returns curation guidance for durable core candidates", async () => {
+    const tools = createToolHandlers(store);
+
+    const result = await tools.proposeMemoryUpdate({
+      content: "Always treat MCP memory as supporting context; prefer README, current files, and git history when they disagree.",
+      taskContext: "global memory protocol rule",
+      projectPath: tempDir,
+      sourceType: "codex-chat",
+      sourceRef: "docs/daily-operations.md#memory-priority"
+    });
+
+    expect(result.structuredContent.proposed.layer).toBe("core");
+    expect(result.structuredContent.curation).toEqual({
+      recommendedLayer: "core",
+      durability: "durable",
+      shouldPromoteToCore: true,
+      rationale: expect.arrayContaining(["Content looks like a durable rule or preference."])
+    });
+  });
+
+  test("propose_memory_update returns provenance guidance for traceable source refs", async () => {
+    const tools = createToolHandlers(store);
+
+    const result = await tools.proposeMemoryUpdate({
+      content: "The comparison evaluation found sourceRef quality should improve before adding more search features.",
+      taskContext: "implementation priority",
+      projectPath: tempDir,
+      sourceType: "codex-chat",
+      sourceRef: "PR #44 / commit ba91c1f / docs/memory-digest-protocol.md"
+    });
+
+    expect(result.structuredContent.provenance).toEqual({
+      sourceType: "codex-chat",
+      sourceRef: "PR #44 / commit ba91c1f / docs/memory-digest-protocol.md",
+      quality: "strong",
+      recognizedRefs: ["pr", "commit", "doc_path"],
+      suggestions: []
+    });
+  });
+
+  test("propose_memory_update recognizes issue source refs as traceable provenance", async () => {
+    const tools = createToolHandlers(store);
+
+    const result = await tools.proposeMemoryUpdate({
+      content: "The restore workflow should stay dry-run until the user explicitly approves replacement.",
+      taskContext: "issue follow-up",
+      projectPath: tempDir,
+      sourceType: "github",
+      sourceRef: "issue #12"
+    });
+
+    expect(result.structuredContent.provenance).toEqual({
+      sourceType: "github",
+      sourceRef: "issue #12",
+      quality: "strong",
+      recognizedRefs: ["issue"],
+      suggestions: []
+    });
+  });
+
+  test("propose_memory_update suggests stronger provenance for generic source refs", async () => {
+    const tools = createToolHandlers(store);
+
+    const result = await tools.proposeMemoryUpdate({
+      content: "Prefer provenance-rich memories for long-lived project decisions.",
+      taskContext: "implementation priority",
+      projectPath: tempDir,
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    expect(result.structuredContent.provenance.quality).toBe("weak");
+    expect(result.structuredContent.provenance.recognizedRefs).toEqual([]);
+    expect(result.structuredContent.provenance.suggestions).toEqual(
+      expect.arrayContaining([
+        "Use a sourceRef that points to a doc path, commit hash, PR number, issue number, or named chat/evaluation id."
+      ])
+    );
+  });
+
   test("propose_memory_update detects duplicates and recommends update", async () => {
     const tools = createToolHandlers(store);
     const existing = await tools.writeMemory({

@@ -5,7 +5,7 @@ Codex app 向けのローカル MCP メモリサイドカーです。個人利�
 ## できること
 
 - `write_memory` / `update_memory` / `forget_memory` でメモリを安全に管理します。
-- `propose_memory_update` は DB を変更せず、保存候補、完全一致または近い重複候補、推奨 action を dry-run で返します。
+- `propose_memory_update` は DB を変更せず、保存候補、完全一致または近い重複候補、推奨 action、layer キュレーション、sourceRef/provenance の品質を dry-run で返します。
 - `consolidate_memory` は完全一致の重複と、近い内容の重複候補を dry-run で提案します。
 - `search_memory` は SQLite FTS と、Ollama が使える場合はローカル embedding を組み合わせて検索します。
 - `memory_digest` は作業前に関連しそうなメモリを短くまとめます。
@@ -144,7 +144,7 @@ ollama pull embeddinggemma
 ## 日常運用
 
 1. 作業開始時に `start_memory_session` を呼び、health、stats、backup retention、digest、修復推奨を確認します。
-2. メモリを残すか迷う場合は、先に `propose_memory_update` を使い、完全一致または近い重複候補を確認します。
+2. メモリを残すか迷う場合は、先に `propose_memory_update` を使い、完全一致または近い重複候補、推奨 layer、sourceRef/provenance の品質を確認します。
 3. 同じ内容が増えてきたと感じたら `consolidate_memory` を dry-run で実行し、完全一致または近い重複候補を確認します。
 4. 大きな変更や削除前には `backup_memory` と `verify_backup` を実行します。
 5. バックアップが増えてきたら `plan_backup_retention` で保持対象と削除候補を確認します。

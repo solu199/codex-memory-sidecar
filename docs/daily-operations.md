@@ -13,7 +13,7 @@ Codex Memory Sidecar を毎日の開発で使うための短い手順です。�
 ## 書き込みルール
 
 - `write_memory` は、ユーザーが明示したとき、または次回以降も役立つ判断が明確なときだけ使います。
-- 迷う場合は先に `propose_memory_update` を使い、保存候補、完全一致または近い重複候補、推奨 action を確認します。
+- 迷う場合は先に `propose_memory_update` を使い、保存候補、完全一致または近い重複候補、推奨 action、推奨 layer、sourceRef/provenance の品質を確認します。
 - `core` は長く残る方針、`recall` は作業文脈、`archival` は履歴寄りの情報に使います。
 - API key、token、password、個人情報の詳細は保存しません。
 - 既存メモリの訂正で足りる場合は、新規作成より `update_memory` を優先します。

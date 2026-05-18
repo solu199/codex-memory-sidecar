@@ -51,6 +51,7 @@
   - 秘密情報、トークン、個人情報の詳細
   - 実ファイルや git 履歴で十分に追跡できる内容
 - 保存に迷う場合は、まず `propose_memory_update` を使います。
+- `propose_memory_update` の curation / provenance を見て、推奨 layer、core に昇格すべきか、sourceRef が追跡可能かを確認します。
 - `propose_memory_update` が `update` を推奨する場合は、新規作成より `update_memory` を優先します。
 
 ## projectScope
@@ -64,6 +65,7 @@
 ## 引用と監査
 
 - メモリ由来の主張をユーザーに伝えるときは、可能な限り memory id や要約を添えて出所を追えるようにします。
+- 長く残すメモリでは、sourceRef を docs path、commit hash、PR 番号、issue 番号、または named chat/evaluation id に寄せます。
 - 重要な判断は `audit_memory` で直近の参照・書き込みイベントを確認できる形にします。
 - `search_memory` の結果を根拠にした場合は、該当 id、検索意図、現在のファイル確認結果を区別します。
 - メモリと実ファイルが矛盾した場合は、実ファイルとユーザーの最新指示を優先し、必要に応じて古いメモリを更新します。
@@ -85,6 +87,7 @@
 - 設計判断や過去方針の確認が必要なときは `search_memory` で関連する `core` / `recall` メモリを探す。
 - メモリ由来の主張は memory id などで出所を監査可能にする。
 - 作業後、次回に有用な知見だけ `propose_memory_update` で確認し、`write_memory` / `update_memory` で保存を検討する。
+- `propose_memory_update` の curation / provenance を確認し、弱い sourceRef は docs path、commit、PR、named evaluation id などに直す。
 - `backupRetention`、`repairRecommended`、`warnings` が出た場合は作業前後の区切りで確認する。
 - 単純作業では過剰に呼び出さない。秘密情報や個人情報の詳細は保存しない。
 ```
