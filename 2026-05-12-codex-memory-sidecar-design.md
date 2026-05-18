@@ -1,5 +1,8 @@
 # Codex Memory Sidecar Design
 
+> Note: This is the initial design note from 2026-05-12. It is kept as historical context and may not match the current implementation exactly.
+> For current setup and daily operation, prefer `README.md`, `docs/daily-operations.md`, and `AGENTS-memory-protocol.md`.
+
 ## Purpose
 
 Build a local MCP-based memory sidecar for Codex app. The sidecar lets Codex search, write, update, forget, and consolidate long-term working memory without modifying Codex app internals.
