@@ -994,6 +994,80 @@ describe("MemoryStore", () => {
 
     expect(memories.map((memory) => memory.id)).toEqual([alpha.id, global.id]);
   });
+
+  test("creates and lists directive memories by global and project scope", () => {
+    const global = store.createDirective({
+      content: "Always read directive memory before normal memory.",
+      scope: "global",
+      rationale: "Global memory protocol.",
+      tags: ["memory-protocol"],
+      sourceType: "manual",
+      sourceRef: "AGENTS-memory-protocol.md"
+    });
+    const project = store.createDirective({
+      content: "For this project, keep README examples in Japanese.",
+      scope: "project",
+      projectScope: "alpha",
+      rationale: "Project documentation policy.",
+      tags: ["docs"],
+      sourceType: "manual",
+      sourceRef: "README.md"
+    });
+    store.createDirective({
+      content: "Other project directive.",
+      scope: "project",
+      projectScope: "beta",
+      rationale: "Should not appear for alpha.",
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const directives = store.listDirectives({ projectScope: "alpha" });
+
+    expect(directives.map((directive) => directive.id)).toEqual([project.id, global.id]);
+    expect(directives[0]).toMatchObject({
+      scope: "project",
+      projectScope: "alpha",
+      status: "active",
+      content: "For this project, keep README examples in Japanese."
+    });
+    expect(directives[1]).toMatchObject({
+      scope: "global",
+      projectScope: "global",
+      status: "active"
+    });
+  });
+
+  test("disables directive memory without hard deleting it", () => {
+    const directive = store.createDirective({
+      content: "Temporary directive that should be disabled.",
+      scope: "global",
+      rationale: "Disable test.",
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const disabled = store.disableDirective({ directiveId: directive.id, reason: "No longer needed." });
+
+    expect(disabled.status).toBe("disabled");
+    expect(store.listDirectives()).toEqual([]);
+    expect(store.listDirectives({ includeDisabled: true })[0]).toMatchObject({
+      id: directive.id,
+      status: "disabled"
+    });
+  });
+
+  test("refuses directive memories that look like secrets", () => {
+    expect(() =>
+      store.createDirective({
+        content: "Always use token=sk-proj-secret123456 for tests.",
+        scope: "global",
+        rationale: "Secret guard.",
+        sourceType: "manual",
+        sourceRef: "test"
+      })
+    ).toThrow(/secret/i);
+  });
 });
 
 function createBackupFixture(backupDir: string, fileName: string, content: string, mtime: Date): string {

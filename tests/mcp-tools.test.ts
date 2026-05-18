@@ -246,6 +246,75 @@ describe("MCP tool handlers", () => {
     expect(store.countRecords().memoryCount).toBe(0);
   });
 
+  test("propose_directive_update asks for scope choice in project context without writing", async () => {
+    const tools = createToolHandlers(store);
+
+    const result = await tools.proposeDirectiveUpdate({
+      content: "Always prefer the strengthened AGENTS.md memory protocol for this project.",
+      taskContext: "project directive update",
+      projectPath: tempDir,
+      sourceType: "codex-chat",
+      sourceRef: "chat:directive-memory-design"
+    });
+
+    expect(result.structuredContent.recommendation).toBe("ask_user");
+    expect(result.structuredContent.wouldWrite).toBe(false);
+    expect(result.structuredContent.scopeGuidance.requiresUserChoice).toBe(true);
+    expect(result.structuredContent.scopeGuidance.options.map((option) => option.scope)).toEqual(["project", "global"]);
+    expect(result.structuredContent.priorityOrder).toEqual([
+      "system/developer",
+      "latest_user_instruction",
+      "AGENTS.md",
+      "directive_memory",
+      "normal_memory",
+      "inference"
+    ]);
+    expect(store.listDirectives()).toEqual([]);
+  });
+
+  test("write_directive and list_directives expose active directive contents", async () => {
+    const tools = createToolHandlers(store);
+    const written = await tools.writeDirective({
+      content: "Read directive memory before normal memory.",
+      scope: "global",
+      rationale: "Memory protocol priority.",
+      tags: ["memory-protocol"],
+      sourceType: "manual",
+      sourceRef: "AGENTS-memory-protocol.md"
+    });
+
+    const listed = await tools.listDirectives({ projectPath: tempDir });
+
+    expect(written.structuredContent.directive).toMatchObject({
+      id: expect.any(Number),
+      scope: "global",
+      projectScope: "global",
+      content: "Read directive memory before normal memory.",
+      status: "active"
+    });
+    expect(listed.structuredContent.directives).toEqual([written.structuredContent.directive]);
+  });
+
+  test("disable_directive hides the directive from normal listings", async () => {
+    const tools = createToolHandlers(store);
+    const written = await tools.writeDirective({
+      content: "Disable this directive after testing.",
+      scope: "global",
+      rationale: "Disable flow.",
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    const disabled = await tools.disableDirective({
+      directiveId: written.structuredContent.directive.id,
+      reason: "test complete"
+    });
+
+    expect(disabled.structuredContent.directive.status).toBe("disabled");
+    expect((await tools.listDirectives({})).structuredContent.directives).toEqual([]);
+    expect((await tools.listDirectives({ includeDisabled: true })).structuredContent.directives[0]?.status).toBe("disabled");
+  });
+
   test("write_memory duplicate candidates stay within project scope plus global memories", async () => {
     const tools = createToolHandlers(store);
     await tools.writeMemory({
@@ -749,6 +818,43 @@ describe("MCP tool handlers", () => {
     expect(JSON.stringify(result.structuredContent)).not.toContain("Daily startup private body");
   });
 
+  test("start_memory_session returns directive memory and priority guidance", async () => {
+    const tools = createToolHandlers(store);
+    await tools.writeDirective({
+      content: "Global directive: read directive memory before normal memory.",
+      scope: "global",
+      rationale: "Memory protocol.",
+      sourceType: "manual",
+      sourceRef: "AGENTS-memory-protocol.md"
+    });
+    await tools.writeDirective({
+      content: "Project directive: keep this repository README in Japanese.",
+      scope: "project",
+      projectPath: tempDir,
+      rationale: "Project documentation preference.",
+      sourceType: "manual",
+      sourceRef: "README.md"
+    });
+
+    const result = await tools.startMemorySession({
+      taskDescription: "update README",
+      projectPath: tempDir
+    });
+
+    expect(result.structuredContent.directives.map((directive) => directive.content)).toEqual([
+      "Project directive: keep this repository README in Japanese.",
+      "Global directive: read directive memory before normal memory."
+    ]);
+    expect(result.structuredContent.sessionGuidance.priorityOrder).toEqual([
+      "system/developer",
+      "latest_user_instruction",
+      "AGENTS.md",
+      "directive_memory",
+      "normal_memory",
+      "inference"
+    ]);
+  });
+
   test("start_memory_session returns guidance that prevents over-trusting memory", async () => {
     const tools = createToolHandlers(store);
     store.createMemory({
@@ -778,7 +884,8 @@ describe("MCP tool handlers", () => {
       limitations: expect.arrayContaining([
         "The digest may omit relevant memories when the query is too narrow or the database has not captured the decision yet."
       ]),
-      suggestedNextTools: expect.arrayContaining(["read_memory", "audit_memory"])
+      priorityOrder: expect.arrayContaining(["directive_memory", "normal_memory"]),
+      suggestedNextTools: expect.arrayContaining(["list_directives", "read_memory", "audit_memory"])
     });
   });
 

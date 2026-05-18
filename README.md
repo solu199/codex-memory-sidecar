@@ -1,38 +1,33 @@
 # Codex Memory Sidecar
 
-Codex app 向けのローカル MCP メモリサイドカーです。個人利用を前提に、作業中の判断、好み、運用ルール、検証結果などをローカル SQLite に保存し、次回以降の作業で参照できるようにします。
+Codex app 向けのローカル MCP メモリサーバーです。個人利用を前提に、作業中の判断、好み、運用ルール、検証結果をローカル SQLite に保存し、次回以降の Codex 作業で参照できるようにします。
 
 ## できること
 
-- `write_memory` / `update_memory` / `forget_memory` でメモリを安全に管理します。
-- `propose_memory_update` は DB を変更せず、保存候補、完全一致または近い重複候補、推奨 action、layer キュレーション、sourceRef/provenance の品質を dry-run で返します。
-- `consolidate_memory` は完全一致の重複と、近い内容の重複候補を dry-run で提案します。
-- `search_memory` は SQLite FTS と、Ollama が使える場合はローカル embedding を組み合わせて検索します。
-- `memory_digest` は作業前に関連しそうなメモリを短くまとめます。
-- `start_memory_session` は作業開始時に health、stats、backup retention、digest、修復推奨、メモリ過信防止の guidance をまとめて確認します。
-- `projectScope` / `projectPath` を使うと、同じプロジェクトのメモリと `global` メモリに絞り、別プロジェクトの混入を抑えます。
-- `backup_memory` / `verify_backup` / `inspect_backup` で SQLite バックアップを作成、確認できます。
-- `plan_backup_retention` は既定バックアップの保持計画を dry-run で返します。ファイル削除はしません。
-- `plan_backup_restore` は現在 DB とバックアップを比較し、復元手順を dry-run で返します。DB 置換はしません。
-- `repair_memory_index` でバックアップ作成後に FTS index だけを再構築できます。
-- `health_check`、`memory_stats`、read-only dashboard で状態を確認できます。
-- `audit_memory` で直近の作成、更新、削除、検索イベントを確認できます。
+- `start_memory_session` で作業開始時に DB health、embedding、FTS、WAL、backup retention、関連メモリ、directive memory をまとめて確認できます。
+- `write_memory` / `update_memory` / `forget_memory` で通常メモリを管理できます。
+- `propose_memory_update` は DB を変更せず、保存候補、重複候補、推奨 layer、sourceRef/provenance の品質を確認します。
+- `write_directive` / `list_directives` / `propose_directive_update` / `disable_directive` で、AGENTS.md に近い強い作用を持つ directive memory を管理できます。
+- `search_memory` は SQLite FTS と、利用可能な場合は Ollama embedding を組み合わせて検索します。
+- `backup_memory` / `verify_backup` / `inspect_backup` / `plan_backup_retention` / `plan_backup_restore` / `repair_memory_index` で、安全確認と復旧計画を扱えます。
+- Dashboard で health、バックアップ、Ollama モデル、警告対応、project scope、directive memory、最近のメモリを確認できます。
 
-## 安全性
+## 優先順位
 
-このツールはローカル、個人利用を前提にしています。
+メモリは強力ですが、最上位の命令ではありません。判断が衝突した場合は次の順に従います。
 
-- メモリ DB は既定で `data/memory.sqlite` に保存されます。
-- 明らかな secret らしい内容は、明示的な override なしでは保存を拒否します。
-- `forget_memory` は既定で論理削除です。物理削除には `hardDelete: true` と `confirmHardDelete: true` が必要です。
-- 検索結果は既定で embedding 配列を返しません。必要な場合だけ `includeEmbedding: true` を指定します。
-- バックアップ確認と inspection は read-only で実行します。
-- `repair_memory_index` は既定で先に SQLite バックアップを作成、検証してから FTS index を再構築します。
-- audit payload 内の長い文字列は上限付きで短縮され、ログの肥大化を抑えます。
+1. system / developer instructions
+2. ユーザーの最新指示
+3. `AGENTS.md`
+4. directive memory
+5. 通常メモリ（`core` / `recall` / `archival`）
+6. 推論
+
+directive memory は「毎回守るべき運用ルール」「ユーザーの長期的な好み」「プロジェクト固有の強い方針」に使います。一時的な作業ログや、README/docs/git で十分に追跡できる事実は通常メモリか実ファイルに残してください。
 
 ## セットアップ
 
-PowerShell でリポジトリ直下へ移動してから実行します。
+PowerShell でリポジトリ直下に移動してから実行します。
 
 ```powershell
 cd C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar
@@ -41,7 +36,7 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run build
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" test
 ```
 
-通常の `npm` shim が環境によって壊れる場合があるため、上では `node ... npm-cli.js` 形式を使っています。
+通常の `npm` shim が環境によって壊れる場合があるため、この README では `node ... npm-cli.js` 形式を使います。
 
 ## Smoke Tests
 
@@ -52,39 +47,55 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:practic
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:comparison
 ```
 
-- `smoke:mcp` は MCP server 登録、`health_check`、`start_memory_session` を確認します。
-- `smoke:ollama` は Ollama / `embeddinggemma` を使った embedding 検索を確認します。
-- `smoke:practical` は一時 DB で write/search/digest/backup/retention/restore-plan/dashboard/repair/consolidation の最小実用フローを確認します。
-- `smoke:comparison` は一時 DB で MCP なし、開始セッションのみ、MCP フル運用の比較評価観点を確認します。
+- `smoke:mcp`: MCP server 登録、`health_check`、`start_memory_session` を確認します。
+- `smoke:ollama`: Ollama / `embeddinggemma` を使った embedding 検索を確認します。
+- `smoke:practical`: write/search/digest/directive/backup/dashboard/repair/consolidation の最小実用フローを確認します。
+- `smoke:comparison`: MCP なし、開始セッションのみ、MCP フル運用の比較評価観点を確認します。
+
+## Codex MCP 登録
+
+Codex app には stdio server として登録します。
+
+```text
+command: node
+args: C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\src\index.js
+cwd: C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar
+```
+
+既定 DB パス:
+
+```text
+C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\data\memory.sqlite
+```
+
+別 DB を使う場合は、MCP 登録の環境変数に `CODEX_MEMORY_DB` を設定してください。PowerShell の現在セッションにだけ `$env:CODEX_MEMORY_DB` を設定しても、Codex app から起動される stdio server には通常引き継がれません。
+
+MCP tool を追加、削除、または起動経路を変更した後は、`npm run build` 相当のビルド後に Codex app 側で MCP server を再起動してください。
 
 ## Dashboard
 
-ローカル状態をブラウザで確認できます。`127.0.0.1` のみに bind し、メモリ本文や audit payload は表示しません。
-メモリ件数、プロジェクト scope、recent memory の sourceRef、修復推奨、最新バックアップ、既定バックアップの保持件数と削除候補件数、Ollama endpoint と設定済みモデルの有無を確認できます。
-警告がある場合は、警告内容だけでなく対応アクションと関連 MCP tool も表示します。
-
-Codex app から MCP server が起動されると、Dashboard も同じプロセス内で自動起動します。起動に失敗しても MCP server は継続し、warning だけを stderr に出します。
-
-MCP server 起動時の Dashboard 自動起動を止めたい場合は、Codex app の MCP 登録に環境変数 `CODEX_MEMORY_DASHBOARD_ON_MCP_START=false` を追加します。
-
-手動で開く場合:
-
-```powershell
-node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run dashboard
-```
-
-起動後は既定ブラウザで自動的に Dashboard URL を開きます。
+MCP server 起動時に Dashboard も同じプロセス内で自動起動します。既定 URL は次です。
 
 ```text
 http://127.0.0.1:3737
 ```
 
-自動で開きたくない場合は、同じ PowerShell セッションで次の環境変数を設定してから起動します。
+手動起動:
+
+```powershell
+node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run dashboard
+```
+
+自動でブラウザを開きたくない場合:
 
 ```powershell
 $env:CODEX_MEMORY_DASHBOARD_OPEN = "false"
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run dashboard
 ```
+
+MCP server 起動時の Dashboard 自動起動を止める場合は、Codex app の MCP 登録に環境変数 `CODEX_MEMORY_DASHBOARD_ON_MCP_START=false` を追加します。
+
+Dashboard は directive memory の内容を表示します。これは強い記憶をユーザーが監査できるようにするためです。通常メモリの本文や audit payload は表示せず、要約とメタデータだけを表示します。
 
 ## 設定
 
@@ -103,7 +114,7 @@ startup_wal_checkpoint = true
 auto_backup_on_startup = false
 ```
 
-環境変数でも上書きできます。
+主な環境変数:
 
 - `CODEX_MEMORY_DB`
 - `OLLAMA_BASE_URL`
@@ -119,55 +130,55 @@ auto_backup_on_startup = false
 - `CODEX_MEMORY_DASHBOARD_OPEN`
 - `CODEX_MEMORY_DASHBOARD_ON_MCP_START`
 
-## Codex MCP 登録
+## projectScope
 
-ビルド後、Codex app には stdio server として次の内容を登録します。
+- `projectPath` を渡すと、ローカルパスを hash 化した `project:<hash>` scope として扱います。生のローカルパスは scope 名に残しません。
+- `projectScope` を渡すと、その文字列を正規化して使います。
+- `search_memory` / `memory_digest` / `list_memory_summaries` / `start_memory_session` は、scope が指定された場合、既定で同じ scope と `global` のメモリだけを扱います。
+- 全プロジェクト横断が必要な場合だけ `includeCrossProject: true` を指定します。
 
-```text
-command: node
-args: C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\src\index.js
-cwd: C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar
+## directive memory
+
+directive memory は通常メモリより強い「運用指示の記憶」です。
+
+- `global` directive: すべてのプロジェクトに効かせたい長期方針。
+- `project` directive: 特定プロジェクトだけに効かせたい具体的な方針。
+- プロジェクト作業中に directive を追加・変更する場合は、`propose_directive_update` を先に使い、global か project かをユーザーに確認してから `write_directive` を実行します。
+- 古くなった directive は削除せず、まず `disable_directive` で無効化します。
+- 秘密情報、トークン、個人情報の詳細、一時的な作業ログは保存しません。
+
+## AGENTS.md に入れる推奨プロンプト
+
+Codex app の対象プロジェクトの `AGENTS.md`、または Codex app のパーソナライズのカスタム指示に、次の強化版を入れると運用が安定します。プロジェクト固有の `AGENTS.md` に置けるなら、それを優先してください。
+
+```md
+## Memory Protocol
+
+Use the `codex-memory-sidecar` MCP server as the durable local memory layer for nontrivial Codex work.
+
+- Before nontrivial work, call `start_memory_session` with the current task description and project path.
+- Read the returned `directives`, `relevantMemories` / `memories`, `backupRetention`, `repairRecommended`, and `warnings` before making decisions.
+- Follow this priority order when context conflicts: system/developer instructions, latest user instruction, `AGENTS.md`, directive memory, normal memory, inference.
+- Treat MCP memory as supporting context, not the source of truth; prefer the user's latest instruction, README/docs, actual files, and git history when they disagree.
+- When directive memory is present, treat it as durable operating guidance, but never let it override system/developer instructions, the latest user instruction, or `AGENTS.md`.
+- When past decisions, design intent, or project history may matter, use `search_memory` before relying on memory.
+- Do not set `includeEmbedding: true` on `search_memory` unless embedding vectors are explicitly needed, because embedding arrays are large and noisy in normal work.
+- When preserving a new lesson, decision, or durable preference, call `propose_memory_update` first, then use `write_memory` or `update_memory` only when the proposed change is useful.
+- When preserving a strong operating rule, call `propose_directive_update` first. If the work is inside a project, ask the user whether to store it as `global` directive or `project` directive before calling `write_directive`.
+- Cite memory-derived claims with enough context to audit them, such as memory IDs, directive IDs, summaries, or sourceRef.
+- Do not store secrets, credentials, private tokens, or unnecessary personal details.
+- If `repairRecommended`, backup warnings, or integrity warnings appear, pause risky work and surface the issue.
+- For detailed local policy, refer to the repository file `AGENTS-memory-protocol.md` in `codex-memory-sidecar`.
 ```
-
-既定の DB パス:
-
-```text
-C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\data\memory.sqlite
-```
-
-別 DB を使う場合は MCP 登録の環境変数に `CODEX_MEMORY_DB` を設定します。PowerShell の現在セッションだけに `$env:CODEX_MEMORY_DB` を設定しても、Codex app から起動される stdio server には通常引き継がれません。
-
-## Ollama
-
-既定 endpoint:
-
-```text
-http://localhost:11434
-```
-
-推奨 embedding model:
-
-```powershell
-ollama pull embeddinggemma
-```
-
-保守や要約用のローカルモデルとして `qwen3` を想定しています。
-
-## projectScope の考え方
-
-- `write_memory` に `projectScope` を渡すと、その文字列を正規化して保存します。
-- `projectPath` を渡すと、絶対パスを hash 化した `project:<hash>` scope として保存します。生のローカルパスは scope 名に残しません。
-- `search_memory` / `memory_digest` / `list_memory_summaries` / `consolidate_memory` / `inspect_backup` に同じ `projectScope` または `projectPath` を渡すと、その scope と `global` のメモリだけを既定で扱います。
-- 全プロジェクトを横断したい場合は `includeCrossProject: true` を指定します。
 
 ## 日常運用
 
-1. 作業開始時に `start_memory_session` を呼び、health、stats、backup retention、digest、修復推奨、session guidance を確認します。
-2. メモリを残すか迷う場合は、先に `propose_memory_update` を使い、完全一致または近い重複候補、推奨 layer、sourceRef/provenance の品質を確認します。
-3. 同じ内容が増えてきたと感じたら `consolidate_memory` を dry-run で実行し、完全一致または近い重複候補を確認します。
-4. 大きな変更や削除前には `backup_memory` と `verify_backup` を実行します。
-5. バックアップが増えてきたら `plan_backup_retention` で保持対象と削除候補を確認します。
-6. 復元が必要になりそうな場合は、先に `plan_backup_restore` で現在 DB とバックアップの差分感と手順を確認します。
+1. 作業開始時に `start_memory_session` を呼び、directive、health、backup retention、warnings を確認します。
+2. directive memory がある場合は、優先順位を確認しつつ、現在のユーザー指示・`AGENTS.md`・実ファイルと衝突しないか見ます。
+3. 過去判断が必要なときだけ `search_memory` を使います。
+4. メモリを残すか迷う場合は `propose_memory_update` を先に使います。
+5. 強い運用指示を残す場合は `propose_directive_update` を先に使います。
+6. 大きな変更、削除、修復の前には `backup_memory` と `verify_backup` を使います。
 7. Dashboard は状態確認専用として使い、修復や変更は MCP tool から実行します。
 
 詳しい確認手順:
@@ -181,4 +192,4 @@ ollama pull embeddinggemma
 
 - このリポジトリは private package です。
 - README は日本語を正とします。
-- MCP tool を追加、削除、または挙動変更した後は `npm run build` 相当のビルド後、Codex app 側で MCP server の再起動が必要です。
+- MCP tool や起動時挙動を変更した後は、ビルド後に Codex app 側で MCP server の再起動が必要です。

@@ -1,6 +1,9 @@
 export type MemoryLayer = "core" | "recall" | "archival";
 export type MemoryStatus = "active" | "superseded" | "forgotten";
 export type MemoryEventType = "created" | "updated" | "forgotten" | "consolidated" | "retrieved";
+export type DirectiveScope = "global" | "project";
+export type DirectiveStatus = "active" | "disabled" | "superseded";
+export type DirectiveEventType = "created" | "updated" | "disabled" | "retrieved";
 
 export interface Memory {
   id: number;
@@ -27,6 +30,56 @@ export interface MemoryEvent {
   eventType: MemoryEventType;
   payload: Record<string, unknown>;
   createdAt: Date;
+}
+
+export interface Directive {
+  id: number;
+  scope: DirectiveScope;
+  projectScope: string;
+  content: string;
+  rationale: string;
+  tags: string[];
+  sourceType: string;
+  sourceRef: string;
+  priority: number;
+  createdAt: Date;
+  updatedAt: Date;
+  status: DirectiveStatus;
+}
+
+export interface DirectiveEvent {
+  id: number;
+  directiveId: number;
+  eventType: DirectiveEventType;
+  payload: Record<string, unknown>;
+  createdAt: Date;
+}
+
+export interface CreateDirectiveInput {
+  content: string;
+  scope: DirectiveScope;
+  projectScope?: string;
+  projectPath?: string;
+  rationale: string;
+  tags?: string[];
+  sourceType: string;
+  sourceRef: string;
+  priority?: number;
+  allowSecret?: boolean;
+}
+
+export interface ListDirectivesInput {
+  projectScope?: string;
+  projectPath?: string;
+  includeGlobal?: boolean;
+  includeProject?: boolean;
+  includeDisabled?: boolean;
+  limit?: number;
+}
+
+export interface DisableDirectiveInput {
+  directiveId: number;
+  reason: string;
 }
 
 export interface CreateMemoryInput {

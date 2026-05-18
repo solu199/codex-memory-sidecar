@@ -121,6 +121,19 @@ export interface DashboardStatus {
     modelNames: string[];
     error: string | null;
   } | null;
+  directives: Array<{
+    id: number;
+    scope: string;
+    projectScope: string;
+    content: string;
+    rationale: string;
+    tags: string[];
+    sourceType: string;
+    sourceRef: string;
+    priority: number;
+    status: string;
+    updatedAt: string;
+  }>;
   recentMemories: Array<{
     id: number;
     layer: string;
@@ -212,6 +225,22 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
     },
     embedding,
     ollama,
+    directives: [
+      ...store.listDirectives({ includeGlobal: false, includeProject: true, limit: 50 }),
+      ...store.listDirectives({ includeGlobal: true, includeProject: false, limit: 50 })
+    ].map((directive) => ({
+      id: directive.id,
+      scope: directive.scope,
+      projectScope: directive.projectScope,
+      content: directive.content,
+      rationale: directive.rationale,
+      tags: directive.tags,
+      sourceType: directive.sourceType,
+      sourceRef: directive.sourceRef,
+      priority: directive.priority,
+      status: directive.status,
+      updatedAt: directive.updatedAt.toISOString()
+    })),
     recentMemories: store.listMemories({ limit: 10 }).map((memory) => ({
       id: memory.id,
       layer: memory.layer,
@@ -700,6 +729,11 @@ function renderDashboardHtml(): string {
       <thead><tr><th>スコープ</th><th>有効</th><th>合計</th><th>最新</th></tr></thead>
       <tbody id="project-scopes"></tbody>
     </table>
+    <h2>Directive Memory</h2>
+    <table>
+      <thead><tr><th>ID</th><th>範囲</th><th>スコープ</th><th>指示内容</th><th>理由</th><th>情報源</th><th>更新</th></tr></thead>
+      <tbody id="directives"></tbody>
+    </table>
     <h2>最近のメモリ</h2>
     <table>
       <thead><tr><th>ID</th><th>レイヤー</th><th>要約</th><th>情報源</th><th>スコープ</th><th>タグ</th><th>更新</th></tr></thead>
@@ -774,6 +808,11 @@ function renderDashboardHtml(): string {
       document.getElementById("project-scopes").innerHTML = status.memoryStats.byProjectScope.map((scope) => (
         "<tr><td class=\\"summary\\">" + escapeHtml(scope.projectScope) + "</td><td>" + scope.active + "</td><td>" + scope.total + "</td><td>" + escapeHtml(scope.latestUpdatedAt ?? "-") + "</td></tr>"
       )).join("");
+      document.getElementById("directives").innerHTML = status.directives.length
+        ? status.directives.map((directive) => (
+          "<tr><td>" + directive.id + "</td><td>" + escapeHtml(directive.scope) + "</td><td class=\\"tags\\">" + escapeHtml(directive.projectScope) + "</td><td class=\\"summary\\">" + escapeHtml(directive.content) + "</td><td class=\\"summary\\">" + escapeHtml(directive.rationale) + "</td><td class=\\"tags\\">" + escapeHtml(directive.sourceType + ': ' + directive.sourceRef) + "</td><td>" + escapeHtml(directive.updatedAt) + "</td></tr>"
+        )).join("")
+        : "<tr><td colspan=\\"7\\">保存済み directive memory はありません</td></tr>";
       document.getElementById("recent-memories").innerHTML = status.recentMemories.map((memory) => (
         "<tr><td>" + memory.id + "</td><td>" + escapeHtml(memory.layer) + "</td><td class=\\"summary\\">" + escapeHtml(memory.summary) + "</td><td class=\\"tags\\">" + escapeHtml(memory.sourceType + ': ' + memory.sourceRef) + "</td><td class=\\"tags\\">" + escapeHtml(memory.projectScope) + "</td><td class=\\"tags\\">" + escapeHtml(memory.tags.join(", ")) + "</td><td>" + escapeHtml(memory.updatedAt) + "</td></tr>"
       )).join("");

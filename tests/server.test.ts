@@ -66,14 +66,17 @@ describe("createMemoryServer", () => {
         "audit_memory",
         "backup_memory",
         "consolidate_memory",
+        "disable_directive",
         "forget_memory",
         "health_check",
         "inspect_backup",
+        "list_directives",
         "list_memory_summaries",
         "memory_digest",
         "memory_stats",
         "plan_backup_restore",
         "plan_backup_retention",
+        "propose_directive_update",
         "propose_memory_update",
         "read_memory",
         "repair_memory_index",
@@ -81,6 +84,7 @@ describe("createMemoryServer", () => {
         "start_memory_session",
         "update_memory",
         "verify_backup",
+        "write_directive",
         "write_memory"
       ]);
     } finally {
