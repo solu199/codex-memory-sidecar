@@ -1,12 +1,13 @@
 # memory_digest 運用プロトコル
 
-`memory_digest` は、作業前に必要そうなローカル記憶だけを短く集めるための入口です。現在のユーザー指示や実ファイルより優先するものではありません。
+`memory_digest` は、必要そうなローカル記憶だけを短く集めるための補助ツールです。現在のユーザー指示や実ファイルより優先するものではありません。
+通常の開発開始時は、health、stats、backup retention、digest、修復推奨をまとめて返す `start_memory_session` を先に使います。
 
 ## 使うタイミング
 
-- 複数ファイルにまたがる変更を始める前。
+- `start_memory_session` の digest だけでは足りず、追加で文脈を絞りたいとき。
+- 個別の作業テーマについて、軽量に関連メモリだけを集めたいとき。
 - 過去の設計判断やユーザーの好みが影響しそうなとき。
-- Codex/AGENTS 系の作業プロトコルを適用する前。
 - 実用テスト、バックアップ、dashboard、MCP 登録など、環境依存の手順を扱うとき。
 
 使わなくてよい場面:
@@ -59,8 +60,9 @@
 
 ## 最小手順
 
-1. 作業前に `memory_digest(taskDescription, projectPath)` を呼ぶ。
-2. 返った digest を現在の指示とファイルで検証する。
-3. 不足があれば `search_memory` で追加検索する。
-4. 作業後、次回に役立つ知見だけ保存を検討する。
-5. 保存した場合は、必要に応じて `audit_memory` でイベントを確認する。
+1. 通常の作業開始時は先に `start_memory_session(taskDescription, projectPath)` を呼ぶ。
+2. 追加の文脈が必要な場合だけ `memory_digest(taskDescription, projectPath)` を呼ぶ。
+3. 返った digest を現在の指示とファイルで検証する。
+4. 不足があれば `search_memory` で追加検索する。
+5. 作業後、次回に役立つ知見だけ `propose_memory_update` で保存候補を確認する。
+6. 保存した場合は、必要に応じて `audit_memory` でイベントを確認する。
