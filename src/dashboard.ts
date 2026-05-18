@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { spawn } from "node:child_process";
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +13,21 @@ import { runStartupMaintenance } from "./startup-maintenance.js";
 export interface DashboardOptions {
   embeddingProvider?: EmbeddingProvider;
 }
+
+type DashboardBrowserProcess = {
+  on?: (event: "error", listener: (error: Error) => void) => unknown;
+  unref?: () => void;
+};
+
+type DashboardBrowserOpener = (
+  command: string,
+  args: string[],
+  options: {
+    detached: boolean;
+    stdio: "ignore";
+    windowsHide: boolean;
+  }
+) => DashboardBrowserProcess;
 
 export interface DashboardStatus {
   ok: boolean;
@@ -223,6 +239,41 @@ export function createDashboardServer(store: MemoryStore, options: DashboardOpti
       sendJson(response, 500, { ok: false, error: message });
     }
   });
+}
+
+export function shouldOpenDashboardBrowser(value: string | undefined): boolean {
+  if (value === undefined) {
+    return true;
+  }
+  const normalized = value.trim().toLowerCase();
+  return !["false", "0", "off", "no"].includes(normalized);
+}
+
+export function openDashboardUrl(url: string, opener: DashboardBrowserOpener = spawn): boolean {
+  const command =
+    process.platform === "win32"
+      ? "cmd"
+      : process.platform === "darwin"
+        ? "open"
+        : "xdg-open";
+  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
+
+  try {
+    const child = opener(command, args, {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true
+    });
+    child.on?.("error", (error) => {
+      console.warn(`codex-memory-sidecar dashboard browser open failed: ${error.message}`);
+    });
+    child.unref?.();
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`codex-memory-sidecar dashboard browser open failed: ${message}`);
+    return false;
+  }
 }
 
 async function probeEmbedding(provider: EmbeddingProvider): Promise<DashboardStatus["embedding"]> {
@@ -561,7 +612,11 @@ async function main(): Promise<void> {
   });
 
   server.listen(port, "127.0.0.1", () => {
-    console.log(`Codex Memory Sidecar dashboard: http://127.0.0.1:${port}`);
+    const dashboardUrl = `http://127.0.0.1:${port}`;
+    console.log(`Codex Memory Sidecar dashboard: ${dashboardUrl}`);
+    if (shouldOpenDashboardBrowser(process.env.CODEX_MEMORY_DASHBOARD_OPEN)) {
+      openDashboardUrl(dashboardUrl);
+    }
   });
 
   process.on("SIGINT", () => {

@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { buildDashboardStatus, createDashboardServer } from "../src/dashboard.js";
+import { buildDashboardStatus, createDashboardServer, openDashboardUrl, shouldOpenDashboardBrowser } from "../src/dashboard.js";
 import { MemoryStore } from "../src/memory-store.js";
 
 describe("dashboard", () => {
@@ -203,6 +203,58 @@ describe("dashboard", () => {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
       });
+    }
+  });
+
+  test("shouldOpenDashboardBrowser enables auto open unless explicitly disabled", () => {
+    expect(shouldOpenDashboardBrowser(undefined)).toBe(true);
+    expect(shouldOpenDashboardBrowser("")).toBe(true);
+    expect(shouldOpenDashboardBrowser("true")).toBe(true);
+    expect(shouldOpenDashboardBrowser("1")).toBe(true);
+    expect(shouldOpenDashboardBrowser("false")).toBe(false);
+    expect(shouldOpenDashboardBrowser("0")).toBe(false);
+    expect(shouldOpenDashboardBrowser("off")).toBe(false);
+    expect(shouldOpenDashboardBrowser("NO")).toBe(false);
+  });
+
+  test("openDashboardUrl starts a detached platform browser command", () => {
+    const calls: Array<{
+      command: string;
+      args: string[];
+      options: { detached?: boolean; stdio?: string; windowsHide?: boolean };
+    }> = [];
+    const unref = vi.fn();
+    const on = vi.fn();
+
+    const opened = openDashboardUrl("http://127.0.0.1:3737", (command, args, options) => {
+      calls.push({ command, args, options });
+      return { on, unref };
+    });
+
+    expect(opened).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.args).toContain("http://127.0.0.1:3737");
+    expect(calls[0]?.options).toMatchObject({
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true
+    });
+    expect(on).toHaveBeenCalledWith("error", expect.any(Function));
+    expect(unref).toHaveBeenCalledOnce();
+  });
+
+  test("openDashboardUrl reports opener failures without throwing", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      const opened = openDashboardUrl("http://127.0.0.1:3737", () => {
+        throw new Error("browser unavailable");
+      });
+
+      expect(opened).toBe(false);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("browser unavailable"));
+    } finally {
+      warn.mockRestore();
     }
   });
 });

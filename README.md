@@ -66,10 +66,17 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:compari
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run dashboard
 ```
 
-起動後に開く URL:
+起動後は既定ブラウザで自動的に Dashboard URL を開きます。
 
 ```text
 http://127.0.0.1:3737
+```
+
+自動で開きたくない場合は、同じ PowerShell セッションで次の環境変数を設定してから起動します。
+
+```powershell
+$env:CODEX_MEMORY_DASHBOARD_OPEN = "false"
+node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run dashboard
 ```
 
 ## 設定
@@ -101,6 +108,8 @@ auto_backup_on_startup = false
 - `CODEX_MEMORY_STARTUP_FTS_SANITY_CHECK`
 - `CODEX_MEMORY_STARTUP_WAL_CHECKPOINT`
 - `CODEX_MEMORY_AUTO_BACKUP_ON_STARTUP`
+- `CODEX_MEMORY_DASHBOARD_PORT`
+- `CODEX_MEMORY_DASHBOARD_OPEN`
 
 ## Codex MCP 登録
 
