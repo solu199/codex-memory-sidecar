@@ -749,6 +749,39 @@ describe("MCP tool handlers", () => {
     expect(JSON.stringify(result.structuredContent)).not.toContain("Daily startup private body");
   });
 
+  test("start_memory_session returns guidance that prevents over-trusting memory", async () => {
+    const tools = createToolHandlers(store);
+    store.createMemory({
+      content: "MCP memories are supporting context and current files remain the source of truth.",
+      summary: "Treat MCP memory as supporting context, not the source of truth.",
+      layer: "core",
+      tags: ["provenance"],
+      sourceType: "manual",
+      sourceRef: "docs/daily-operations.md",
+      projectPath: tempDir
+    });
+
+    const result = await tools.startMemorySession({
+      taskDescription: "decide next implementation priority from memory and docs",
+      projectPath: tempDir,
+      maxTokens: 200
+    });
+
+    expect(result.structuredContent.sessionGuidance).toEqual({
+      memoryUse: "supporting_context",
+      canAnswer: expect.arrayContaining([
+        "Relevant saved memory summaries and their sourceRefs can inform this task."
+      ]),
+      mustVerify: expect.arrayContaining([
+        "Validate memory-derived claims against the user's latest instruction, README/docs, actual files, or git history before treating them as facts."
+      ]),
+      limitations: expect.arrayContaining([
+        "The digest may omit relevant memories when the query is too narrow or the database has not captured the decision yet."
+      ]),
+      suggestedNextTools: expect.arrayContaining(["read_memory", "audit_memory"])
+    });
+  });
+
   test("start_memory_session reports backup retention summary without deleting backups", async () => {
     const tools = createToolHandlers(store);
     await tools.writeMemory({

@@ -8,7 +8,8 @@ Codex Memory Sidecar を毎日の開発で使うための短い手順です。�
 2. `ready: true` なら、返ってきた digest と memory summary を参考にします。
 3. `repairRecommended: true` の場合は、作業に入る前に `repair_memory_index` を検討します。
 4. `backupRetention.prunableCount` が増えている場合は、作業の区切りで `plan_backup_retention` を確認します。
-5. digest は参考情報として扱い、現在のユーザー指示と実ファイルを優先します。
+5. `sessionGuidance` を確認し、メモリで分かること、分からないこと、追加確認すべき情報源を切り分けます。
+6. digest は参考情報として扱い、現在のユーザー指示、README/docs、実ファイル、git 履歴を優先します。
 
 ## 書き込みルール
 

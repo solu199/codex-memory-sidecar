@@ -38,5 +38,9 @@ describe("runMcpSmoke", () => {
       prunableCount: 0,
       wouldDelete: false
     });
+    expect(result.startMemorySession.sessionGuidance).toMatchObject({
+      memoryUse: "supporting_context"
+    });
+    expect(result.startMemorySession.sessionGuidance.suggestedNextTools).toContain("audit_memory");
   }, 20_000);
 });
