@@ -132,6 +132,14 @@ describe("dashboard", () => {
     expect(status.maintenance.repairRecommended).toBe(true);
     expect(status.maintenance.latestBackup?.backupPath).toContain(path.join(tempDir, "backups"));
     expect(status.warnings).toContain("FTS index is missing 1 active memory row(s).");
+    expect(status.warningActions).toEqual([
+      expect.objectContaining({
+        severity: "warning",
+        title: "検索インデックスの修復が必要です",
+        action: "MCP tool の repair_memory_index を実行してください。",
+        tools: ["backup_memory", "repair_memory_index", "health_check"]
+      })
+    ]);
   });
 
   test("buildDashboardStatus reports backup retention totals without deleting backups", async () => {
@@ -182,14 +190,14 @@ describe("dashboard", () => {
       expect(page.headers.get("content-type")).toContain("text/html");
       const html = await page.text();
       expect(html).toContain("Codex Memory Sidecar");
-      expect(html).toContain("Memory Stats");
-      expect(html).toContain("Maintenance");
-      expect(html).toContain("Backup Retention");
-      expect(html).toContain("Warnings");
-      expect(html).toContain("Ollama Models");
-      expect(html).toContain("Project Scopes");
-      expect(html).toContain("Recent Memories");
-      expect(html).toContain("Source");
+      expect(html).toContain("メモリ統計");
+      expect(html).toContain("メンテナンス");
+      expect(html).toContain("バックアップ保持");
+      expect(html).toContain("警告と対応");
+      expect(html).toContain("Ollama モデル");
+      expect(html).toContain("プロジェクトスコープ");
+      expect(html).toContain("最近のメモリ");
+      expect(html).toContain("情報源");
 
       const response = await fetch(`${baseUrl}/api/status`);
       expect(response.headers.get("content-type")).toContain("application/json");
@@ -326,5 +334,12 @@ describe("dashboard", () => {
       modelNames: ["embeddinggemma:latest"]
     });
     expect(status.warnings).toContain("Ollama model is not available: qwen3");
+    expect(status.warningActions).toContainEqual(
+      expect.objectContaining({
+        severity: "warning",
+        title: "Ollama モデルが見つかりません",
+        action: "Ollama に不足モデルを追加してください: ollama pull qwen3"
+      })
+    );
   });
 });

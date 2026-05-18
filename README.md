@@ -61,6 +61,7 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:compari
 
 ローカル状態をブラウザで確認できます。`127.0.0.1` のみに bind し、メモリ本文や audit payload は表示しません。
 メモリ件数、プロジェクト scope、recent memory の sourceRef、修復推奨、最新バックアップ、既定バックアップの保持件数と削除候補件数、Ollama endpoint と設定済みモデルの有無を確認できます。
+警告がある場合は、警告内容だけでなく対応アクションと関連 MCP tool も表示します。
 
 Codex app から MCP server が起動されると、Dashboard も同じプロセス内で自動起動します。起動に失敗しても MCP server は継続し、warning だけを stderr に出します。
 

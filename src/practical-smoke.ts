@@ -236,8 +236,8 @@ async function fetchDashboardSnapshot(store: MemoryStore, embeddingProvider: Emb
     const baseUrl = `http://127.0.0.1:${address.port}`;
     const page = await fetch(baseUrl);
     const html = await page.text();
-    if (!html.includes("Project Scopes")) {
-      throw new Error("Dashboard HTML did not include Project Scopes.");
+    if (!html.includes("プロジェクトスコープ")) {
+      throw new Error("Dashboard HTML did not include プロジェクトスコープ.");
     }
 
     const response = await fetch(`${baseUrl}/api/status`);
