@@ -1,7 +1,9 @@
 import type http from "node:http";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 import type { MemorySidecarConfig } from "./config.js";
-import { createDashboardServer, DASHBOARD_SCHEMA_VERSION, openDashboardUrl, shouldOpenDashboardBrowser } from "./dashboard.js";
+import { createDashboardServer, DASHBOARD_SCHEMA_VERSION, openDashboardUrl } from "./dashboard.js";
 import { OllamaEmbeddingProvider } from "./embedding.js";
 import type { MemoryStore } from "./memory-store.js";
 
@@ -41,6 +43,7 @@ export async function startDashboardCompanion(options: DashboardCompanionOptions
   }
 
   const port = options.port ?? Number(env.CODEX_MEMORY_DASHBOARD_PORT ?? 3737);
+  const openMarkerPath = path.join(path.dirname(options.config.databasePath), ".dashboard-opened.json");
   const server = createDashboardServer(options.store, {
     embeddingProvider: new OllamaEmbeddingProvider({
       baseUrl: options.config.ollamaBaseUrl,
@@ -55,13 +58,14 @@ export async function startDashboardCompanion(options: DashboardCompanionOptions
     }
   });
 
-  return await listenDashboardServer(server, port, env, options.opener, options.fetch);
+  return await listenDashboardServer(server, port, env, openMarkerPath, options.opener, options.fetch);
 }
 
 async function listenDashboardServer(
   server: http.Server,
   port: number,
   env: Record<string, string | undefined>,
+  openMarkerPath: string,
   opener: Parameters<typeof openDashboardUrl>[1],
   fetchImpl: typeof globalThis.fetch = globalThis.fetch
 ): Promise<DashboardCompanionResult> {
@@ -83,9 +87,7 @@ async function listenDashboardServer(
         const existing = error.code === "EADDRINUSE" ? await findExistingSidecarDashboard(port, fetchImpl) : null;
         if (existing?.reusable) {
           console.error(`codex-memory-sidecar dashboard companion reused existing dashboard: ${existing.url}`);
-          if (shouldOpenDashboardBrowser(env.CODEX_MEMORY_DASHBOARD_OPEN)) {
-            openDashboardUrl(existing.url, opener);
-          }
+          openDashboardForMcp(existing.url, env.CODEX_MEMORY_DASHBOARD_OPEN, openMarkerPath, opener);
           finish({
             started: false,
             url: existing.url,
@@ -121,9 +123,7 @@ async function listenDashboardServer(
       const actualPort = address && typeof address !== "string" ? address.port : port;
       const url = `http://127.0.0.1:${actualPort}`;
       console.error(`codex-memory-sidecar dashboard companion: ${url}`);
-      if (shouldOpenDashboardBrowser(env.CODEX_MEMORY_DASHBOARD_OPEN)) {
-        openDashboardUrl(url, opener);
-      }
+      openDashboardForMcp(url, env.CODEX_MEMORY_DASHBOARD_OPEN, openMarkerPath, opener);
       finish({
         started: true,
         url,
@@ -132,6 +132,69 @@ async function listenDashboardServer(
       });
     });
   });
+}
+
+function openDashboardForMcp(
+  url: string,
+  value: string | undefined,
+  markerPath: string,
+  opener: Parameters<typeof openDashboardUrl>[1]
+): boolean {
+  const mode = resolveDashboardOpenMode(value);
+  if (mode === "never") {
+    return false;
+  }
+  if (mode === "once" && wasDashboardAlreadyOpened(markerPath, url)) {
+    return false;
+  }
+  const opened = openDashboardUrl(url, opener);
+  if (opened) {
+    rememberDashboardOpened(markerPath, url);
+  }
+  return opened;
+}
+
+function resolveDashboardOpenMode(value: string | undefined): "once" | "always" | "never" {
+  if (value === undefined || value.trim() === "") {
+    return "once";
+  }
+  const normalized = value.trim().toLowerCase();
+  if (["false", "0", "off", "no", "never"].includes(normalized)) {
+    return "never";
+  }
+  if (["true", "1", "yes", "always"].includes(normalized)) {
+    return "always";
+  }
+  return "once";
+}
+
+function wasDashboardAlreadyOpened(markerPath: string, url: string): boolean {
+  try {
+    const marker = JSON.parse(readFileSync(markerPath, "utf8")) as unknown;
+    return isRecord(marker) && marker.url === url && marker.schemaVersion === DASHBOARD_SCHEMA_VERSION;
+  } catch {
+    return false;
+  }
+}
+
+function rememberDashboardOpened(markerPath: string, url: string): void {
+  try {
+    mkdirSync(path.dirname(markerPath), { recursive: true });
+    writeFileSync(
+      markerPath,
+      JSON.stringify(
+        {
+          url,
+          schemaVersion: DASHBOARD_SCHEMA_VERSION,
+          openedAt: new Date().toISOString()
+        },
+        null,
+        2
+      )
+    );
+  } catch {
+    // Browser auto-open is a convenience; marker write failures should not affect MCP startup.
+  }
 }
 
 async function findExistingSidecarDashboard(
