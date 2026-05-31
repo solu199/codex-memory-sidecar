@@ -510,11 +510,12 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         recommendation = "skip";
         reasons.push("Content looks like a secret; do not store as directive memory.");
       }
-      if (isEphemeralMemory(input.content, input.taskContext)) {
+      const durableDirectivePattern = looksLikeDurableDirectivePattern(input.content, input.taskContext);
+      if (isEphemeralMemory(input.content, input.taskContext) && !durableDirectivePattern) {
         recommendation = "skip";
         reasons.push("Content looks temporary and is too strong for directive memory.");
       }
-      if (!looksLikeDirective(input.content, input.taskContext)) {
+      if (!looksLikeDirective(input.content, input.taskContext) && !durableDirectivePattern) {
         warnings.push("Directive memory should contain a durable instruction, preference, or policy. Consider normal memory instead.");
       }
       const scopeGuidance = buildDirectiveScopeGuidance(input);
@@ -1630,6 +1631,15 @@ function looksLikeDirective(content: string, taskContext: string | undefined): b
   return /\b(always|never|must|should|prefer|priority|policy|directive|instruction|rule|必ず|常に|禁止|優先|方針|ルール|指示)\b/i.test(
     combined
   );
+}
+
+function looksLikeDurableDirectivePattern(content: string, taskContext: string | undefined): boolean {
+  const combined = `${taskContext ?? ""} ${content}`.toLowerCase();
+  const recurrence = /\b(repeated|recurs?|recurring|same problem|same correction|again|operating pattern|reusable|future work|learned rule|繰り返|再発|再利用|運用パターン)\b/i.test(
+    combined
+  );
+  const memoryIntent = /\b(directive memory|directive candidate|capture|preserve|save|保存|記憶|候補)\b/i.test(combined);
+  return recurrence && memoryIntent;
 }
 
 function findNearDuplicateCandidates(content: string, layer: MemoryLayer | undefined, candidates: Memory[], excludedIds: Set<number>) {

@@ -1,7 +1,7 @@
 import type http from "node:http";
 
 import type { MemorySidecarConfig } from "./config.js";
-import { createDashboardServer, openDashboardUrl, shouldOpenDashboardBrowser } from "./dashboard.js";
+import { createDashboardServer, DASHBOARD_SCHEMA_VERSION, openDashboardUrl, shouldOpenDashboardBrowser } from "./dashboard.js";
 import { OllamaEmbeddingProvider } from "./embedding.js";
 import type { MemoryStore } from "./memory-store.js";
 
@@ -80,16 +80,27 @@ async function listenDashboardServer(
     };
     const onError = (error: NodeJS.ErrnoException) => {
       void (async () => {
-        const existingUrl = error.code === "EADDRINUSE" ? await findExistingSidecarDashboard(port, fetchImpl) : null;
-        if (existingUrl) {
-          console.error(`codex-memory-sidecar dashboard companion reused existing dashboard: ${existingUrl}`);
+        const existing = error.code === "EADDRINUSE" ? await findExistingSidecarDashboard(port, fetchImpl) : null;
+        if (existing?.reusable) {
+          console.error(`codex-memory-sidecar dashboard companion reused existing dashboard: ${existing.url}`);
           if (shouldOpenDashboardBrowser(env.CODEX_MEMORY_DASHBOARD_OPEN)) {
-            openDashboardUrl(existingUrl, opener);
+            openDashboardUrl(existing.url, opener);
           }
           finish({
             started: false,
-            url: existingUrl,
-            warnings: [`Dashboard companion reused existing sidecar dashboard: ${existingUrl}`],
+            url: existing.url,
+            warnings: [`Dashboard companion reused existing sidecar dashboard: ${existing.url}`],
+            close
+          });
+          return;
+        }
+
+        if (existing?.warning) {
+          console.error(`codex-memory-sidecar dashboard companion stale dashboard warning: ${existing.warning}`);
+          finish({
+            started: false,
+            url: null,
+            warnings: [existing.warning],
             close
           });
           return;
@@ -123,7 +134,10 @@ async function listenDashboardServer(
   });
 }
 
-async function findExistingSidecarDashboard(port: number, fetchImpl: typeof globalThis.fetch): Promise<string | null> {
+async function findExistingSidecarDashboard(
+  port: number,
+  fetchImpl: typeof globalThis.fetch
+): Promise<{ reusable: true; url: string } | { reusable: false; url: string; warning: string } | null> {
   const url = `http://127.0.0.1:${port}`;
   try {
     const response = await fetchImpl(`${url}/api/status`);
@@ -134,7 +148,15 @@ async function findExistingSidecarDashboard(port: number, fetchImpl: typeof glob
     if (!isRecord(status) || !isRecord(status.database) || !isRecord(status.embedding)) {
       return null;
     }
-    return url;
+    const schemaVersion = isRecord(status.dashboard) ? status.dashboard.schemaVersion : null;
+    if (schemaVersion !== DASHBOARD_SCHEMA_VERSION) {
+      return {
+        reusable: false,
+        url,
+        warning: `既存の Dashboard (${url}) は stale、または別ビルドの可能性があります。古い Dashboard プロセスを停止してから MCP server を再起動してください。`
+      };
+    }
+    return { reusable: true, url };
   } catch {
     return null;
   }

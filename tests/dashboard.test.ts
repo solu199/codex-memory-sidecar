@@ -250,6 +250,9 @@ describe("dashboard", () => {
       expect(response.headers.get("content-type")).toContain("application/json");
       await expect(response.json()).resolves.toMatchObject({
         ok: true,
+        dashboard: {
+          schemaVersion: expect.any(String)
+        },
         database: {
           ok: true
         },
