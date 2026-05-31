@@ -155,11 +155,22 @@ directive memory は通常メモリより強い「運用指示の記憶」です
 
 Codex app の対象プロジェクトの `AGENTS.md`、または Codex app のパーソナライズのカスタム指示に、次の強化版を入れると運用が安定します。プロジェクト固有の `AGENTS.md` に置けるなら、それを優先してください。
 
+### Codex app カスタム指示用ブートストラップ
+
+新しいチャットで persona や preferences の directive memory を効かせたい場合は、Codex app のパーソナライズのカスタム指示に、少なくとも次を入れてください。`AGENTS.md` だけでは、挨拶や「あなたは誰？」のような軽い会話で MCP が呼ばれず、global directive が読まれない場合があります。
+
+```md
+When a new chat starts, or when the user asks about your identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` from the `codex-memory-sidecar` MCP server before answering. Read returned directive memory first, then answer according to the documented priority order. Keep this bootstrap short; do not store secrets or unnecessary personal details.
+```
+
+### 強化版 AGENTS.md / project instruction
+
 ```md
 ## Memory Protocol
 
 Use the `codex-memory-sidecar` MCP server as the durable local memory layer for nontrivial Codex work.
 
+- When a new chat starts, or when the user asks about identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` before answering so directive memory can be loaded.
 - Before nontrivial work, call `start_memory_session` with the current task description and project path.
 - Read the returned `directives`, `relevantMemories` / `memories`, `backupRetention`, `repairRecommended`, and `warnings` before making decisions.
 - Follow this priority order when context conflicts: system/developer instructions, latest user instruction, `AGENTS.md`, directive memory, normal memory, inference.

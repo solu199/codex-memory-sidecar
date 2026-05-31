@@ -7,6 +7,7 @@
 - メモリは、作業を速く安全にする補助情報です。ユーザーの最新指示、`AGENTS.md`、README/docs、実ファイル、git 履歴より優先しません。
 - directive memory は通常メモリより強い運用指示ですが、system/developer instructions、ユーザーの最新指示、`AGENTS.md` よりは下位です。
 - 参照・書き込みはローカル MCP tool 経由で行います。外部サービスへ自動送信しません。
+- 新しいチャット開始時、または自己紹介・persona・memory・preferences に関する軽い質問でも、directive memory を読む必要があるため `start_memory_session(taskDescription, projectPath)` を呼びます。
 - 非自明な作業では、最初に `start_memory_session(taskDescription, projectPath)` を呼び、directive、health、stats、backup retention、digest、修復推奨をまとめて確認します。
 - 設計判断、仕様解釈、既存方針の確認が必要なときは `search_memory` で関連する通常メモリを探します。
 - 作業後、次回以降の助けになる知見がある場合だけ `propose_memory_update` を先に使い、重複候補を確認してから `write_memory` または `update_memory` を検討します。
@@ -27,6 +28,7 @@ directive memory が現在のユーザー指示や `AGENTS.md` と矛盾する�
 
 ## 使うとよい場面
 
+- 新しいチャット開始時、自己紹介、persona、memory、preferences、いつもの方針について聞かれたとき。
 - 複数ファイルにまたがる変更、設計判断、運用手順、MCP tool 仕様、個人設定に関わる作業。
 - 以前の実装意図、過去の失敗、ローカル環境の注意点を確認したいとき。
 - ユーザーが「前に決めたこと」「いつもの方針」「この環境の設定」に触れているとき。
@@ -41,15 +43,16 @@ directive memory が現在のユーザー指示や `AGENTS.md` と矛盾する�
 
 ## 作業前プロトコル
 
-1. タスクが非自明なら `start_memory_session` を呼びます。
+1. 新しいチャット開始時、またはユーザーが identity、persona、memory、preferences、いつもの方針について聞いた場合は、軽い会話でも `start_memory_session` を呼びます。directive memory は MCP を呼んだ後でしか見えないためです。
+2. タスクが非自明なら `start_memory_session` を呼びます。
    - `taskDescription`: 今回の作業を 1 文で具体的に書きます。
    - `projectPath`: 対象リポジトリの絶対パスを渡します。
-2. `ready: true` なら、返ってきた `directives`、digest、memory summary を参考にします。
-3. `sessionGuidance.priorityOrder` を確認し、directive memory を通常メモリより先に読みます。
-4. `repairRecommended: true` の場合は、作業に入る前に `repair_memory_index` を検討します。
-5. `backupRetention.prunableCount` が増えている場合は、作業の区切りで `plan_backup_retention` を確認します。
-6. 返ってきた内容を、現在のユーザー指示、`AGENTS.md`、README/docs、実ファイル、git 履歴で検証します。
-7. メモリが古い・曖昧・矛盾している場合は推測として扱い、必要ならユーザーに確認します。
+3. `ready: true` なら、返ってきた `directives`、digest、memory summary を参考にします。
+4. `sessionGuidance.priorityOrder` を確認し、directive memory を通常メモリより先に読みます。
+5. `repairRecommended: true` の場合は、作業に入る前に `repair_memory_index` を検討します。
+6. `backupRetention.prunableCount` が増えている場合は、作業の区切りで `plan_backup_retention` を確認します。
+7. 返ってきた内容を、現在のユーザー指示、`AGENTS.md`、README/docs、実ファイル、git 履歴で検証します。
+8. メモリが古い・曖昧・矛盾している場合は推測として扱い、必要ならユーザーに確認します。
 
 ## 作業後プロトコル
 
@@ -100,11 +103,20 @@ directive memory が現在のユーザー指示や `AGENTS.md` と矛盾する�
 
 ## 強化版テンプレート
 
+## Codex app カスタム指示用ブートストラップ
+
+Codex app のパーソナライズのカスタム指示には、少なくとも次の短い指示を入れてください。`AGENTS.md` だけでは、挨拶や自己紹介のような軽い会話で MCP が呼ばれず、global directive の persona や preferences が読まれない場合があります。
+
+```md
+When a new chat starts, or when the user asks about your identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` from the `codex-memory-sidecar` MCP server before answering. Read returned directive memory first, then answer according to the documented priority order. Keep this bootstrap short; do not store secrets or unnecessary personal details.
+```
+
 ```md
 ## Memory Protocol
 
 Use the `codex-memory-sidecar` MCP server as the durable local memory layer for nontrivial Codex work.
 
+- When a new chat starts, or when the user asks about identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` before answering so directive memory can be loaded.
 - Before nontrivial work, call `start_memory_session` with the current task description and project path.
 - Read the returned `directives`, `relevantMemories` / `memories`, `backupRetention`, `repairRecommended`, and `warnings` before making decisions.
 - Follow this priority order when context conflicts: system/developer instructions, latest user instruction, `AGENTS.md`, directive memory, normal memory, inference.
