@@ -272,6 +272,38 @@ describe("MCP tool handlers", () => {
     expect(store.listDirectives()).toEqual([]);
   });
 
+  test("propose_directive_update allows durable rules that mention avoiding one-off troubleshooting", async () => {
+    const tools = createToolHandlers(store);
+
+    const result = await tools.proposeDirectiveUpdate({
+      content:
+        "When the same problem recurs, propose capturing the reusable operating pattern as directive memory instead of treating it as one-off troubleshooting.",
+      taskContext: "global meta-rule for repeated user corrections",
+      preferredScope: "global",
+      sourceType: "codex-chat",
+      sourceRef: "chat:repeated-pattern-rule"
+    });
+
+    expect(result.structuredContent.recommendation).toBe("create");
+    expect(result.structuredContent.reasons).not.toContain("Content looks temporary and is too strong for directive memory.");
+    expect(result.structuredContent.warnings).toEqual([]);
+  });
+
+  test("propose_directive_update still rejects genuinely temporary directive candidates", async () => {
+    const tools = createToolHandlers(store);
+
+    const result = await tools.proposeDirectiveUpdate({
+      content: "For this scratch run, temporarily use the one-off local port.",
+      taskContext: "temporary debugging note",
+      preferredScope: "global",
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    expect(result.structuredContent.recommendation).toBe("skip");
+    expect(result.structuredContent.reasons).toContain("Content looks temporary and is too strong for directive memory.");
+  });
+
   test("write_directive and list_directives expose active directive contents", async () => {
     const tools = createToolHandlers(store);
     const written = await tools.writeDirective({

@@ -10,6 +10,8 @@ import { OllamaEmbeddingProvider } from "./embedding.js";
 import { MemoryStore } from "./memory-store.js";
 import { runStartupMaintenance } from "./startup-maintenance.js";
 
+export const DASHBOARD_SCHEMA_VERSION = "2026-05-19-dashboard-status-v1";
+
 export interface DashboardOptions {
   embeddingProvider?: EmbeddingProvider;
   ollama?: OllamaStatusOptions;
@@ -40,6 +42,9 @@ type DashboardBrowserOpener = (
 export interface DashboardStatus {
   ok: boolean;
   checkedAt: string;
+  dashboard: {
+    schemaVersion: string;
+  };
   database: {
     ok: boolean;
     memoryCount: number;
@@ -200,6 +205,9 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
   return {
     ok: databaseHealth.ok && embedding.ok && (!ollama || ollama.ok),
     checkedAt: new Date().toISOString(),
+    dashboard: {
+      schemaVersion: DASHBOARD_SCHEMA_VERSION
+    },
     database: {
       ok: databaseHealth.ok,
       memoryCount: counts.memoryCount,

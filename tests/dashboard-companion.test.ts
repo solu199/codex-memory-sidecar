@@ -1,5 +1,6 @@
 import os from "node:os";
 import path from "node:path";
+import http from "node:http";
 
 import { mkdtempSync, rmSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -127,6 +128,46 @@ describe("dashboard companion", () => {
       await result.close();
     } finally {
       await existing.close();
+    }
+  });
+
+  test("startDashboardCompanion warns instead of reusing a stale dashboard build", async () => {
+    const staleServer = http.createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          ok: true,
+          database: { ok: true },
+          embedding: { ok: true }
+        })
+      );
+    });
+    await new Promise<void>((resolve) => staleServer.listen(0, "127.0.0.1", resolve));
+    const address = staleServer.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Expected stale dashboard TCP address.");
+    }
+    const port = address.port;
+    const opener = vi.fn(() => ({ on: vi.fn(), unref: vi.fn() }));
+
+    try {
+      const result = await startDashboardCompanion({
+        store,
+        config,
+        port,
+        opener
+      });
+
+      expect(result.started).toBe(false);
+      expect(result.url).toBeNull();
+      expect(result.warnings[0]).toContain("stale");
+      expect(result.warnings[0]).toContain(`http://127.0.0.1:${port}`);
+      expect(opener).not.toHaveBeenCalled();
+      await result.close();
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        staleServer.close((error) => (error ? reject(error) : resolve()));
+      });
     }
   });
 });

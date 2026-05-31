@@ -97,6 +97,8 @@ MCP server 起動時の Dashboard 自動起動を止める場合は、Codex app 
 
 Dashboard は active directive memory と無効化済み directive memory の内容を表示します。これは強い記憶をユーザーが監査できるようにするためです。通常メモリの本文や audit payload は表示せず、要約とメタデータだけを表示します。
 
+Dashboard の `/api/status` には `dashboard.schemaVersion` が含まれます。MCP server 起動時に同じポートの既存 Dashboard を見つけた場合、この schema version が一致する時だけ再利用します。一致しない、または古い Dashboard が schema version を返さない場合は stale warning を出します。その場合は古い Dashboard プロセスを停止し、MCP server を再起動してください。
+
 ## 設定
 
 `config/memory-sidecar.toml` を作ると既定値を上書きできます。
