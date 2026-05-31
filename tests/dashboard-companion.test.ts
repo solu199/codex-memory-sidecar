@@ -92,7 +92,7 @@ describe("dashboard companion", () => {
     await result.close();
   });
 
-  test("startDashboardCompanion opens an existing sidecar dashboard when the port is already in use", async () => {
+  test("startDashboardCompanion does not reopen an already opened dashboard by default", async () => {
     const existing = await startDashboardCompanion({
       store,
       config,
@@ -124,6 +124,43 @@ describe("dashboard companion", () => {
       expect(result.warnings).toEqual([
         `Dashboard companion reused existing sidecar dashboard: ${existing.url}`
       ]);
+      expect(opener).not.toHaveBeenCalled();
+      await result.close();
+    } finally {
+      await existing.close();
+    }
+  });
+
+  test("startDashboardCompanion can always reopen an existing dashboard when requested", async () => {
+    const existing = await startDashboardCompanion({
+      store,
+      config,
+      port: 0,
+      opener: vi.fn(() => ({ on: vi.fn(), unref: vi.fn() })),
+      fetch: vi.fn(async (url) => {
+        if (String(url).endsWith("/api/tags")) {
+          return new Response(JSON.stringify({ models: [{ name: "embeddinggemma:latest" }, { name: "qwen3:latest" }] }));
+        }
+        return new Response(JSON.stringify({ embeddings: [[0.1, 0.2]] }));
+      })
+    });
+    if (!existing.url) {
+      throw new Error("Expected existing dashboard URL.");
+    }
+    const port = Number(new URL(existing.url).port);
+    const opener = vi.fn(() => ({ on: vi.fn(), unref: vi.fn() }));
+
+    try {
+      const result = await startDashboardCompanion({
+        store,
+        config,
+        port,
+        opener,
+        env: { CODEX_MEMORY_DASHBOARD_OPEN: "always" }
+      });
+
+      expect(result.started).toBe(false);
+      expect(result.url).toBe(existing.url);
       expect(opener).toHaveBeenCalledOnce();
       await result.close();
     } finally {
