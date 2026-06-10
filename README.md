@@ -79,6 +79,14 @@ npm run smoke:ollama
 
 `smoke:ollama` は、Ollama と embedding model が使える環境だけで実行する追加検証です。通常の CI や基本利用には必須ではありません。
 
+## 公開・貢献・安全性
+
+- セキュリティ方針: `SECURITY.md`
+- コントリビューション手順: `CONTRIBUTING.md`
+- ライセンス: `LICENSE`
+
+公開前には、`data/` 配下の実DBやバックアップ、`.env`、token、個人情報、実チャット全文が含まれていないことを確認してください。Issue、PR、コミットメッセージは日本語を基本にします。
+
 ## MCP server 登録例
 
 MCP client には stdio server として登録します。Codex app の場合も同じ考え方です。
