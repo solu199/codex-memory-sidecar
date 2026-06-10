@@ -46,6 +46,7 @@ describe("documentation", () => {
     const security = readFileSync("SECURITY.md", "utf8");
     const contributing = readFileSync("CONTRIBUTING.md", "utf8");
     const license = readFileSync("LICENSE", "utf8");
+    const audit = readFileSync("docs/public-readiness-audit.md", "utf8");
 
     expect(readme).toContain("SECURITY.md");
     expect(readme).toContain("CONTRIBUTING.md");
@@ -55,5 +56,7 @@ describe("documentation", () => {
     expect(contributing).toContain("Issue起点");
     expect(contributing).toContain("日本語を基本");
     expect(license).toContain("MIT License");
+    expect(audit).toContain("公開前の基礎整備は一通り完了");
+    expect(audit).toContain("#69 CIのNode.js 20 deprecation annotation対応");
   });
 });

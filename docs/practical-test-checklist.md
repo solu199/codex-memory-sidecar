@@ -39,15 +39,15 @@ Codex app には stdio server として登録します。
 
 ```text
 command: node
-args: C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\src\index.js
-cwd: C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar
+args: <repo>\dist\src\index.js
+cwd: <repo>
 ```
 
 通常 DB を汚したくない場合は、一時 DB 用の MCP server 登録を別に作り、その server プロセスに `CODEX_MEMORY_DB` が渡るようにします。
 
 ```powershell
-$env:CODEX_MEMORY_DB="C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\data\practical-test.sqlite"
-node C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\src\index.js
+$env:CODEX_MEMORY_DB="<repo>\data\practical-test.sqlite"
+node <repo>\dist\src\index.js
 ```
 
 Codex app から起動する stdio server には、Codex app の MCP 登録側で環境変数を指定してください。
