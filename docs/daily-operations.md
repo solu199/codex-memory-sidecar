@@ -6,10 +6,11 @@ Codex Memory Sidecar を毎日の開発で使うための短い手順です。�
 
 1. `start_memory_session` を `taskDescription` と `projectPath` 付きで呼びます。
 2. `ready: true` なら、返ってきた digest と memory summary を参考にします。
-3. `repairRecommended: true` の場合は、作業に入る前に `repair_memory_index` を検討します。
-4. `backupRetention.prunableCount` が増えている場合は、作業の区切りで `plan_backup_retention` を確認します。
-5. `sessionGuidance` を確認し、メモリで分かること、分からないこと、追加確認すべき情報源を切り分けます。
-6. digest は参考情報として扱い、現在のユーザー指示、README/docs、実ファイル、git 履歴を優先します。
+3. `start_memory_session` は作業開始の監査イベントを記録するため、完全な読み取り専用操作ではありません。event count は呼び出し後に増えることがあります。
+4. `repairRecommended: true` の場合は、作業に入る前に `repair_memory_index` を検討します。
+5. `backupRetention.prunableCount` が増えている場合は、作業の区切りで `plan_backup_retention` を確認します。
+6. `sessionGuidance` を確認し、メモリで分かること、分からないこと、追加確認すべき情報源を切り分けます。
+7. digest は参考情報として扱い、現在のユーザー指示、README/docs、実ファイル、git 履歴を優先します。
 
 ## 書き込みルール
 

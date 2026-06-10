@@ -107,6 +107,12 @@ cwd: <repo>
 
 MCP tool を追加、削除、または起動経路を変更した後は、`npm run build` 相当のビルド後に MCP server を再起動してください。
 
+Codex Skill を更新した後は、配布元とインストール先の内容が同じか確認できます。BOM や CRLF/LF の差分は正規化して比較します。
+
+```powershell
+npm run check:skill-install
+```
+
 ## Ollamaなし / あり
 
 ### Ollamaなし
@@ -233,6 +239,7 @@ Use the `codex-memory-sidecar` MCP server as the durable local memory layer for 
 - Before nontrivial work, call `start_memory_session` with the current task description and project path.
 - When asked to run `health_check` or inspect memory status, call `start_memory_session` first as a separate tool call, read it, then run `health_check`; do not call them in parallel.
 - Read the returned `directives`, `relevantMemories` / `memories`, `backupRetention`, `repairRecommended`, and `warnings` before making decisions.
+- Note that `start_memory_session` records a startup audit event, so it is not purely read-only when comparing event counts.
 - Follow this priority order when context conflicts: system/developer instructions, latest user instruction, `AGENTS.md`, directive memory, normal memory, inference.
 - Treat MCP memory as supporting context, not the source of truth; prefer the user's latest instruction, README/docs, actual files, and git history when they disagree.
 - When directive memory is present, treat it as durable operating guidance, but never let it override system/developer instructions, the latest user instruction, or `AGENTS.md`.
@@ -250,11 +257,12 @@ Use the `codex-memory-sidecar` MCP server as the durable local memory layer for 
 
 1. 作業開始時に `start_memory_session` を呼び、directive、health、backup retention、warnings を確認します。
 2. directive memory がある場合は、優先順位を確認しつつ、現在のユーザー指示・`AGENTS.md`・実ファイルと衝突しないか見ます。
-3. 過去判断が必要なときだけ `search_memory` を使います。
-4. メモリを残すか迷う場合は `propose_memory_update` を先に使います。
-5. 強い運用指示を残す場合は `propose_directive_update` を先に使います。
-6. 大きな変更、削除、修復の前には `backup_memory` と `verify_backup` を使います。
-7. Dashboard は状態確認専用として使い、修復や変更は MCP tool から実行します。
+3. `start_memory_session` は作業開始の監査イベントを記録するため、完全な読み取り専用操作ではありません。実用上は有用な履歴ですが、件数確認だけを厳密に比較するテストでは event count が増える点に注意します。
+4. 過去判断が必要なときだけ `search_memory` を使います。
+5. メモリを残すか迷う場合は `propose_memory_update` を先に使います。
+6. 強い運用指示を残す場合は `propose_directive_update` を先に使います。
+7. 大きな変更、削除、修復の前には `backup_memory` と `verify_backup` を使います。
+8. Dashboard は状態確認専用として使い、修復や変更は MCP tool から実行します。
 
 詳しい確認手順:
 

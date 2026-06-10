@@ -50,10 +50,11 @@ directive memory が現在のユーザー指示や `AGENTS.md` と矛盾する�
    - `projectPath`: 対象リポジトリの絶対パスを渡します。
 3. `ready: true` なら、返ってきた `directives`、digest、memory summary を参考にします。
 4. `sessionGuidance.priorityOrder` を確認し、directive memory を通常メモリより先に読みます。
-5. `repairRecommended: true` の場合は、作業に入る前に `repair_memory_index` を検討します。
-6. `backupRetention.prunableCount` が増えている場合は、作業の区切りで `plan_backup_retention` を確認します。
-7. 返ってきた内容を、現在のユーザー指示、`AGENTS.md`、README/docs、実ファイル、git 履歴で検証します。
-8. メモリが古い・曖昧・矛盾している場合は推測として扱い、必要ならユーザーに確認します。
+5. `start_memory_session` は作業開始の監査イベントを記録するため、完全な読み取り専用操作ではありません。event count を厳密に見る検証では、呼び出しにより件数が増える前提で扱います。
+6. `repairRecommended: true` の場合は、作業に入る前に `repair_memory_index` を検討します。
+7. `backupRetention.prunableCount` が増えている場合は、作業の区切りで `plan_backup_retention` を確認します。
+8. 返ってきた内容を、現在のユーザー指示、`AGENTS.md`、README/docs、実ファイル、git 履歴で検証します。
+9. メモリが古い・曖昧・矛盾している場合は推測として扱い、必要ならユーザーに確認します。
 
 ## 作業後プロトコル
 
@@ -121,6 +122,7 @@ Use the `codex-memory-sidecar` MCP server as the durable local memory layer for 
 - Before nontrivial work, call `start_memory_session` with the current task description and project path.
 - When asked to run `health_check` or inspect memory status, call `start_memory_session` first as a separate tool call, read it, then run `health_check`; do not call them in parallel.
 - Read the returned `directives`, `relevantMemories` / `memories`, `backupRetention`, `repairRecommended`, and `warnings` before making decisions.
+- Note that `start_memory_session` records a startup audit event, so it is not purely read-only when comparing event counts.
 - Follow this priority order when context conflicts: system/developer instructions, latest user instruction, `AGENTS.md`, directive memory, normal memory, inference.
 - Treat MCP memory as supporting context, not the source of truth; prefer the user's latest instruction, README/docs, actual files, and git history when they disagree.
 - When directive memory is present, treat it as durable operating guidance, but never let it override system/developer instructions, the latest user instruction, or `AGENTS.md`.
