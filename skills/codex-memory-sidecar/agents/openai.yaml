@@ -1,4 +1,9 @@
-﻿interface:
+interface:
   display_name: "Codex Memory Sidecar"
   short_description: "Stable local MCP memory operations"
-  default_prompt: "Start a Codex Memory Sidecar MCP memory session."
+  default_prompt: "Start a Codex Memory Sidecar MCP memory session before memory operations."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "codex-memory-sidecar"
+      description: "Local Codex Memory Sidecar MCP server"

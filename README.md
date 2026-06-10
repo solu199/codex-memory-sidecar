@@ -218,7 +218,7 @@ Codex app は利用例のひとつです。Codex app のパーソナライズの
 When a new chat starts, or when the user asks about your identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` from the `codex-memory-sidecar` MCP server before answering. Read returned directive memory first, then answer according to the documented priority order. Keep this bootstrap short; do not store secrets or unnecessary personal details.
 ```
 
-詳細な運用手順は、配布用Skill雛形 `skills/codex-memory-sidecar/SKILL.md` に切り出しています。Codex app のカスタム指示は短く保ち、`start_memory_session`、`search_memory`、`propose_memory_update`、directive memory、backup / repair の実務ルールはSkill側で読ませる構成を推奨します。
+詳細な運用手順は、配布用Skill雛形 `skills/codex-memory-sidecar/SKILL.md` に切り出しています。Codex app のカスタム指示は短く保ち、`start_memory_session`、`search_memory`、`propose_memory_update`、directive memory、backup / repair の実務ルールはSkill側で読ませる構成を推奨します。Skill側では、`health_check` やメモリ状態確認だけを頼まれた場合でも、先に `start_memory_session` を単独で呼び、結果を読んでから次の tool を呼ぶ順序にしています。
 
 プロジェクト固有の `AGENTS.md` には、必要に応じて次の強化版を入れます。Skillを使う場合でも、プロジェクト固有の優先順位や強い制約は `AGENTS.md` に残すと安定します。
 
@@ -231,6 +231,7 @@ Use the `codex-memory-sidecar` MCP server as the durable local memory layer for 
 
 - When a new chat starts, or when the user asks about identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` before answering so directive memory can be loaded.
 - Before nontrivial work, call `start_memory_session` with the current task description and project path.
+- When asked to run `health_check` or inspect memory status, call `start_memory_session` first as a separate tool call, read it, then run `health_check`; do not call them in parallel.
 - Read the returned `directives`, `relevantMemories` / `memories`, `backupRetention`, `repairRecommended`, and `warnings` before making decisions.
 - Follow this priority order when context conflicts: system/developer instructions, latest user instruction, `AGENTS.md`, directive memory, normal memory, inference.
 - Treat MCP memory as supporting context, not the source of truth; prefer the user's latest instruction, README/docs, actual files, and git history when they disagree.

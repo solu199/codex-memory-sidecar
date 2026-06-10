@@ -54,7 +54,7 @@ Codex app から起動する stdio server には、Codex app の MCP 登録側�
 
 ## 3. MCP tool 確認
 
-順に確認します。
+順に確認します。Codex app などエージェント経由の実運用テストでは、`health_check` だけを頼む場合でも、先に `start_memory_session` を単独で呼び、結果を読んでから `health_check` を呼ぶかを確認します。低レベルの smoke test では個別 tool を直接検証してかまいません。
 
 - `health_check`: database と embedding が OK。
 - `propose_memory_update`: DB を変更せず、保存候補と完全一致または近い重複候補を返す。

@@ -9,6 +9,7 @@
 - 参照・書き込みはローカル MCP tool 経由で行います。外部サービスへ自動送信しません。
 - 新しいチャット開始時、または自己紹介・persona・memory・preferences に関する軽い質問でも、directive memory を読む必要があるため `start_memory_session(taskDescription, projectPath)` を呼びます。
 - 非自明な作業では、最初に `start_memory_session(taskDescription, projectPath)` を呼び、directive、health、stats、backup retention、digest、修復推奨をまとめて確認します。
+- `health_check` やメモリ状態確認だけを頼まれた場合でも、先に `start_memory_session` を単独で呼び、返ってきた directive、warnings、repair 推奨を読んでから `health_check` を呼びます。`start_memory_session` と `health_check` は並列実行しません。
 - 設計判断、仕様解釈、既存方針の確認が必要なときは `search_memory` で関連する通常メモリを探します。
 - 作業後、次回以降の助けになる知見がある場合だけ `propose_memory_update` を先に使い、重複候補を確認してから `write_memory` または `update_memory` を検討します。
 - 強い運用指示を残す場合は `propose_directive_update` を先に使い、global directive か project directive かを確認してから `write_directive` を検討します。
@@ -44,7 +45,7 @@ directive memory が現在のユーザー指示や `AGENTS.md` と矛盾する�
 ## 作業前プロトコル
 
 1. 新しいチャット開始時、またはユーザーが identity、persona、memory、preferences、いつもの方針について聞いた場合は、軽い会話でも `start_memory_session` を呼びます。directive memory は MCP を呼んだ後でしか見えないためです。
-2. タスクが非自明なら `start_memory_session` を呼びます。
+2. タスクが非自明、または `health_check`、メモリ状態確認、Dashboard/backup/repair 状態確認なら `start_memory_session` を呼びます。
    - `taskDescription`: 今回の作業を 1 文で具体的に書きます。
    - `projectPath`: 対象リポジトリの絶対パスを渡します。
 3. `ready: true` なら、返ってきた `directives`、digest、memory summary を参考にします。
@@ -118,6 +119,7 @@ Use the `codex-memory-sidecar` MCP server as the durable local memory layer for 
 
 - When a new chat starts, or when the user asks about identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` before answering so directive memory can be loaded.
 - Before nontrivial work, call `start_memory_session` with the current task description and project path.
+- When asked to run `health_check` or inspect memory status, call `start_memory_session` first as a separate tool call, read it, then run `health_check`; do not call them in parallel.
 - Read the returned `directives`, `relevantMemories` / `memories`, `backupRetention`, `repairRecommended`, and `warnings` before making decisions.
 - Follow this priority order when context conflicts: system/developer instructions, latest user instruction, `AGENTS.md`, directive memory, normal memory, inference.
 - Treat MCP memory as supporting context, not the source of truth; prefer the user's latest instruction, README/docs, actual files, and git history when they disagree.

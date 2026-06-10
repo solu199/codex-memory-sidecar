@@ -23,6 +23,7 @@ Codex Memory Sidecar を毎日の開発で使うための短い手順です。�
 
 - 通常は `projectPath` を指定し、同一 project scope と `global` だけを検索します。
 - 作業開始時は個別の `health_check` と `memory_digest` より、まず `start_memory_session` を優先します。
+- `health_check` だけを頼まれた場合も、`start_memory_session` を先に単独で呼び、warnings と修復推奨を読んでから `health_check` を呼びます。並列実行はしません。
 - 明示的に横断確認が必要なときだけ `includeCrossProject: true` を使います。
 - 検索結果は memory id と summary を根拠にし、必要に応じて `read_memory` や `audit_memory` で確認します。
 

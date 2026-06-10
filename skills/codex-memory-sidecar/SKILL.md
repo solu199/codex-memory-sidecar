@@ -13,6 +13,10 @@ Use `codex-memory-sidecar` as a local supporting memory layer for MCP-aware AI a
 
 For nontrivial work, call `start_memory_session` before making decisions.
 
+When the user asks for `health_check`, memory status, Dashboard status, backup status, repair status, or any other codex-memory-sidecar MCP operation, still call `start_memory_session` first. Call it as a separate first MCP tool call, read the returned context, and only then call `health_check` or the requested follow-up tool. Do not call `start_memory_session` in parallel with `health_check`, `memory_stats`, `search_memory`, or write/repair tools; the session result is ordering context for the next action.
+
+If `start_memory_session` is unavailable, say that session context could not be loaded, then continue with the explicitly requested tool when it is safe.
+
 Use:
 
 - `taskDescription`: one concrete sentence about the current task.
@@ -28,6 +32,17 @@ Read these returned fields before acting:
 - `sessionGuidance.priorityOrder`
 
 If the user asks about identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` even if the conversation seems casual. Directive memory is not visible until the MCP tool is called.
+
+## Health Check Requests
+
+For a request such as "run codex-memory-sidecar health_check":
+
+1. Call `start_memory_session` with the current task and project path.
+2. Read `directives`, `repairRecommended`, `warnings`, and health/session guidance.
+3. Call `health_check`.
+4. Report the health result plus any session warnings or required actions.
+
+This sequence must be sequential, not parallel.
 
 ## Priority Order
 

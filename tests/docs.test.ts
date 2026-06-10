@@ -29,7 +29,9 @@ describe("documentation", () => {
 
   test("Codex Skill template documents detailed memory operations", () => {
     const readme = readFileSync("README.md", "utf8");
+    const protocol = readFileSync("AGENTS-memory-protocol.md", "utf8");
     const skill = readFileSync("skills/codex-memory-sidecar/SKILL.md", "utf8");
+    const openaiAgent = readFileSync("skills/codex-memory-sidecar/agents/openai.yaml", "utf8");
 
     expect(readme).toContain("skills/codex-memory-sidecar/SKILL.md");
     expect(readme).toContain("Codex app のカスタム指示は短く保ち");
@@ -39,6 +41,12 @@ describe("documentation", () => {
     expect(skill).toContain("propose_directive_update");
     expect(skill).toContain("backup_memory");
     expect(skill).toContain("When a new chat starts");
+    expect(skill).toContain("Do not call `start_memory_session` in parallel with `health_check`");
+    expect(skill).toContain("This sequence must be sequential, not parallel.");
+    expect(readme).toContain("do not call them in parallel");
+    expect(protocol).toContain("do not call them in parallel");
+    expect(openaiAgent).toContain('type: "mcp"');
+    expect(openaiAgent).toContain('value: "codex-memory-sidecar"');
   });
 
   test("public safety and contribution documents are present", () => {
