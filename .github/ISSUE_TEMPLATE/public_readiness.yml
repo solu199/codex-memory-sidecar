@@ -1,0 +1,28 @@
+name: 公開前監査
+description: ポートフォリオ公開に向けた監査・整理タスク
+title: "public-readiness: "
+labels: ["public-readiness"]
+body:
+  - type: textarea
+    id: scope
+    attributes:
+      label: 監査範囲
+      description: 対象ファイル、機能、ドキュメント、GitHub設定などを書いてください。
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: チェック項目
+      options:
+        - label: 個人ローカルパスや個人利用前提の説明を確認した
+        - label: 秘密情報、token、API key、DB実データが含まれないことを確認した
+        - label: Ollama必須に見える説明や実装を確認した
+        - label: README、Issue、PR、CI、テストの見せ方を確認した
+  - type: textarea
+    id: result
+    attributes:
+      label: 監査結果・後続タスク
+      description: 見つかった課題と、必要な後続Issueを書いてください。
+    validations:
+      required: true

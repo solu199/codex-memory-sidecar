@@ -1,0 +1,55 @@
+name: 不具合報告
+description: 再現可能な不具合や想定外の挙動を報告する
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: 何が起きたかを短く書いてください。
+      placeholder: Dashboard が起動しない、検索結果が空になる、など
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      description: できるだけ具体的に、実行したコマンドや操作を書いてください。
+      placeholder: |
+        1. npm run build
+        2. npm run smoke:mcp
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待した挙動
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の挙動
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 環境
+      description: OS、Node.js、Codex app、MCP設定など。秘密情報は書かないでください。
+      placeholder: |
+        - OS:
+        - Node.js:
+        - Codex app:
+        - Ollama 使用有無:
+    validations:
+      required: false
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: 安全確認
+      options:
+        - label: API key、token、password、個人情報の詳細を含めていません。
+          required: true
