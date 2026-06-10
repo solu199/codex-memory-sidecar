@@ -61,8 +61,9 @@
 ## 最小手順
 
 1. 通常の作業開始時は先に `start_memory_session(taskDescription, projectPath)` を呼ぶ。
-2. 追加の文脈が必要な場合だけ `memory_digest(taskDescription, projectPath)` を呼ぶ。
-3. 返った digest を現在の指示とファイルで検証する。
-4. 不足があれば `search_memory` で追加検索する。
-5. 作業後、次回に役立つ知見だけ `propose_memory_update` で保存候補を確認する。
-6. 保存した場合は、必要に応じて `audit_memory` でイベントを確認する。
+2. `health_check` やメモリ状態確認だけを頼まれた場合も、`start_memory_session` を先に単独で呼び、並列実行しない。
+3. 追加の文脈が必要な場合だけ `memory_digest(taskDescription, projectPath)` を呼ぶ。
+4. 返った digest を現在の指示とファイルで検証する。
+5. 不足があれば `search_memory` で追加検索する。
+6. 作業後、次回に役立つ知見だけ `propose_memory_update` で保存候補を確認する。
+7. 保存した場合は、必要に応じて `audit_memory` でイベントを確認する。
