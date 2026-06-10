@@ -1,73 +1,90 @@
 # 公開前監査レポート
 
-Codex Memory Sidecar を日本企業向けポートフォリオとして公開するための監査メモです。公開判断の前に、個人利用前提の情報、導入ハードル、GitHub上の見せ方、安全性を段階的に確認します。
+Codex Memory Sidecar を日本企業向けポートフォリオとして公開できる形に整えるための監査結果です。
 
 ## 現在の状態
 
 - GitHub repository: `solu199/codex-memory-sidecar`
 - Visibility: private
-- package: `private: true`
-- README: 日本語中心。ただし Codex app 個人利用前提、絶対パス、Ollama 前提の説明が残っている。
-- CI: この監査時点で未整備だったため、Issue #59 で追加対象。
-- Issue / PR template: この監査時点で未整備だったため、Issue #59 で追加対象。
+- package: npm公開は想定せず、ローカルMCPツールとして扱う
+- README: 日本語公開向けに再構成済み
+- CI: GitHub Actionsで build / test / smoke を実行
+- Issue / PR template: 追加済み
+- Security / Contribution / License: 追加済み
+- Ollama: 任意機能として整理済み
+- Codex Skill: 配布用雛形を追加済み
 
-## 公開前に解消したい主な課題
+## 確認結果
 
 ### 1. 個人利用前提の説明
 
-README と docs には、個人利用や特定環境を前提にした表現が残っています。公開向けには「MCP対応AIエージェント向けのローカルメモリサイドカー」を主語にし、Codex app は利用例のひとつとして扱う方が読みやすくなります。
+README の主語は「MCP対応AIエージェント向けのローカルメモリサイドカー」に変更済みです。Codex app は利用例のひとつとして扱っています。
 
-確認対象:
+対応:
 
-- `README.md`
-- `AGENTS-memory-protocol.md`
-- `docs/daily-operations.md`
-- `docs/practical-test-checklist.md`
-- `docs/friend-explanation.html`
-- `2026-05-12-codex-memory-sidecar-design.md`
+- #61 READMEを日本語公開向けに再構成
+- #63 Codex Skillとして詳細運用プロトコルを切り出し
 
 ### 2. ローカル絶対パス
 
-README と実用テスト手順には、開発者のローカルパスが例として残っています。公開向けには `<repo>` や `C:\path\to\codex-memory-sidecar` のような汎用表記に置き換えます。
+README と tracked docs の主要な手順から、開発者固有のローカルパスを汎用表記へ置換しました。
 
-例:
+公開前の注意:
 
-- `C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar`
-- `C:\Users\hare1\Documents\Codex\2026-05-12\codex-rag-ai`
+- untracked な作業ファイルは公開対象に含めない
+- サンプルパスは `<repo>`、`<node-install-dir>` のような表記に寄せる
 
 ### 3. Ollama の扱い
 
-現状は Ollama / `embeddinggemma` / `qwen3` の説明が目立つため、初見では Ollama が必須に見えます。公開向けには次の整理が必要です。
+Ollama は必須ではなく、SQLite FTS による基本運用と、Ollamaありのsemantic search強化に分けました。
 
-- Ollamaなし: SQLite FTS による基本検索で利用可能
-- Ollamaあり: embedding による semantic search とモデル状態表示が有効
-- smoke: `smoke:ollama` は optional 検証として扱う
+対応:
+
+- #62 Ollamaを任意機能として整理
+- `embedding_mode = auto | off | ollama`
+- `smoke:ollama` は任意の追加確認
 
 ### 4. 安全性
 
-現状でも `data/`、`.env`、`dist/`、`node_modules/` は `.gitignore` に含まれています。公開前には、実DB、バックアップ、秘密情報、個人情報の詳細が git 管理対象に入っていないことを再確認します。
+`data/`、`.env`、`dist/`、`node_modules/` は `.gitignore` で除外済みです。`SECURITY.md` で実DB、バックアップ、秘密情報、個人情報を公開しない方針を明文化しました。
+
+対応:
+
+- #64 SECURITY / CONTRIBUTING / LICENSEを追加
+- `SECURITY.md`
+- `CONTRIBUTING.md`
+- `LICENSE`
 
 ### 5. GitHub運用
 
-ポートフォリオとして見せるため、今後は Issue 起点で開発します。Issue、ブランチ、PR、CI、テスト結果を追いやすくします。
+Issue起点、ブランチ、PR、CI、テスト結果を追える形に整備しました。
 
-今回追加するもの:
+対応:
 
-- `.github/ISSUE_TEMPLATE/bug_report.yml`
-- `.github/ISSUE_TEMPLATE/feature_request.yml`
-- `.github/ISSUE_TEMPLATE/public_readiness.yml`
-- `.github/pull_request_template.md`
-- `.github/workflows/ci.yml`
+- #59 GitHub運用整備
+- #69 CIのNode.js 20 deprecation annotation対応
 
-## 後続Issue候補
+## 後続Issue
 
-1. READMEを日本語公開向けに再構成する
-2. Ollama optional 化を明確にする
-3. Codex Skill を追加する
-4. SECURITY.md / CONTRIBUTING.md / LICENSE を追加する
-5. ローカル絶対パスと個人利用前提の表現を置換する
-6. 公開前の最終secret scanと導入手順レビューを行う
+この監査から切り出した主要Issueは完了済みです。
+
+- #59 GitHub運用整備: 完了
+- #61 README公開向け再構成: 完了
+- #62 Ollama optional化: 完了
+- #63 Codex Skill化: 完了
+- #64 SECURITY / CONTRIBUTING / LICENSE追加: 完了
+- #69 CI annotation対応: 完了
+
+## 公開前の最終チェック
+
+公開操作の直前に、次を確認してください。
+
+- `git status` に意図しない差分がない
+- `data/`、`.env`、実DB、バックアップ、token、秘密情報が含まれていない
+- untracked file を公開対象へ含めない
+- README のセットアップ手順が現在の実装と一致している
+- GitHub repository visibility を public に切り替える前に、Issue/PRに個人情報がないか確認する
 
 ## 判断
 
-このリポジトリは、現時点では private のまま改善を進めるのが妥当です。公開前に上記の個人環境依存とOllama前提の説明を整理すれば、日本企業向けポートフォリオとして「MCPツール開発」「GitHub運用」「テスト」「安全設計」を見せやすい題材になります。
+現時点で、公開前の基礎整備は一通り完了しています。実際にpublicへ切り替える前には、GitHub上のIssue/PR本文、添付画像、untracked file、ローカルDB、バックアップを最終確認してください。

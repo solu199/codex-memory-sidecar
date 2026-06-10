@@ -14,13 +14,13 @@ The goal is to make past project knowledge, user preferences, decisions, and wor
 Create the actual project as a stable local tool repo, separate from temporary Codex task folders:
 
 ```text
-C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar
+<repo>
 ```
 
 This location is preferable to a date-scoped workspace such as:
 
 ```text
-C:\Users\hare1\Documents\Codex\2026-05-12\codex-rag-ai
+<temporary-codex-workspace>
 ```
 
 Date-scoped folders are good for experiments and design notes, but the sidecar should become durable infrastructure used across many Codex sessions. A stable `tools` folder also makes MCP configuration paths, model settings, SQLite storage paths, logs, and backups easier to maintain.
