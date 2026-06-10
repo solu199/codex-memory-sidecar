@@ -26,4 +26,18 @@ describe("documentation", () => {
       expect(document).toContain("start_memory_session");
     }
   });
+
+  test("Codex Skill template documents detailed memory operations", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const skill = readFileSync("skills/codex-memory-sidecar/SKILL.md", "utf8");
+
+    expect(readme).toContain("skills/codex-memory-sidecar/SKILL.md");
+    expect(readme).toContain("Codex app のカスタム指示は短く保ち");
+    expect(skill).toContain("name: codex-memory-sidecar");
+    expect(skill).toContain("start_memory_session");
+    expect(skill).toContain("propose_memory_update");
+    expect(skill).toContain("propose_directive_update");
+    expect(skill).toContain("backup_memory");
+    expect(skill).toContain("When a new chat starts");
+  });
 });
