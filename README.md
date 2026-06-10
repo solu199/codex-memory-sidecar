@@ -1,20 +1,37 @@
 # Codex Memory Sidecar
 
-Codex app 向けのローカル MCP メモリサーバーです。個人利用を前提に、作業中の判断、好み、運用ルール、検証結果をローカル SQLite に保存し、次回以降の Codex 作業で参照できるようにします。
+Codex Memory Sidecar は、MCP対応AIエージェント向けのローカルメモリサイドカーです。AIエージェントが作業をまたいで参照したい設計判断、運用ルール、検証結果、プロジェクト固有の注意点を、ローカル SQLite に保存し、MCP tool として安全に読み書きできるようにします。
 
-## できること
+Codex app は利用例のひとつです。MCP に対応したエージェントであれば、同じ考え方でローカルの長期作業メモリとして利用できます。
 
-- `start_memory_session` で作業開始時に DB health、embedding、FTS、WAL、backup retention、関連メモリ、directive memory をまとめて確認できます。
-- `write_memory` / `update_memory` / `forget_memory` で通常メモリを管理できます。
-- `propose_memory_update` は DB を変更せず、保存候補、重複候補、推奨 layer、sourceRef/provenance の品質を確認します。
-- `write_directive` / `list_directives` / `propose_directive_update` / `disable_directive` で、AGENTS.md に近い強い作用を持つ directive memory を管理できます。
-- `search_memory` は SQLite FTS と、利用可能な場合は Ollama embedding を組み合わせて検索します。
+## 目的
+
+AIコーディングエージェントは、チャットや作業セッションをまたぐと過去の判断や運用ルールを忘れがちです。このツールは、次のような情報をローカルに残し、必要なときだけ参照できるようにします。
+
+- プロジェクトごとの設計判断
+- 作業開始時に確認したい運用ルール
+- 繰り返し起きた不具合と対処方針
+- 通った検証コマンド
+- ユーザーが明示した長期的な好み
+- Dashboard で確認できる health / backup / directive memory の状態
+
+メモリは強力ですが、最上位の命令ではありません。ユーザーの最新指示、リポジトリ内の実ファイル、README/docs、git 履歴と矛盾する場合は、それらを優先します。
+
+## 特徴
+
+- MCP server として動作し、AIエージェントから tool 経由で利用できます。
+- SQLite にローカル保存します。外部サービスへの自動送信はしません。
+- Ollamaなしでも利用できます。SQLite FTS によるキーワード検索だけで、write / search / digest / start session の基本機能が動きます。
+- Ollamaを使うと、embedding による semantic search と Dashboard のモデル状態確認が使えます。
+- `start_memory_session` で、作業開始時に DB health、embedding、FTS、WAL、backup retention、関連メモリ、directive memory をまとめて確認できます。
+- `propose_memory_update` は、DBを書き換えずに保存候補、重複候補、推奨 layer、sourceRef の品質を確認できます。
+- `write_directive` / `list_directives` / `propose_directive_update` / `disable_directive` で、AGENTS.md に近い強い作用を持つ directive memory を扱えます。
 - `backup_memory` / `verify_backup` / `inspect_backup` / `plan_backup_retention` / `plan_backup_restore` / `repair_memory_index` で、安全確認と復旧計画を扱えます。
 - Dashboard で health、バックアップ、Ollama モデル、警告対応、project scope、directive memory、最近のメモリを確認できます。
 
 ## 優先順位
 
-メモリは強力ですが、最上位の命令ではありません。判断が衝突した場合は次の順に従います。
+判断が衝突した場合は、次の順で扱います。
 
 1. system / developer instructions
 2. ユーザーの最新指示
@@ -23,54 +40,85 @@ Codex app 向けのローカル MCP メモリサーバーです。個人利用�
 5. 通常メモリ（`core` / `recall` / `archival`）
 6. 推論
 
-directive memory は「毎回守るべき運用ルール」「ユーザーの長期的な好み」「プロジェクト固有の強い方針」に使います。一時的な作業ログや、README/docs/git で十分に追跡できる事実は通常メモリか実ファイルに残してください。
+directive memory は「毎回守るべき運用ルール」「ユーザーの長期的な好み」「プロジェクト固有の強い方針」に使います。一時的な作業ログや、README/docs/git で十分に追跡できる事実は、通常メモリか実ファイルに残してください。
 
 ## セットアップ
 
-PowerShell でリポジトリ直下に移動してから実行します。
+Node.js 22 系を推奨します。PowerShell では、リポジトリ直下に移動してから実行します。
 
 ```powershell
-cd C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar
-node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" install
-node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run build
-node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" test
+cd <repo>
+npm install
+npm run build
+npm test
 ```
 
-通常の `npm` shim が環境によって壊れる場合があるため、この README では `node ... npm-cli.js` 形式を使います。
-
-## Smoke Tests
+環境によって npm shim が壊れている場合は、Node.js に同梱されている `npm-cli.js` を直接呼び出してください。
 
 ```powershell
-node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:mcp
-node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:ollama
-node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:practical
-node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:comparison
+node "<node-install-dir>\node_modules\npm\bin\npm-cli.js" install
+node "<node-install-dir>\node_modules\npm\bin\npm-cli.js" run build
+node "<node-install-dir>\node_modules\npm\bin\npm-cli.js" test
+```
+
+## 最小確認
+
+```powershell
+npm run smoke:mcp
+npm run smoke:practical
 ```
 
 - `smoke:mcp`: MCP server 登録、`health_check`、`start_memory_session` を確認します。
-- `smoke:ollama`: Ollama / `embeddinggemma` を使った embedding 検索を確認します。
 - `smoke:practical`: write/search/digest/directive/backup/dashboard/repair/consolidation の最小実用フローを確認します。
-- `smoke:comparison`: MCP なし、開始セッションのみ、MCP フル運用の比較評価観点を確認します。
 
-## Codex MCP 登録
+任意で Ollama を使う場合:
 
-Codex app には stdio server として登録します。
+```powershell
+npm run smoke:ollama
+```
+
+`smoke:ollama` は、Ollama と embedding model が使える環境だけで実行する追加検証です。通常の CI や基本利用には必須ではありません。
+
+## MCP server 登録例
+
+MCP client には stdio server として登録します。Codex app の場合も同じ考え方です。
 
 ```text
 command: node
-args: C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\dist\src\index.js
-cwd: C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar
+args: <repo>\dist\src\index.js
+cwd: <repo>
 ```
 
 既定 DB パス:
 
 ```text
-C:\Users\hare1\Documents\Codex\tools\codex-memory-sidecar\data\memory.sqlite
+<repo>\data\memory.sqlite
 ```
 
-別 DB を使う場合は、MCP 登録の環境変数に `CODEX_MEMORY_DB` を設定してください。PowerShell の現在セッションにだけ `$env:CODEX_MEMORY_DB` を設定しても、Codex app から起動される stdio server には通常引き継がれません。
+別 DB を使う場合は、MCP 登録側の環境変数に `CODEX_MEMORY_DB` を設定してください。PowerShell の現在セッションにだけ `$env:CODEX_MEMORY_DB` を設定しても、アプリから起動される stdio server には通常引き継がれません。
 
-MCP tool を追加、削除、または起動経路を変更した後は、`npm run build` 相当のビルド後に Codex app 側で MCP server を再起動してください。
+MCP tool を追加、削除、または起動経路を変更した後は、`npm run build` 相当のビルド後に MCP server を再起動してください。
+
+## Ollamaなし / あり
+
+### Ollamaなし
+
+Ollamaなしでも利用できます。通常メモリの保存、SQLite FTS によるキーワード検索、directive memory、backup、Dashboard の基本表示は動作します。
+
+この構成は、初めて試す人や CI での検証に向いています。
+
+### Ollamaあり
+
+Ollamaを使うと、embedding による semantic search が有効になり、キーワードが完全一致しない過去メモリも見つけやすくなります。Dashboard では設定済みモデルの状態も確認できます。
+
+例:
+
+```powershell
+ollama pull embeddinggemma
+ollama pull qwen3
+```
+
+既定設定では、embedding model に `embeddinggemma`、maintenance model に `qwen3` を使います。必要に応じて環境変数または設定ファイルで変更できます。
 
 ## Dashboard
 
@@ -83,19 +131,12 @@ http://127.0.0.1:3737
 手動起動:
 
 ```powershell
-node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run dashboard
+npm run dashboard
 ```
 
-自動でブラウザを開きたくない場合:
+MCP server 起動時の Dashboard 自動起動を止める場合は、MCP 登録に環境変数 `CODEX_MEMORY_DASHBOARD_ON_MCP_START=false` を追加します。
 
-```powershell
-$env:CODEX_MEMORY_DASHBOARD_OPEN = "false"
-node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run dashboard
-```
-
-MCP server 起動時の Dashboard 自動起動を止める場合は、Codex app の MCP 登録に環境変数 `CODEX_MEMORY_DASHBOARD_ON_MCP_START=false` を追加します。
-
-MCP server と同時起動する Dashboard は、既定では同じ URL を一度だけブラウザで開きます。再起動のたびにタブを増やしたい場合は `CODEX_MEMORY_DASHBOARD_OPEN=always`、一切開きたくない場合は `CODEX_MEMORY_DASHBOARD_OPEN=false` を MCP 登録に追加します。手動の `npm run dashboard` は従来どおり起動時にブラウザを開きます。
+MCP server と同時起動する Dashboard は、既定では同じ URL を一度だけブラウザで開きます。再起動のたびにタブを増やしたい場合は `CODEX_MEMORY_DASHBOARD_OPEN=always`、一切開きたくない場合は `CODEX_MEMORY_DASHBOARD_OPEN=false` を MCP 登録に追加します。
 
 Dashboard は active directive memory と無効化済み directive memory の内容を表示します。これは強い記憶をユーザーが監査できるようにするためです。通常メモリの本文や audit payload は表示せず、要約とメタデータだけを表示します。
 
@@ -151,19 +192,19 @@ directive memory は通常メモリより強い「運用指示の記憶」です
 - 古くなった directive は削除せず、まず `disable_directive` で無効化します。
 - 秘密情報、トークン、個人情報の詳細、一時的な作業ログは保存しません。
 
-## AGENTS.md に入れる推奨プロンプト
+## Codex app で使う場合
 
-Codex app の対象プロジェクトの `AGENTS.md`、または Codex app のパーソナライズのカスタム指示に、次の強化版を入れると運用が安定します。プロジェクト固有の `AGENTS.md` に置けるなら、それを優先してください。
+Codex app は利用例のひとつです。Codex app のパーソナライズのカスタム指示には、最小ブートストラップだけを置くと安定します。
 
 ### Codex app カスタム指示用ブートストラップ
-
-新しいチャットで persona や preferences の directive memory を効かせたい場合は、Codex app のパーソナライズのカスタム指示に、少なくとも次を入れてください。`AGENTS.md` だけでは、挨拶や「あなたは誰？」のような軽い会話で MCP が呼ばれず、global directive が読まれない場合があります。
 
 ```md
 When a new chat starts, or when the user asks about your identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` from the `codex-memory-sidecar` MCP server before answering. Read returned directive memory first, then answer according to the documented priority order. Keep this bootstrap short; do not store secrets or unnecessary personal details.
 ```
 
-### 強化版 AGENTS.md / project instruction
+プロジェクト固有の `AGENTS.md` には、必要に応じて次の強化版を入れます。
+
+### AGENTS.md 用プロンプト
 
 ```md
 ## Memory Protocol
@@ -198,6 +239,7 @@ Use the `codex-memory-sidecar` MCP server as the durable local memory layer for 
 
 詳しい確認手順:
 
+- 公開前監査: `docs/public-readiness-audit.md`
 - 実用テスト前: `docs/practical-test-checklist.md`
 - 日常運用: `docs/daily-operations.md`
 - digest 運用: `docs/memory-digest-protocol.md`
@@ -205,6 +247,6 @@ Use the `codex-memory-sidecar` MCP server as the durable local memory layer for 
 
 ## 開発メモ
 
-- このリポジトリは private package です。
-- README は日本語を正とします。
-- MCP tool や起動時挙動を変更した後は、ビルド後に Codex app 側で MCP server の再起動が必要です。
+- README、Issue、PR、コミットメッセージは日本語を基本にします。
+- MCP tool や起動時挙動を変更した後は、ビルド後に MCP server の再起動が必要です。
+- 公開前に `SECURITY.md`、`CONTRIBUTING.md`、`LICENSE`、Ollama optional 化、Codex Skill 化を整備する予定です。
