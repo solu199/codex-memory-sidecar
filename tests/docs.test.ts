@@ -45,6 +45,12 @@ describe("documentation", () => {
     expect(skill).toContain("This sequence must be sequential, not parallel.");
     expect(readme).toContain("do not call them in parallel");
     expect(protocol).toContain("do not call them in parallel");
+    expect(readme).toContain("start_memory_session` は作業開始の監査イベントを記録");
+    expect(protocol).toContain("start_memory_session` は作業開始の監査イベントを記録");
+    expect(skill).toContain("records a startup audit event");
+    expect(readme).toContain("npm run check:skill-install");
+    expect(readme).toContain("BOM や CRLF/LF の差分は正規化して比較");
+    expect(protocol).toContain("not purely read-only");
     expect(openaiAgent).toContain('type: "mcp"');
     expect(openaiAgent).toContain('value: "codex-memory-sidecar"');
   });

@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import vm from "node:vm";
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -264,6 +265,114 @@ describe("dashboard", () => {
         },
         recentMemories: []
       });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  test("renders dashboard data into the DOM after the browser script refreshes", async () => {
+    store.createMemory({
+      content: "Dashboard DOM test memory body must stay out of visible summary.",
+      summary: "DOM rendered memory summary",
+      layer: "recall",
+      tags: ["dashboard", "dom"],
+      sourceType: "manual",
+      sourceRef: "dom-test",
+      projectScope: "alpha"
+    });
+    store.createDirective({
+      content: "DOM rendered directive content",
+      scope: "global",
+      rationale: "DOM rendering should expose directive memory for inspection.",
+      tags: ["dashboard", "dom"],
+      sourceType: "manual",
+      sourceRef: "dom-test"
+    });
+
+    const server = createDashboardServer(store, {
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2, 0.3]) },
+      ollama: {
+        baseUrl: "http://localhost:11434",
+        embeddingModel: "embeddinggemma",
+        maintenanceModel: "qwen3",
+        fetch: vi.fn(async () =>
+          new Response(JSON.stringify({ models: [{ name: "embeddinggemma:latest" }, { name: "qwen3:latest" }] }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          })
+        )
+      }
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Expected TCP server address.");
+      }
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const html = await (await fetch(baseUrl)).text();
+      const status = await (await fetch(`${baseUrl}/api/status`)).json();
+      const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
+      if (!script) {
+        throw new Error("Dashboard script was not found.");
+      }
+      const elements = new Map<string, { textContent: string; innerHTML: string; className: string; listeners: string[] }>();
+      const elementFor = (id: string) => {
+        const existing = elements.get(id);
+        if (existing) {
+          return existing;
+        }
+        const created = {
+          textContent: "",
+          innerHTML: "",
+          className: "",
+          listeners: [] as string[],
+          addEventListener(eventName: string) {
+            this.listeners.push(eventName);
+          }
+        };
+        elements.set(id, created);
+        return created;
+      };
+      const context = {
+        fetch: vi.fn(async () => ({
+          json: async () => status
+        })),
+        document: {
+          getElementById: elementFor
+        }
+      };
+
+      vm.runInNewContext(script, context);
+      await vi.waitFor(() => {
+        expect(elementFor("status").textContent).toBe("正常");
+      });
+
+      expect(elementFor("status")).toMatchObject({
+        textContent: "正常",
+        className: "value status-ok"
+      });
+      expect(context.fetch).toHaveBeenCalledWith("/api/status");
+      expect(elementFor("memories").textContent).toBe("1");
+      expect(elementFor("embedding").textContent).toBe("3");
+      expect(elementFor("repair")).toMatchObject({
+        textContent: "不要",
+        className: "value status-ok"
+      });
+      expect(elementFor("warnings").innerHTML).toContain("現在");
+      expect(elementFor("warnings").innerHTML).toContain("なし");
+      expect(elementFor("ollama-status")).toMatchObject({
+        textContent: "正常",
+        className: "value status-ok"
+      });
+      expect(elementFor("ollama-models").innerHTML).toContain("embeddinggemma:latest");
+      expect(elementFor("directives").innerHTML).toContain("DOM rendered directive content");
+      expect(elementFor("recent-memories").innerHTML).toContain("DOM rendered memory summary");
+      expect(elementFor("recent-memories").innerHTML).not.toContain("Dashboard DOM test memory body");
+      expect(elementFor("refresh").listeners).toEqual(["click"]);
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

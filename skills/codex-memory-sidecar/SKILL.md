@@ -31,6 +31,8 @@ Read these returned fields before acting:
 - `warnings`
 - `sessionGuidance.priorityOrder`
 
+`start_memory_session` records a startup audit event. Treat it as safe and expected operational history, but not as a purely read-only call when comparing event counts in tests.
+
 If the user asks about identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` even if the conversation seems casual. Directive memory is not visible until the MCP tool is called.
 
 ## Health Check Requests
