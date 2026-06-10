@@ -40,4 +40,20 @@ describe("documentation", () => {
     expect(skill).toContain("backup_memory");
     expect(skill).toContain("When a new chat starts");
   });
+
+  test("public safety and contribution documents are present", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const security = readFileSync("SECURITY.md", "utf8");
+    const contributing = readFileSync("CONTRIBUTING.md", "utf8");
+    const license = readFileSync("LICENSE", "utf8");
+
+    expect(readme).toContain("SECURITY.md");
+    expect(readme).toContain("CONTRIBUTING.md");
+    expect(readme).toContain("LICENSE");
+    expect(security).toContain("実運用DB");
+    expect(security).toContain("秘密情報");
+    expect(contributing).toContain("Issue起点");
+    expect(contributing).toContain("日本語を基本");
+    expect(license).toContain("MIT License");
+  });
 });
