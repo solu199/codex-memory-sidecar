@@ -21,6 +21,7 @@ describe("createMemoryServer", () => {
 
   test("creates a server and store from resolved config", () => {
     const runtime = createMemoryServer({
+      embeddingMode: "auto",
       ollamaBaseUrl: "http://localhost:11434",
       embeddingModel: "embeddinggemma",
       maintenanceModel: "qwen3",
@@ -41,6 +42,7 @@ describe("createMemoryServer", () => {
 
   test("registers the expected MCP tools", async () => {
     const runtime = createMemoryServer({
+      embeddingMode: "auto",
       ollamaBaseUrl: "http://localhost:11434",
       embeddingModel: "embeddinggemma",
       maintenanceModel: "qwen3",
@@ -87,6 +89,53 @@ describe("createMemoryServer", () => {
         "write_directive",
         "write_memory"
       ]);
+    } finally {
+      await client.close();
+      await runtime.server.close();
+      runtime.store.close();
+    }
+  });
+
+  test("can run with embeddings disabled for Ollama-free operation", async () => {
+    const runtime = createMemoryServer({
+      embeddingMode: "off",
+      ollamaBaseUrl: "http://localhost:11434",
+      embeddingModel: "embeddinggemma",
+      maintenanceModel: "qwen3",
+      databasePath: path.join(tempDir, "memory.sqlite"),
+      defaultSearchLimit: 8,
+      consolidationDryRun: true,
+      startupIntegrityCheck: true,
+      startupFtsSanityCheck: true,
+      startupWalCheckpoint: true,
+      autoBackupOnStartup: false
+    });
+    const client = new Client({
+      name: "codex-memory-sidecar-test",
+      version: "0.1.0"
+    });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+    try {
+      await Promise.all([runtime.server.connect(serverTransport), client.connect(clientTransport)]);
+      const health = await client.callTool({
+        name: "health_check",
+        arguments: {}
+      });
+
+      expect(health.structuredContent).toMatchObject({
+        ok: true,
+        database: {
+          ok: true
+        },
+        embedding: {
+          ok: true,
+          required: false,
+          dimensions: 0,
+          error: null
+        },
+        warnings: []
+      });
     } finally {
       await client.close();
       await runtime.server.close();

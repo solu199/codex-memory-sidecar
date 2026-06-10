@@ -147,6 +147,7 @@ Dashboard の `/api/status` には `dashboard.schemaVersion` が含まれます�
 `config/memory-sidecar.toml` を作ると既定値を上書きできます。
 
 ```toml
+embedding_mode = "auto"
 ollama_base_url = "http://localhost:11434"
 embedding_model = "embeddinggemma"
 maintenance_model = "qwen3"
@@ -159,9 +160,16 @@ startup_wal_checkpoint = true
 auto_backup_on_startup = false
 ```
 
+`embedding_mode` は次の3種類です。
+
+- `auto`: 既定値。Ollama が使える場合は semantic search を使い、使えない場合は警告で作業を止めず SQLite FTS で動きます。
+- `off`: Ollama を使わず、SQLite FTS だけで動きます。導入直後や CI に向いています。
+- `ollama`: Ollama を必須扱いにします。Ollama 接続や model が不足している場合は health / Dashboard で警告します。
+
 主な環境変数:
 
 - `CODEX_MEMORY_DB`
+- `CODEX_MEMORY_EMBEDDING_MODE`
 - `OLLAMA_BASE_URL`
 - `CODEX_MEMORY_EMBEDDING_MODEL`
 - `CODEX_MEMORY_MAINTENANCE_MODEL`

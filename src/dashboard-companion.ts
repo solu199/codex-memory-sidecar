@@ -44,18 +44,27 @@ export async function startDashboardCompanion(options: DashboardCompanionOptions
 
   const port = options.port ?? Number(env.CODEX_MEMORY_DASHBOARD_PORT ?? 3737);
   const openMarkerPath = path.join(path.dirname(options.config.databasePath), ".dashboard-opened.json");
+  const embeddingProvider =
+    options.config.embeddingMode === "off"
+      ? undefined
+      : new OllamaEmbeddingProvider({
+          baseUrl: options.config.ollamaBaseUrl,
+          model: options.config.embeddingModel,
+          fetch: options.fetch
+        });
   const server = createDashboardServer(options.store, {
-    embeddingProvider: new OllamaEmbeddingProvider({
-      baseUrl: options.config.ollamaBaseUrl,
-      model: options.config.embeddingModel,
-      fetch: options.fetch
-    }),
-    ollama: {
-      baseUrl: options.config.ollamaBaseUrl,
-      embeddingModel: options.config.embeddingModel,
-      maintenanceModel: options.config.maintenanceModel,
-      fetch: options.fetch
-    }
+    embeddingProvider,
+    embeddingRequired: options.config.embeddingMode === "ollama",
+    ollama:
+      options.config.embeddingMode === "off"
+        ? undefined
+        : {
+            baseUrl: options.config.ollamaBaseUrl,
+            embeddingModel: options.config.embeddingModel,
+            maintenanceModel: options.config.maintenanceModel,
+            fetch: options.fetch
+          },
+    ollamaRequired: options.config.embeddingMode === "ollama"
   });
 
   return await listenDashboardServer(server, port, env, openMarkerPath, options.opener, options.fetch);

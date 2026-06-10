@@ -4,10 +4,9 @@
 
 ## 前提
 
-- Ollama アプリが起動している。
-- `embeddinggemma` が pull 済み。
-- 必要に応じて `qwen3` が pull 済み。
 - このリポジトリで build が通る。
+- Ollama なしで確認する場合は `CODEX_MEMORY_EMBEDDING_MODE=off` または既定の `auto` を使う。
+- Ollama ありで semantic search まで確認する場合は、Ollama アプリを起動し、`embeddinggemma` と必要に応じて `qwen3` を pull しておく。
 
 ## 1. ローカル検証
 
@@ -15,9 +14,14 @@
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" test
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run build
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:mcp
-node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:ollama
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:practical
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:comparison
+```
+
+Ollama ありの追加確認:
+
+```powershell
+node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:ollama
 ```
 
 期待値:
@@ -25,9 +29,9 @@ node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run smoke:compari
 - test は全件 pass。
 - build は TypeScript error なし。
 - `smoke:mcp` は `ok: true`。
-- `smoke:ollama` は `embeddingDimensions` が 0 より大きく、warnings が空。
 - `smoke:practical` は一時 DB で write/search/digest/backup/retention/restore-plan/dashboard/repair/consolidation の流れを確認し、`ok: true`。
 - `smoke:comparison` は一時 DB で MCP なし、開始セッションのみ、MCP フル運用の比較評価観点を確認し、`ok: true`。
+- Ollama ありで実行した場合、`smoke:ollama` は `embeddingDimensions` が 0 より大きく、warnings が空。
 
 ## 2. Codex MCP 登録
 

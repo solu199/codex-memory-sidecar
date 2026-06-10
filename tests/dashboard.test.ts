@@ -392,4 +392,33 @@ describe("dashboard", () => {
       })
     );
   });
+
+  test("buildDashboardStatus treats unavailable Ollama as optional when not required", async () => {
+    const status = await buildDashboardStatus(store, {
+      embeddingProvider: { embed: vi.fn(async () => Promise.reject(new Error("Ollama offline"))) },
+      embeddingRequired: false,
+      ollama: {
+        baseUrl: "http://localhost:11434",
+        embeddingModel: "embeddinggemma",
+        maintenanceModel: "qwen3",
+        fetch: vi.fn(async () => {
+          throw new Error("Ollama offline");
+        })
+      },
+      ollamaRequired: false
+    });
+
+    expect(status.ok).toBe(true);
+    expect(status.embedding).toMatchObject({
+      ok: false,
+      required: false,
+      error: "Ollama offline"
+    });
+    expect(status.ollama).toMatchObject({
+      ok: false,
+      error: "Ollama offline"
+    });
+    expect(status.warnings).toEqual([]);
+    expect(status.warningActions).toEqual([]);
+  });
 });
