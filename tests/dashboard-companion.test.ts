@@ -18,6 +18,7 @@ describe("dashboard companion", () => {
     tempDir = mkdtempSync(path.join(os.tmpdir(), "codex-memory-sidecar-dashboard-companion-"));
     store = new MemoryStore(path.join(tempDir, "memory.sqlite"));
     config = {
+      embeddingMode: "auto",
       ollamaBaseUrl: "http://localhost:11434",
       embeddingModel: "embeddinggemma",
       maintenanceModel: "qwen3",

@@ -366,9 +366,12 @@ interface AuditMemoryToolInput {
 
 interface ToolHandlerOptions {
   embeddingProvider?: EmbeddingProvider;
+  embeddingRequired?: boolean;
 }
 
 export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptions = {}) {
+  const embeddingRequired = options.embeddingRequired ?? true;
+
   return {
     async writeMemory(input: WriteMemoryToolInput) {
       const embedding = await tryEmbed(options.embeddingProvider, input.content);
@@ -398,7 +401,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       return toolResult({
         memory: serializeMemory(memory),
         duplicateCandidates,
-        warnings: embedding.warning ? [embedding.warning] : []
+        warnings: embeddingWarnings(embedding.warning, embeddingRequired)
       });
     },
 
@@ -572,7 +575,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         ? await tryEmbed(options.embeddingProvider, "codex memory sidecar health check")
         : {
             value: null,
-            warning: "Embedding provider is not configured."
+            warning: embeddingRequired ? "Embedding provider is not configured." : null
           };
       const counts = store.countRecords();
       const health = store.checkDatabaseHealth();
@@ -584,15 +587,16 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         fts: health.fts,
         walCheckpoint: health.walCheckpoint
       };
-      const warnings = [...health.warnings, ...(embedding.warning ? [embedding.warning] : [])];
+      const warnings = [...health.warnings, ...embeddingWarnings(embedding.warning, embeddingRequired)];
 
       return toolResult({
         ok: database.ok && warnings.length === 0,
         database,
         embedding: {
-          ok: embedding.warning === null,
+          ok: embedding.warning === null || !embeddingRequired,
           dimensions: embedding.value?.length ?? 0,
-          error: embedding.warning ? embedding.warning.replace(/^Embedding unavailable: /, "") : null
+          error: embedding.warning ? embedding.warning.replace(/^Embedding unavailable: /, "") : null,
+          required: embeddingRequired
         },
         warnings
       });
@@ -666,7 +670,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
 
       return toolResult({
         memories: results.map((result) => serializeSearchResult(result, { includeEmbedding: input.includeEmbedding ?? false })),
-        warnings: embedding.warning ? [embedding.warning] : []
+        warnings: embeddingWarnings(embedding.warning, embeddingRequired)
       });
     },
 
@@ -684,7 +688,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       return toolResult({
         memory: serializeMemory(memory),
         event: "updated",
-        warnings: embedding.warning ? [embedding.warning] : []
+        warnings: embeddingWarnings(embedding.warning, embeddingRequired)
       });
     },
 
@@ -743,7 +747,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       return toolResult({
         digest,
         memories: serialized,
-        warnings: embedding.warning ? [embedding.warning] : []
+        warnings: embeddingWarnings(embedding.warning, embeddingRequired)
       });
     },
 
@@ -759,13 +763,14 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         walCheckpoint: databaseHealth.walCheckpoint
       };
       const embeddingStatus = {
-        ok: embedding.warning === null,
+        ok: embedding.warning === null || !embeddingRequired,
         dimensions: embedding.value?.length ?? 0,
-        error: embedding.warning ? embedding.warning.replace(/^Embedding unavailable: /, "") : null
+        error: embedding.warning ? embedding.warning.replace(/^Embedding unavailable: /, "") : null,
+        required: embeddingRequired
       };
       const repairRecommended =
         !databaseHealth.ok && (databaseHealth.integrityCheck !== "ok" || !databaseHealth.fts.ok);
-      const warnings = [...databaseHealth.warnings, ...(embedding.warning ? [embedding.warning] : [])];
+      const warnings = [...databaseHealth.warnings, ...embeddingWarnings(embedding.warning, embeddingRequired)];
       const sessionGuidance = buildSessionGuidance();
       const directives = store.listDirectives({
         projectScope: input.projectScope,
@@ -1444,6 +1449,10 @@ async function tryEmbed(
     const message = error instanceof Error ? error.message : String(error);
     return { value: null, warning: `Embedding unavailable: ${message}` };
   }
+}
+
+function embeddingWarnings(warning: string | null, required: boolean): string[] {
+  return warning && required ? [warning] : [];
 }
 
 function compactDigest(memories: ReturnType<typeof serializeSearchResult>[], maxTokens: number): string {

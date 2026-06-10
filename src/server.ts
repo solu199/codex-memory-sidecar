@@ -16,12 +16,17 @@ export function createMemoryServer(config: MemorySidecarConfig): MemoryServerRun
     name: "codex-memory-sidecar",
     version: "0.1.0"
   });
+  const embeddingProvider =
+    config.embeddingMode === "off"
+      ? undefined
+      : new OllamaEmbeddingProvider({
+          baseUrl: config.ollamaBaseUrl,
+          model: config.embeddingModel
+        });
 
   registerMemoryTools(server, store, {
-    embeddingProvider: new OllamaEmbeddingProvider({
-      baseUrl: config.ollamaBaseUrl,
-      model: config.embeddingModel
-    })
+    embeddingProvider,
+    embeddingRequired: config.embeddingMode === "ollama"
   });
 
   return { server, store };

@@ -14,7 +14,9 @@ export const DASHBOARD_SCHEMA_VERSION = "2026-05-19-dashboard-status-v1";
 
 export interface DashboardOptions {
   embeddingProvider?: EmbeddingProvider;
+  embeddingRequired?: boolean;
   ollama?: OllamaStatusOptions;
+  ollamaRequired?: boolean;
 }
 
 export interface OllamaStatusOptions {
@@ -115,6 +117,7 @@ export interface DashboardStatus {
     ok: boolean;
     dimensions: number;
     error: string | null;
+    required: boolean;
   };
   ollama: {
     ok: boolean;
@@ -182,28 +185,36 @@ export interface DashboardStatus {
 }
 
 export async function buildDashboardStatus(store: MemoryStore, options: DashboardOptions = {}): Promise<DashboardStatus> {
+  const embeddingRequired = options.embeddingRequired ?? true;
+  const ollamaRequired = options.ollamaRequired ?? true;
   const counts = store.countRecords();
   const databaseHealth = store.checkDatabaseHealth();
   const memoryStats = store.getStats();
   const backupRetention = store.planBackupRetention();
   const latestBackup = backupRetention.backups[0] ?? null;
   const embedding = options.embeddingProvider
-    ? await probeEmbedding(options.embeddingProvider)
+    ? await probeEmbedding(options.embeddingProvider, embeddingRequired)
     : {
-        ok: false,
+        ok: !embeddingRequired,
         dimensions: 0,
-        error: "Embedding provider is not configured."
+        error: embeddingRequired ? "Embedding provider is not configured." : null,
+        required: embeddingRequired
       };
   const ollama = options.ollama ? await probeOllamaStatus(options.ollama) : null;
   const warnings = [
     ...databaseHealth.warnings,
-    ...(embedding.ok ? [] : [embedding.error ?? "Embedding provider is unavailable."]),
-    ...ollamaWarnings(ollama)
+    ...(embedding.ok || !embeddingRequired ? [] : [embedding.error ?? "Embedding provider is unavailable."]),
+    ...ollamaWarnings(ollama, ollamaRequired)
   ];
-  const warningActions = buildWarningActions({ warnings, repairRecommended: !databaseHealth.ok && (databaseHealth.integrityCheck !== "ok" || !databaseHealth.fts.ok), ollama });
+  const warningActions = buildWarningActions({
+    warnings,
+    repairRecommended: !databaseHealth.ok && (databaseHealth.integrityCheck !== "ok" || !databaseHealth.fts.ok),
+    ollama,
+    ollamaRequired
+  });
 
   return {
-    ok: databaseHealth.ok && embedding.ok && (!ollama || ollama.ok),
+    ok: databaseHealth.ok && (embedding.ok || !embeddingRequired) && (!ollama || ollama.ok || !ollamaRequired),
     checkedAt: new Date().toISOString(),
     dashboard: {
       schemaVersion: DASHBOARD_SCHEMA_VERSION
@@ -406,8 +417,11 @@ export async function probeOllamaStatus(options: OllamaStatusOptions): Promise<N
   }
 }
 
-function ollamaWarnings(ollama: DashboardStatus["ollama"]): string[] {
+function ollamaWarnings(ollama: DashboardStatus["ollama"], required: boolean): string[] {
   if (!ollama) {
+    return [];
+  }
+  if (!required) {
     return [];
   }
   if (ollama.error) {
@@ -427,6 +441,7 @@ function buildWarningActions(options: {
   warnings: string[];
   repairRecommended: boolean;
   ollama: DashboardStatus["ollama"];
+  ollamaRequired: boolean;
 }): DashboardStatus["warningActions"] {
   const actions: DashboardStatus["warningActions"] = [];
 
@@ -453,7 +468,7 @@ function buildWarningActions(options: {
     });
   }
 
-  if (options.ollama?.error) {
+  if (options.ollamaRequired && options.ollama?.error) {
     actions.push({
       severity: "warning",
       title: "Ollama に接続できません",
@@ -463,7 +478,7 @@ function buildWarningActions(options: {
     });
   }
 
-  if (options.ollama && !options.ollama.error) {
+  if (options.ollamaRequired && options.ollama && !options.ollama.error) {
     const missingModels = [
       ...(options.ollama.embeddingModelAvailable ? [] : [options.ollama.embeddingModel]),
       ...(options.ollama.maintenanceModelAvailable ? [] : [options.ollama.maintenanceModel])
@@ -513,19 +528,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-async function probeEmbedding(provider: EmbeddingProvider): Promise<DashboardStatus["embedding"]> {
+async function probeEmbedding(provider: EmbeddingProvider, required: boolean): Promise<DashboardStatus["embedding"]> {
   try {
     const vector = await provider.embed("codex memory sidecar dashboard health check");
     return {
       ok: true,
       dimensions: vector.length,
-      error: null
+      error: null,
+      required
     };
   } catch (error) {
     return {
       ok: false,
       dimensions: 0,
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
+      required
     };
   }
 }
@@ -927,16 +944,25 @@ async function main(): Promise<void> {
     console.error(`codex-memory-sidecar dashboard startup warning: ${warning}`);
   }
   const port = Number(process.env.CODEX_MEMORY_DASHBOARD_PORT ?? 3737);
+  const embeddingProvider =
+    config.embeddingMode === "off"
+      ? undefined
+      : new OllamaEmbeddingProvider({
+          baseUrl: config.ollamaBaseUrl,
+          model: config.embeddingModel
+        });
   const server = createDashboardServer(store, {
-    embeddingProvider: new OllamaEmbeddingProvider({
-      baseUrl: config.ollamaBaseUrl,
-      model: config.embeddingModel
-    }),
-    ollama: {
-      baseUrl: config.ollamaBaseUrl,
-      embeddingModel: config.embeddingModel,
-      maintenanceModel: config.maintenanceModel
-    }
+    embeddingProvider,
+    embeddingRequired: config.embeddingMode === "ollama",
+    ollama:
+      config.embeddingMode === "off"
+        ? undefined
+        : {
+            baseUrl: config.ollamaBaseUrl,
+            embeddingModel: config.embeddingModel,
+            maintenanceModel: config.maintenanceModel
+          },
+    ollamaRequired: config.embeddingMode === "ollama"
   });
 
   server.listen(port, "127.0.0.1", () => {

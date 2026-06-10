@@ -677,6 +677,30 @@ describe("MCP tool handlers", () => {
     expect(result.structuredContent.warnings).toEqual(["Embedding unavailable: Ollama offline"]);
   });
 
+  test("write_memory and search_memory use FTS quietly when optional embeddings fail", async () => {
+    const tools = createToolHandlers(store, {
+      embeddingProvider: { embed: vi.fn(async () => Promise.reject(new Error("Ollama offline"))) },
+      embeddingRequired: false
+    });
+
+    const written = await tools.writeMemory({
+      content: "Keyword fallback should stay useful without Ollama.",
+      layer: "recall",
+      tags: ["fallback"],
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+    const searched = await tools.searchMemory({
+      query: "Keyword fallback",
+      limit: 5
+    });
+
+    expect(written.structuredContent.memory.embedding).toBeNull();
+    expect(written.structuredContent.warnings).toEqual([]);
+    expect(searched.structuredContent.memories[0]?.summary).toContain("Keyword fallback");
+    expect(searched.structuredContent.warnings).toEqual([]);
+  });
+
   test("update_memory recalculates embedding from new content", async () => {
     const embedder = {
       embed: vi.fn().mockResolvedValueOnce([1, 0]).mockResolvedValueOnce([0, 1])
@@ -742,6 +766,22 @@ describe("MCP tool handlers", () => {
     expect(result.structuredContent.embedding.ok).toBe(false);
     expect(result.structuredContent.embedding.error).toContain("Ollama offline");
     expect(result.structuredContent.warnings).toEqual(["Embedding unavailable: Ollama offline"]);
+  });
+
+  test("health_check treats unavailable optional embeddings as non-blocking", async () => {
+    const tools = createToolHandlers(store, {
+      embeddingProvider: { embed: vi.fn(async () => Promise.reject(new Error("Ollama offline"))) },
+      embeddingRequired: false
+    });
+
+    const result = await tools.healthCheck({});
+
+    expect(result.structuredContent.ok).toBe(true);
+    expect(result.structuredContent.database.ok).toBe(true);
+    expect(result.structuredContent.embedding.ok).toBe(true);
+    expect(result.structuredContent.embedding.required).toBe(false);
+    expect(result.structuredContent.embedding.error).toContain("Ollama offline");
+    expect(result.structuredContent.warnings).toEqual([]);
   });
 
   test("health_check reports missing embedding provider as unavailable", async () => {
