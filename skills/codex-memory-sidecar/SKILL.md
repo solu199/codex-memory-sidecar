@@ -66,6 +66,8 @@ Treat memory-derived claims as supporting context. Verify important claims again
 
 Use `search_memory` when past decisions, design intent, operating history, or user preferences may matter. Do not set `includeEmbedding: true` unless raw vectors are explicitly needed.
 
+When Ollama is unavailable, keyword search still uses SQLite FTS trigram plus short-term LIKE fallback, including for Japanese memory text.
+
 Use `read_memory` or `audit_memory` when a memory affects an important decision and the summary alone is not enough. Cite memory-derived claims with enough context to audit them, such as memory IDs, directive IDs, summaries, and `sourceRef`.
 
 ## Write And Curate

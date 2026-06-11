@@ -8,6 +8,8 @@ describe("documentation", () => {
 
     expect(readme).toContain("MCP対応AIエージェント向け");
     expect(readme).toContain("Ollamaなしでも利用できます");
+    expect(readme).toContain("SQLite FTS trigram");
+    expect(readme).toContain("短語LIKE fallback");
     expect(readme).toContain("Ollamaを使うと");
     expect(readme).toContain("手動MCP tool入力例");
     expect(readme).toContain("初めて試す場合は、まず Ollama なし");

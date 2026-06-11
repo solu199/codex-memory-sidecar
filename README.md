@@ -21,7 +21,7 @@ AIコーディングエージェントは、チャットや作業セッション
 
 - MCP server として動作し、AIエージェントから tool 経由で利用できます。
 - SQLite にローカル保存します。外部サービスへの自動送信はしません。
-- Ollamaなしでも利用できます。SQLite FTS によるキーワード検索だけで、write / search / digest / start session の基本機能が動きます。
+- Ollamaなしでも利用できます。SQLite FTS trigram と短語LIKE fallback によるキーワード検索だけで、write / search / digest / start session の基本機能が動きます。
 - Ollamaを使うと、embedding による semantic search と Dashboard のモデル状態確認が使えます。
 - `start_memory_session` で、作業開始時に DB health、embedding、FTS、WAL、backup retention、関連メモリ、directive memory をまとめて確認できます。
 - `propose_memory_update` は、DBを書き換えずに保存候補、重複候補、推奨 layer、sourceRef の品質を確認できます。
@@ -120,7 +120,7 @@ npm run check:skill-install
 
 ### Ollamaなし
 
-Ollamaなしでも利用できます。通常メモリの保存、SQLite FTS によるキーワード検索、directive memory、backup、Dashboard の基本表示は動作します。
+Ollamaなしでも利用できます。通常メモリの保存、SQLite FTS trigram と短語LIKE fallback によるキーワード検索、directive memory、backup、Dashboard の基本表示は動作します。
 
 この構成は、初めて試す人や CI での検証に向いています。
 

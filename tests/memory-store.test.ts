@@ -131,10 +131,14 @@ describe("MemoryStore", () => {
       const migrated = legacyStore.getMemory(1);
       const migratedDb = new Database(legacyPath, { readonly: true, fileMustExist: true });
       const indexes = migratedDb.prepare("PRAGMA index_list(memories)").all() as { name: string }[];
+      const ftsSql = migratedDb
+        .prepare("SELECT sql FROM sqlite_master WHERE name = 'memories_fts'")
+        .get() as { sql: string };
       migratedDb.close();
 
       expect(migrated?.projectScope).toBe("global");
       expect(legacyStore.searchMemory({ query: "legacy scoped migration", projectScope: "alpha", limit: 5 })).toHaveLength(1);
+      expect(ftsSql.sql).toContain("tokenize = 'trigram'");
       expect(legacyStore.getStats().byProjectScope).toEqual([
         expect.objectContaining({
           projectScope: "global",
@@ -146,6 +150,23 @@ describe("MemoryStore", () => {
     } finally {
       legacyStore.close();
     }
+  });
+
+  test("searches Japanese and mixed-language memory text with trigram FTS and LIKE fallback", () => {
+    const created = store.createMemory({
+      content: "ダッシュボードが古く見える時はstaleプロセスとポート再利用を疑う。運用メモとして残す。",
+      layer: "recall",
+      tags: ["dashboard", "運用"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8
+    });
+
+    expect(store.searchMemory({ query: "ダッシュボード", limit: 5 })[0]?.memory.id).toBe(created.id);
+    expect(store.searchMemory({ query: "stale", limit: 5 })[0]?.memory.id).toBe(created.id);
+    expect(store.searchMemory({ query: "ポート再利用", limit: 5 })[0]?.memory.id).toBe(created.id);
+    expect(store.searchMemory({ query: "運用", limit: 5 })[0]?.memory.id).toBe(created.id);
   });
 
   test("checks active database integrity and FTS consistency", () => {
