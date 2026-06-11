@@ -25,6 +25,7 @@ AIコーディングエージェントは、チャットや作業セッション
 - Ollamaを使うと、embedding による semantic search と Dashboard のモデル状態確認が使えます。
 - `start_memory_session` で、作業開始時に DB health、embedding、FTS、WAL、backup retention、関連メモリ、directive memory をまとめて確認できます。
 - `propose_memory_update` は、DBを書き換えずに保存候補、重複候補、推奨 layer、sourceRef の品質を確認できます。
+- sourceRef は `pr:#123`、`issue:#123`、`git:<hash>`、`session:<id>`、docs path、named chat/evaluation id のように追跡できる形式を推奨します。`propose_memory_update` と auto memory curation は同じ sourceRef 判定を使います。
 - `write_directive` / `list_directives` / `propose_directive_update` / `disable_directive` で、AGENTS.md に近い強い作用を持つ directive memory を扱えます。
 - `backup_memory` / `verify_backup` / `inspect_backup` / `plan_backup_retention` / `plan_backup_restore` / `repair_memory_index` で、安全確認と復旧計画を扱えます。
 - Dashboard で health、バックアップ、Ollama モデル、警告対応、project scope、directive memory、最近のメモリ、メモリ鮮度、保存候補を確認できます。
