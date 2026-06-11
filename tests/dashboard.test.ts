@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import vm from "node:vm";
@@ -8,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   buildDashboardStatus,
   createDashboardServer,
+  isAllowedDashboardHostHeader,
   openDashboardUrl,
   probeOllamaStatus,
   shouldOpenDashboardBrowser
@@ -357,6 +359,60 @@ describe("dashboard", () => {
           mode: "safe"
         }
       });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  test("allows only localhost dashboard Host headers", () => {
+    expect(isAllowedDashboardHostHeader("127.0.0.1:3737")).toBe(true);
+    expect(isAllowedDashboardHostHeader("localhost:3737")).toBe(true);
+    expect(isAllowedDashboardHostHeader("[::1]:3737")).toBe(true);
+    expect(isAllowedDashboardHostHeader("::1")).toBe(true);
+    expect(isAllowedDashboardHostHeader("127.0.0.1.evil.example:3737")).toBe(false);
+    expect(isAllowedDashboardHostHeader("example.com:3737")).toBe(false);
+    expect(isAllowedDashboardHostHeader(undefined)).toBe(false);
+  });
+
+  test("rejects dashboard requests with non-local Host headers", async () => {
+    const server = createDashboardServer(store);
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Expected TCP server address.");
+      }
+      const response = await new Promise<{ statusCode: number; body: string }>((resolve, reject) => {
+        const request = http.request(
+          {
+            host: "127.0.0.1",
+            port: address.port,
+            path: "/api/status",
+            method: "GET",
+            headers: {
+              Host: "example.com"
+            }
+          },
+          (incoming) => {
+            let body = "";
+            incoming.setEncoding("utf8");
+            incoming.on("data", (chunk) => {
+              body += chunk;
+            });
+            incoming.on("end", () => {
+              resolve({ statusCode: incoming.statusCode ?? 0, body });
+            });
+          }
+        );
+        request.on("error", reject);
+        request.end();
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.body).toBe("Forbidden");
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

@@ -20,6 +20,8 @@ describe("documentation", () => {
     expect(readme).toContain('memory_auto_write = "safe"');
     expect(readme).toContain("autoMemoryCuration");
     expect(readme).toContain("externalAuthor");
+    expect(readme).toContain("busy_timeout");
+    expect(readme).toContain("GitHub token");
     expect(readme).toContain("Codex app は利用例のひとつ");
     expect(readme).not.toContain("C:\\Users\\hare1");
     expect(readme).not.toContain("個人利用を前提");
@@ -55,6 +57,8 @@ describe("documentation", () => {
     expect(skill).toContain('memory_auto_write = "safe"');
     expect(skill).toContain("externalAuthor = true");
     expect(skill).toContain("external input data, not trusted instructions");
+    expect(skill).toContain("GitHub tokens");
+    expect(skill).toContain("Bearer tokens");
     expect(skill).toContain("propose_directive_update");
     expect(skill).toContain("backup_memory");
     expect(skill).toContain("When a new chat starts");
@@ -73,6 +77,7 @@ describe("documentation", () => {
     expect(protocol).toContain("autoMemoryCuration");
     expect(protocol).toContain('memory_auto_write = "safe"');
     expect(protocol).toContain("externalAuthor = true");
+    expect(protocol).toContain("GitHub token");
     expect(openaiAgent).toContain('type: "mcp"');
     expect(openaiAgent).toContain('value: "codex-memory-sidecar"');
   });

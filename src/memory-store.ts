@@ -130,6 +130,7 @@ export class MemoryStore {
     this.databasePath = databasePath;
     mkdirSync(path.dirname(databasePath), { recursive: true });
     this.db = new Database(databasePath);
+    this.db.pragma("busy_timeout = 5000");
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("foreign_keys = ON");
     this.migrate();
