@@ -373,6 +373,11 @@ function serializeDashboardDirectives(directives: ReturnType<MemoryStore["listDi
 export function createDashboardServer(store: MemoryStore, options: DashboardOptions = {}): http.Server {
   return http.createServer(async (request, response) => {
     try {
+      if (!isAllowedDashboardHostHeader(request.headers.host)) {
+        sendText(response, 403, "Forbidden");
+        return;
+      }
+
       const url = new URL(request.url ?? "/", "http://127.0.0.1");
       if (request.method !== "GET") {
         sendText(response, 405, "Method Not Allowed");
@@ -395,6 +400,31 @@ export function createDashboardServer(store: MemoryStore, options: DashboardOpti
       sendJson(response, 500, { ok: false, error: message });
     }
   });
+}
+
+export function isAllowedDashboardHostHeader(hostHeader: string | undefined): boolean {
+  if (!hostHeader) {
+    return false;
+  }
+  const value = hostHeader.trim().toLowerCase();
+  if (!value) {
+    return false;
+  }
+  if (value === "::1") {
+    return true;
+  }
+  if (value.startsWith("[")) {
+    const closingBracket = value.indexOf("]");
+    if (closingBracket === -1) {
+      return false;
+    }
+    const hostname = value.slice(1, closingBracket);
+    const suffix = value.slice(closingBracket + 1);
+    return hostname === "::1" && (suffix === "" || /^:\d+$/.test(suffix));
+  }
+  const [hostname, ...rest] = value.split(":");
+  const hasValidPort = rest.length === 0 || (rest.length === 1 && /^\d+$/.test(rest[0] ?? ""));
+  return hasValidPort && (hostname === "127.0.0.1" || hostname === "localhost");
 }
 
 export function shouldOpenDashboardBrowser(value: string | undefined): boolean {

@@ -169,6 +169,8 @@ GitHub Issue / PR 由来の候補に `externalAuthor = true` が付く場合、�
 
 Dashboard の `/api/status` には `dashboard.schemaVersion` が含まれます。MCP server 起動時に同じポートの既存 Dashboard を見つけた場合、この schema version が一致する時だけ再利用します。一致しない、または古い Dashboard が schema version を返さない場合は stale warning を出します。その場合は古い Dashboard プロセスを停止し、MCP server を再起動してください。
 
+Dashboard は `127.0.0.1` にだけ bind し、`Host` ヘッダも `127.0.0.1` / `localhost` / `::1` だけを許可します。DB 接続には `busy_timeout` を設定し、通常メモリ・directive memory・auto curation・MCP提案時の secret 検出では OpenAI key だけでなく GitHub token、npm token、AWS access key、Slack token、Bearer token、JWT、private key も拒否対象にします。
+
 ## 設定
 
 `config/memory-sidecar.toml` を作ると既定値を上書きできます。

@@ -76,6 +76,13 @@ describe("MemoryStore", () => {
     }
   });
 
+  test("sets a SQLite busy timeout for local concurrent access", () => {
+    const db = (store as unknown as { db: Database.Database }).db;
+    const timeout = db.pragma("busy_timeout", { simple: true }) as number;
+
+    expect(timeout).toBeGreaterThanOrEqual(5000);
+  });
+
   test("migrates legacy databases without project_scope as global memories", () => {
     const legacyPath = path.join(tempDir, "legacy.sqlite");
     const legacyDb = new Database(legacyPath);
@@ -681,6 +688,32 @@ describe("MemoryStore", () => {
         confidence: 0.9
       })
     ).toThrow(/secret/i);
+  });
+
+  test("refuses common provider tokens and authorization headers", () => {
+    const githubToken = "ghp_" + "abcdefghijklmnopqrstuvwxyz1234567890";
+    const awsAccessKey = "AKIA" + "1234567890ABCDEF";
+    const bearerToken = "Authorization: Bearer " + "abcdefghijklmnopqrstuvwxyz123456";
+    const slackToken = "xoxb-" + "1234567890-abcdefghijklmnop";
+
+    for (const content of [
+      `github token ${githubToken}`,
+      `aws key ${awsAccessKey}`,
+      bearerToken,
+      `slack token ${slackToken}`
+    ]) {
+      expect(() =>
+        store.createMemory({
+          content,
+          layer: "recall",
+          tags: ["secret"],
+          sourceType: "manual",
+          sourceRef: "test",
+          importance: 0.1,
+          confidence: 0.9
+        })
+      ).toThrow(/secret/i);
+    }
   });
 
   test("creates a SQLite backup at the requested path", async () => {

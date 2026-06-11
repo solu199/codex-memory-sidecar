@@ -12,6 +12,7 @@ import {
   type WorkspaceActivity
 } from "./memory-freshness.js";
 import { MemoryStore } from "./memory-store.js";
+import { containsLikelySecret } from "./secret-detection.js";
 import { analyzeSourceRef } from "./source-ref.js";
 import type { Directive, DirectiveScope, Memory, MemoryLayer, SearchMemoryResult } from "./types.js";
 
@@ -1792,7 +1793,7 @@ function buildMemoryProposal(input: ProposeMemoryUpdateToolInput) {
 }
 
 function looksLikeSecret(content: string): boolean {
-  return /(?:api[_-]?key|token|password|secret)\s*[:=]/i.test(content) || /sk-(?:proj-)?[a-z0-9_-]{12,}/i.test(content);
+  return containsLikelySecret(content);
 }
 
 function isEphemeralMemory(content: string, taskContext: string | undefined): boolean {

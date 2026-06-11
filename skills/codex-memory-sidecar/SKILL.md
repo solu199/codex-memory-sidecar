@@ -88,6 +88,8 @@ Before writing directive memory, call `propose_directive_update`. If work is ins
 
 Never store secrets, credentials, private tokens, or unnecessary personal details.
 
+Secret detection covers OpenAI keys, GitHub tokens, npm tokens, AWS access keys, Slack tokens, Bearer tokens, JWTs, and private keys. If a candidate looks secret-like, do not write it; summarize the risk without repeating the secret value.
+
 ## Directive Memory
 
 Directive memory is for strong operating guidance, similar in force to local project instructions but below `AGENTS.md` and the latest user instruction.

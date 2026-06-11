@@ -288,6 +288,23 @@ describe("MCP tool handlers", () => {
     expect(store.countRecords().memoryCount).toBe(0);
   });
 
+  test("propose_memory_update rejects common provider tokens without writing", async () => {
+    const tools = createToolHandlers(store);
+    const githubToken = "ghp_" + "abcdefghijklmnopqrstuvwxyz1234567890";
+
+    const result = await tools.proposeMemoryUpdate({
+      content: `A review pasted GitHub token ${githubToken} by mistake.`,
+      taskContext: "secret test",
+      sourceType: "manual",
+      sourceRef: "test"
+    });
+
+    expect(result.structuredContent.recommendation).toBe("skip");
+    expect(result.structuredContent.reasons.join(" ")).toMatch(/secret/i);
+    expect(result.structuredContent.wouldWrite).toBe(false);
+    expect(store.countRecords().memoryCount).toBe(0);
+  });
+
   test("propose_directive_update asks for scope choice in project context without writing", async () => {
     const tools = createToolHandlers(store);
 
