@@ -36,7 +36,7 @@ export interface MemoryFreshness {
 }
 
 export interface MemoryUpdateCandidate {
-  kind: "commit" | "issue" | "pull_request";
+  kind: "commit" | "issue" | "pull_request" | "session";
   title: string;
   summary: string;
   sourceType: string;

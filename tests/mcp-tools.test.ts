@@ -892,6 +892,7 @@ describe("MCP tool handlers", () => {
 
   test("start_memory_session returns memory freshness and safe update candidates", async () => {
     const tools = createToolHandlers(store, {
+      autoMemoryWrite: "review",
       now: new Date("2026-06-20T03:20:00Z"),
       workspaceActivity: {
         commits: [
@@ -940,7 +941,93 @@ describe("MCP tool handlers", () => {
         kind: "commit",
         sourceRef: "git:92e5fcb",
         suggestedTool: "propose_memory_update"
+      }),
+      expect.objectContaining({
+        kind: "session",
+        sourceRef: "session:2026-06-20T03:20:00.000Z",
+        suggestedTool: "propose_memory_update"
       })
+    ]);
+  });
+
+  test("start_memory_session safe auto-writes high confidence curation candidates with audit details", async () => {
+    const tools = createToolHandlers(store, {
+      autoMemoryWrite: "safe",
+      now: new Date("2026-06-20T03:20:00Z"),
+      workspaceActivity: {
+        pullRequests: [
+          {
+            number: 79,
+            title: "メモリ鮮度と保存候補を表示",
+            mergedAt: new Date("2026-06-20T03:00:20Z")
+          }
+        ]
+      }
+    });
+    store.createMemory({
+      content: "Older memory before recent work.",
+      summary: "Older saved memory",
+      layer: "recall",
+      tags: ["freshness"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectPath: tempDir
+    });
+
+    const result = await tools.startMemorySession({
+      taskDescription: "check auto memory curation",
+      projectPath: tempDir
+    });
+
+    expect(result.structuredContent.autoMemoryCuration.mode).toBe("safe");
+    expect(result.structuredContent.autoMemoryCuration.autoWrittenMemories).toEqual([
+      expect.objectContaining({
+        sourceRef: "pr:#79",
+        score: expect.any(Number)
+      })
+    ]);
+    expect(result.structuredContent.memoryUpdateCandidates).toEqual([
+      expect.objectContaining({ kind: "session" })
+    ]);
+
+    const audit = await tools.auditMemory({ limit: 10 });
+    expect(JSON.stringify(audit.structuredContent.events)).toContain("autoCuration");
+    expect(JSON.stringify(audit.structuredContent.events)).toContain("pr:#79");
+  });
+
+  test("start_memory_session safe mode keeps duplicate candidates in review", async () => {
+    const tools = createToolHandlers(store, {
+      autoMemoryWrite: "safe",
+      now: new Date("2026-06-20T03:20:00Z"),
+      workspaceActivity: {
+        pullRequests: [
+          {
+            number: 79,
+            title: "メモリ鮮度と保存候補を表示",
+            mergedAt: new Date("2026-06-20T03:00:20Z")
+          }
+        ]
+      }
+    });
+    store.createMemory({
+      content: "PR memory candidate: PR #79: メモリ鮮度と保存候補を表示. Reason: already saved.",
+      summary: "PR #79: メモリ鮮度と保存候補を表示",
+      layer: "recall",
+      tags: ["auto-curated"],
+      sourceType: "github-pr",
+      sourceRef: "pr:#79",
+      projectPath: tempDir
+    });
+
+    const result = await tools.startMemorySession({
+      taskDescription: "check auto memory curation duplicates",
+      projectPath: tempDir
+    });
+
+    expect(result.structuredContent.autoMemoryCuration.autoWrittenMemories).toEqual([]);
+    expect(result.structuredContent.memoryUpdateCandidates).toEqual([
+      expect.objectContaining({ sourceRef: "pr:#79" }),
+      expect.objectContaining({ kind: "session" })
     ]);
   });
 

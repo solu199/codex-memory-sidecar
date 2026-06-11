@@ -1,6 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
+import {
+  buildAutoCurationResult,
+  type AutoMemoryWriteMode
+} from "./auto-curation.js";
 import type { EmbeddingProvider } from "./embedding.js";
 import {
   buildMemoryFreshness,
@@ -372,12 +376,14 @@ interface AuditMemoryToolInput {
 interface ToolHandlerOptions {
   embeddingProvider?: EmbeddingProvider;
   embeddingRequired?: boolean;
+  autoMemoryWrite?: AutoMemoryWriteMode;
   workspaceActivity?: WorkspaceActivity;
   now?: Date;
 }
 
 export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptions = {}) {
   const embeddingRequired = options.embeddingRequired ?? true;
+  const autoMemoryWrite = options.autoMemoryWrite ?? "safe";
 
   return {
     async writeMemory(input: WriteMemoryToolInput) {
@@ -767,6 +773,8 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         activity: options.workspaceActivity ?? collectWorkspaceActivity(input.projectPath ?? process.cwd()),
         now: options.now
       });
+      const sessionCandidate = buildSessionMemoryCandidate(input.taskDescription, options.now ?? new Date());
+      const autoCurationCandidates = [...memoryFreshnessReport.candidates, sessionCandidate];
       const backupRetention = serializeBackupRetentionSummary(store.planBackupRetention());
       const embedding = await tryEmbed(options.embeddingProvider, input.taskDescription);
       const database = {
@@ -806,6 +814,17 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           directives: directives.map(serializeDirective),
           memoryFreshness: memoryFreshnessReport.freshness,
           memoryUpdateCandidates: memoryFreshnessReport.candidates,
+          autoMemoryCuration: buildAutoCurationResult({
+            mode: autoMemoryWrite,
+            candidates: autoCurationCandidates,
+            existingMemories: store.listMemories({
+              limit: 500,
+              projectScope: input.projectScope,
+              projectPath: input.projectPath,
+              includeCrossProject: false
+            }),
+            now: options.now
+          }),
           digest: "",
           memories: [] as unknown[],
           warnings,
@@ -822,6 +841,53 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         includeCrossProject: input.includeCrossProject ?? false
       });
       const serialized = results.map((result) => serializeSearchResult(result));
+      const autoMemoryCuration = buildAutoCurationResult({
+        mode: autoMemoryWrite,
+        candidates: autoCurationCandidates,
+        existingMemories: store.listMemories({
+          limit: 500,
+          projectScope: input.projectScope,
+          projectPath: input.projectPath,
+          includeCrossProject: false
+        }),
+        now: options.now
+      });
+      const autoWrittenMemories = [];
+      for (const evaluation of autoMemoryCuration.autoWriteCandidates) {
+        const autoEmbedding = await tryEmbed(options.embeddingProvider, evaluation.content);
+        const memory = store.createMemory({
+          content: evaluation.content,
+          summary: evaluation.candidate.summary,
+          layer: evaluation.layer,
+          tags: evaluation.tags,
+          projectScope: input.projectScope,
+          projectPath: input.projectPath,
+          sourceType: evaluation.candidate.sourceType,
+          sourceRef: evaluation.candidate.sourceRef,
+          importance: evaluation.importance,
+          confidence: evaluation.confidence,
+          embedding: autoEmbedding.value,
+          autoCuration: {
+            mode: autoMemoryWrite,
+            score: evaluation.score,
+            decision: evaluation.decision,
+            reasons: evaluation.reasons,
+            sourceRef: evaluation.candidate.sourceRef,
+            sourceType: evaluation.candidate.sourceType,
+            originalCandidate: evaluation.candidate,
+            duplicateCandidates: evaluation.duplicateCandidates,
+            provenance: evaluation.provenance,
+            safety: evaluation.safety
+          }
+        });
+        autoWrittenMemories.push({
+          memory: serializeMemorySummary(memory),
+          score: evaluation.score,
+          reasons: evaluation.reasons,
+          sourceRef: evaluation.candidate.sourceRef
+        });
+      }
+      const finalStats = autoWrittenMemories.length ? store.getStats() : stats;
 
       return toolResult({
         ready: true,
@@ -830,13 +896,17 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           database,
           embedding: embeddingStatus
         },
-        memoryStats: serializeMemoryStats(stats),
+        memoryStats: serializeMemoryStats(finalStats),
         backupRetention,
         repairRecommended,
         sessionGuidance,
         directives: directives.map(serializeDirective),
         memoryFreshness: memoryFreshnessReport.freshness,
-        memoryUpdateCandidates: memoryFreshnessReport.candidates,
+        memoryUpdateCandidates: autoMemoryCuration.reviewCandidates.map((evaluation) => evaluation.candidate),
+        autoMemoryCuration: {
+          ...autoMemoryCuration,
+          autoWrittenMemories
+        },
         digest: compactDigest(serialized, input.maxTokens ?? 800),
         memories: results.map(serializeSessionMemory),
         warnings,
@@ -1300,6 +1370,19 @@ function buildSessionGuidance() {
       "Memory can be stale, incomplete, or less precise than current repository files."
     ],
     suggestedNextTools: ["list_directives", "read_memory", "search_memory", "audit_memory", "propose_directive_update"]
+  };
+}
+
+function buildSessionMemoryCandidate(taskDescription: string, now: Date) {
+  return {
+    kind: "session" as const,
+    title: taskDescription,
+    summary: `Session: ${taskDescription}`,
+    sourceType: "mcp-session",
+    sourceRef: `session:${now.toISOString()}`,
+    occurredAt: now.toISOString(),
+    reason: "start_memory_session で扱った作業内容が、通常メモリ候補になる可能性があります。",
+    suggestedTool: "propose_memory_update" as const
   };
 }
 

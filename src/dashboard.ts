@@ -4,6 +4,11 @@ import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  buildAutoCurationResult,
+  type AutoMemoryWriteMode,
+  type AutoCurationEvaluation
+} from "./auto-curation.js";
 import { loadConfig } from "./config.js";
 import type { EmbeddingProvider } from "./embedding.js";
 import { OllamaEmbeddingProvider } from "./embedding.js";
@@ -17,13 +22,14 @@ import {
 import { MemoryStore } from "./memory-store.js";
 import { runStartupMaintenance } from "./startup-maintenance.js";
 
-export const DASHBOARD_SCHEMA_VERSION = "2026-05-19-dashboard-status-v1";
+export const DASHBOARD_SCHEMA_VERSION = "2026-06-12-dashboard-status-v2";
 
 export interface DashboardOptions {
   embeddingProvider?: EmbeddingProvider;
   embeddingRequired?: boolean;
   ollama?: OllamaStatusOptions;
   ollamaRequired?: boolean;
+  autoMemoryWrite?: AutoMemoryWriteMode;
   workspaceActivity?: WorkspaceActivity;
   now?: Date;
 }
@@ -186,6 +192,17 @@ export interface DashboardStatus {
   }>;
   memoryFreshness: MemoryFreshness;
   memoryUpdateCandidates: MemoryUpdateCandidate[];
+  autoMemoryCuration: {
+    mode: AutoMemoryWriteMode;
+    threshold: number;
+    evaluatedAt: string;
+    evaluatedCount: number;
+    reviewCount: number;
+    autoWriteEligibleCount: number;
+    skippedCount: number;
+    evaluations: AutoCurationEvaluation[];
+    note: string;
+  };
   warnings: string[];
   warningActions: Array<{
     severity: "warning" | "error";
@@ -206,6 +223,12 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
     latestMemoryUpdatedAt: memoryStats.updatedAtRange.newest,
     memoryCount: counts.memoryCount,
     activity: options.workspaceActivity ?? collectWorkspaceActivity(process.cwd()),
+    now: options.now
+  });
+  const autoMemoryCuration = buildAutoCurationResult({
+    mode: options.autoMemoryWrite ?? "safe",
+    candidates: memoryFreshnessReport.candidates,
+    existingMemories: store.listMemories({ limit: 500 }),
     now: options.now
   });
   const backupRetention = store.planBackupRetention();
@@ -306,7 +329,18 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
       createdAt: event.createdAt.toISOString()
     })),
     memoryFreshness: memoryFreshnessReport.freshness,
-    memoryUpdateCandidates: memoryFreshnessReport.candidates,
+    memoryUpdateCandidates: autoMemoryCuration.reviewCandidates.map((evaluation) => evaluation.candidate),
+    autoMemoryCuration: {
+      mode: autoMemoryCuration.mode,
+      threshold: autoMemoryCuration.threshold,
+      evaluatedAt: autoMemoryCuration.evaluatedAt,
+      evaluatedCount: autoMemoryCuration.evaluated.length,
+      reviewCount: autoMemoryCuration.reviewCandidates.length,
+      autoWriteEligibleCount: autoMemoryCuration.autoWriteCandidates.length,
+      skippedCount: autoMemoryCuration.skippedCandidates.length,
+      evaluations: autoMemoryCuration.evaluated,
+      note: "Dashboard は評価結果だけを表示します。safe mode の自動保存は start_memory_session の実行時に行います。"
+    },
     warnings,
     warningActions
   };
@@ -785,6 +819,10 @@ function renderDashboardHtml(): string {
         <p class="label">保存候補</p>
         <ul class="stats-list action-list" id="memory-candidates"></ul>
       </div>
+      <div class="panel">
+        <p class="label">Auto Memory Curation</p>
+        <ul class="stats-list" id="auto-curation"></ul>
+      </div>
     </section>
     <h2>メンテナンス</h2>
     <section class="stats-grid">
@@ -885,6 +923,15 @@ function renderDashboardHtml(): string {
       document.getElementById("memory-candidates").innerHTML = status.memoryUpdateCandidates.length
         ? renderMemoryCandidates(status.memoryUpdateCandidates)
         : renderStats({ 保存候補: "なし" });
+      document.getElementById("auto-curation").innerHTML = renderStats({
+        mode: status.autoMemoryCuration.mode,
+        threshold: status.autoMemoryCuration.threshold,
+        evaluated: status.autoMemoryCuration.evaluatedCount,
+        review: status.autoMemoryCuration.reviewCount,
+        safe候補: status.autoMemoryCuration.autoWriteEligibleCount,
+        skip: status.autoMemoryCuration.skippedCount,
+        note: status.autoMemoryCuration.note
+      });
       document.getElementById("repair").textContent = status.maintenance.repairRecommended ? "推奨" : "不要";
       document.getElementById("repair").className = status.maintenance.repairRecommended ? "value status-warn" : "value status-ok";
       document.getElementById("backup-stats").innerHTML = status.maintenance.latestBackup
@@ -1032,6 +1079,7 @@ async function main(): Promise<void> {
   const server = createDashboardServer(store, {
     embeddingProvider,
     embeddingRequired: config.embeddingMode === "ollama",
+    autoMemoryWrite: config.memoryAutoWrite,
     ollama:
       config.embeddingMode === "off"
         ? undefined

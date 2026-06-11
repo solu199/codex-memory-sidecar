@@ -2,6 +2,7 @@ import path from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 
 export interface MemorySidecarConfig {
+  memoryAutoWrite: "off" | "review" | "safe";
   embeddingMode: "auto" | "off" | "ollama";
   ollamaBaseUrl: string;
   embeddingModel: string;
@@ -22,6 +23,7 @@ interface LoadConfigOptions {
 }
 
 const DEFAULTS = {
+  memoryAutoWrite: "safe" as const,
   embeddingMode: "auto" as const,
   ollamaBaseUrl: "http://localhost:11434",
   embeddingModel: "embeddinggemma",
@@ -45,6 +47,10 @@ export function loadConfig(options: LoadConfigOptions = {}): MemorySidecarConfig
     env.CODEX_MEMORY_DB ?? stringValue(fileConfig.database_path) ?? DEFAULTS.databasePath;
 
   return {
+    memoryAutoWrite:
+      memoryAutoWriteValue(env.CODEX_MEMORY_AUTO_WRITE) ??
+      memoryAutoWriteValue(fileConfig.memory_auto_write) ??
+      DEFAULTS.memoryAutoWrite,
     embeddingMode:
       embeddingModeValue(env.CODEX_MEMORY_EMBEDDING_MODE) ??
       embeddingModeValue(fileConfig.embedding_mode) ??
@@ -82,6 +88,17 @@ export function loadConfig(options: LoadConfigOptions = {}): MemorySidecarConfig
       booleanValue(fileConfig.auto_backup_on_startup) ??
       DEFAULTS.autoBackupOnStartup
   };
+}
+
+function memoryAutoWriteValue(value: unknown): MemorySidecarConfig["memoryAutoWrite"] | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "off" || normalized === "review" || normalized === "safe") {
+    return normalized;
+  }
+  return undefined;
 }
 
 function embeddingModeValue(value: unknown): MemorySidecarConfig["embeddingMode"] | undefined {

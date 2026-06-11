@@ -1299,7 +1299,7 @@ function freshness(updatedAt: string): number {
 }
 
 function redactedInput(input: CreateMemoryInput): Record<string, unknown> {
-  return {
+  const payload: Record<string, unknown> = {
     layer: input.layer,
     tags: input.tags ?? [],
     projectScope: resolveProjectScope(input),
@@ -1308,6 +1308,10 @@ function redactedInput(input: CreateMemoryInput): Record<string, unknown> {
     importance: input.importance,
     confidence: input.confidence
   };
+  if (input.autoCuration) {
+    payload.autoCuration = input.autoCuration;
+  }
+  return payload;
 }
 
 function parseEmbedding(value: string): number[] | null {

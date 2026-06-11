@@ -21,6 +21,7 @@ describe("loadConfig", () => {
     const config = loadConfig({ cwd: tempDir, env: {} });
 
     expect(config.ollamaBaseUrl).toBe("http://localhost:11434");
+    expect(config.memoryAutoWrite).toBe("safe");
     expect(config.embeddingMode).toBe("auto");
     expect(config.embeddingModel).toBe("embeddinggemma");
     expect(config.maintenanceModel).toBe("qwen3");
@@ -39,6 +40,7 @@ describe("loadConfig", () => {
       path.join(tempDir, "config", "memory-sidecar.toml"),
       [
         'ollama_base_url = "http://localhost:11435"',
+        'memory_auto_write = "review"',
         'embedding_mode = "off"',
         'embedding_model = "all-minilm"',
         'maintenance_model = "gemma3"',
@@ -55,6 +57,7 @@ describe("loadConfig", () => {
     const config = loadConfig({ cwd: tempDir, env: {} });
 
     expect(config.ollamaBaseUrl).toBe("http://localhost:11435");
+    expect(config.memoryAutoWrite).toBe("review");
     expect(config.embeddingMode).toBe("off");
     expect(config.embeddingModel).toBe("all-minilm");
     expect(config.maintenanceModel).toBe("gemma3");
@@ -75,6 +78,7 @@ describe("loadConfig", () => {
       cwd: tempDir,
       env: {
         CODEX_MEMORY_DB: path.join(tempDir, "env.sqlite"),
+        CODEX_MEMORY_AUTO_WRITE: "safe",
         OLLAMA_BASE_URL: "http://127.0.0.1:11434",
         CODEX_MEMORY_EMBEDDING_MODE: "ollama",
         CODEX_MEMORY_EMBEDDING_MODEL: "qwen3-embedding",
@@ -86,6 +90,7 @@ describe("loadConfig", () => {
     });
 
     expect(config.databasePath).toBe(path.join(tempDir, "env.sqlite"));
+    expect(config.memoryAutoWrite).toBe("safe");
     expect(config.ollamaBaseUrl).toBe("http://127.0.0.1:11434");
     expect(config.embeddingMode).toBe("ollama");
     expect(config.embeddingModel).toBe("qwen3-embedding");

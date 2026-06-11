@@ -96,6 +96,7 @@ export interface CreateMemoryInput {
   allowSecret?: boolean;
   projectScope?: string;
   projectPath?: string;
+  autoCuration?: Record<string, unknown>;
 }
 
 export interface UpdateMemoryInput {

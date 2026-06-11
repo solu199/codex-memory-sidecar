@@ -1,3 +1,4 @@
+memory_auto_write = "safe"
 ollama_base_url = "http://localhost:11434"
 embedding_model = "embeddinggemma"
 maintenance_model = "qwen3"
