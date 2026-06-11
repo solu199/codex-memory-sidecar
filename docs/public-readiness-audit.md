@@ -1,11 +1,11 @@
-# 公開前監査レポート
+# 公開後監査レポート
 
-Codex Memory Sidecar を日本企業向けポートフォリオとして公開できる形に整えるための監査結果です。
+Codex Memory Sidecar を日本企業向けポートフォリオとして公開し、継続的に安全な状態で保つための監査結果です。
 
 ## 現在の状態
 
 - GitHub repository: `solu199/codex-memory-sidecar`
-- Visibility: private
+- Visibility: public
 - package: npm公開は想定せず、ローカルMCPツールとして扱う
 - README: 日本語公開向けに再構成済み
 - CI: GitHub Actionsで build / test / smoke を実行
@@ -15,6 +15,23 @@ Codex Memory Sidecar を日本企業向けポートフォリオとして公開�
 - Codex Skill: 配布用雛形を追加済み
 
 ## 確認結果
+
+### 0. 公開後の最終確認
+
+2026-06-11 時点で、GitHub repository は public です。公開済みの状態を前提に、tracked file、Git履歴、Issue/PR本文、依存関係、CI、ローカル生成物を確認しました。
+
+確認結果:
+
+- tracked file に `data/`、SQLite DB、`.env`、`dist/`、`node_modules/` は含まれていない
+- 非テスト・非検出ロジックの範囲で、実シークレットらしき履歴ヒットはない
+- `npm audit --omit=dev` は `npm audit fix` 後に 0 vulnerabilities
+- build / test / smoke / skill install check はローカルで成功
+- 最新の GitHub Actions は `main` で成功
+
+注意点:
+
+- 過去コミットと一部PR本文には、開発者ローカルのWindows絶対パスが残っている。秘密情報ではないが、公開履歴として見えるため、気になる場合は新しいクリーン公開リポジトリへ移す
+- `docs/friend-explanation.html` は説明用のローカル生成物として扱い、公開対象に含めない
 
 ### 1. 個人利用前提の説明
 
@@ -29,10 +46,11 @@ README の主語は「MCP対応AIエージェント向けのローカルメモ�
 
 README と tracked docs の主要な手順から、開発者固有のローカルパスを汎用表記へ置換しました。
 
-公開前の注意:
+公開時・公開後の注意:
 
 - untracked な作業ファイルは公開対象に含めない
 - サンプルパスは `<repo>`、`<node-install-dir>` のような表記に寄せる
+- Issue / PR / commit message にも、不要なローカル絶対パスや個人情報を書かない
 
 ### 3. Ollama の扱い
 
@@ -75,16 +93,17 @@ Issue起点、ブランチ、PR、CI、テスト結果を追える形に整備�
 - #64 SECURITY / CONTRIBUTING / LICENSE追加: 完了
 - #69 CI annotation対応: 完了
 
-## 公開前の最終チェック
+## 公開後の定期チェック
 
-公開操作の直前に、次を確認してください。
+公開後も、リリース前や大きなPRの直前に次を確認してください。
 
 - `git status` に意図しない差分がない
 - `data/`、`.env`、実DB、バックアップ、token、秘密情報が含まれていない
 - untracked file を公開対象へ含めない
 - README のセットアップ手順が現在の実装と一致している
-- GitHub repository visibility を public に切り替える前に、Issue/PRに個人情報がないか確認する
+- Issue/PRに不要な個人情報やローカル絶対パスがないか確認する
+- `npm audit --omit=dev`、`npm run build`、`npm test`、主要 smoke を実行する
 
 ## 判断
 
-現時点で、公開前の基礎整備は一通り完了しています。実際にpublicへ切り替える前には、GitHub上のIssue/PR本文、添付画像、untracked file、ローカルDB、バックアップを最終確認してください。
+現時点で、公開後の基礎整備は一通り完了しています。今後は、GitHub上のIssue/PR本文、添付画像、untracked file、ローカルDB、バックアップ、依存関係の脆弱性を定期的に確認してください。

@@ -91,7 +91,10 @@ describe("documentation", () => {
     expect(contributing).toContain("Issue起点");
     expect(contributing).toContain("日本語を基本");
     expect(license).toContain("MIT License");
-    expect(audit).toContain("公開前の基礎整備は一通り完了");
+    expect(audit).toContain("Visibility: public");
+    expect(audit).toContain("npm audit fix");
+    expect(audit).toContain("0 vulnerabilities");
+    expect(audit).toContain("docs/friend-explanation.html");
     expect(audit).toContain("#69 CIのNode.js 20 deprecation annotation対応");
   });
 });
