@@ -10,12 +10,16 @@ export interface WorkspaceIssueActivity {
   number: number;
   title: string;
   updatedAt: Date;
+  authorLogin?: string;
+  externalAuthor?: boolean;
 }
 
 export interface WorkspacePullRequestActivity {
   number: number;
   title: string;
   mergedAt: Date;
+  authorLogin?: string;
+  externalAuthor?: boolean;
 }
 
 export interface WorkspaceActivity {
@@ -42,6 +46,8 @@ export interface MemoryUpdateCandidate {
   sourceType: string;
   sourceRef: string;
   occurredAt: string;
+  authorLogin?: string;
+  externalAuthor?: boolean;
   reason: string;
   suggestedTool: "propose_memory_update";
 }
@@ -149,48 +155,106 @@ function collectGitActivity(cwd: string, limit: number): WorkspaceActivity {
 }
 
 function collectGitHubActivity(cwd: string, limit: number): WorkspaceActivity {
+  const ownerLogin = collectGitHubOwnerLogin(cwd);
   return {
-    issues: collectGitHubIssues(cwd, limit),
-    pullRequests: collectGitHubPullRequests(cwd, limit)
+    issues: collectGitHubIssues(cwd, limit, ownerLogin),
+    pullRequests: collectGitHubPullRequests(cwd, limit, ownerLogin)
   };
 }
 
-function collectGitHubIssues(cwd: string, limit: number): WorkspaceIssueActivity[] {
+function collectGitHubIssues(cwd: string, limit: number, ownerLogin: string | null): WorkspaceIssueActivity[] {
   try {
     const output = execFileSync(
       "gh",
-      ["issue", "list", "--state", "all", "--limit", String(limit), "--json", "number,title,updatedAt"],
+      ["issue", "list", "--state", "all", "--limit", String(limit), "--json", "number,title,updatedAt,author"],
       { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2000 }
     );
-    const issues = JSON.parse(output) as Array<{ number?: number; title?: string; updatedAt?: string }>;
+    const issues = JSON.parse(output) as Array<{
+      number?: number;
+      title?: string;
+      updatedAt?: string;
+      author?: { login?: string };
+    }>;
     return issues.flatMap((issue) => {
       if (typeof issue.number !== "number" || !issue.title || !issue.updatedAt) {
         return [];
       }
-      return [{ number: issue.number, title: issue.title, updatedAt: new Date(issue.updatedAt) }];
+      const authorLogin = normalizeLogin(issue.author?.login);
+      return [
+        {
+          number: issue.number,
+          title: issue.title,
+          updatedAt: new Date(issue.updatedAt),
+          authorLogin,
+          externalAuthor: inferExternalAuthor(authorLogin, ownerLogin)
+        }
+      ];
     });
   } catch {
     return [];
   }
 }
 
-function collectGitHubPullRequests(cwd: string, limit: number): WorkspacePullRequestActivity[] {
+function collectGitHubPullRequests(cwd: string, limit: number, ownerLogin: string | null): WorkspacePullRequestActivity[] {
   try {
     const output = execFileSync(
       "gh",
-      ["pr", "list", "--state", "all", "--limit", String(limit), "--json", "number,title,mergedAt"],
+      ["pr", "list", "--state", "all", "--limit", String(limit), "--json", "number,title,mergedAt,author"],
       { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2000 }
     );
-    const pullRequests = JSON.parse(output) as Array<{ number?: number; title?: string; mergedAt?: string | null }>;
+    const pullRequests = JSON.parse(output) as Array<{
+      number?: number;
+      title?: string;
+      mergedAt?: string | null;
+      author?: { login?: string };
+    }>;
     return pullRequests.flatMap((pullRequest) => {
       if (typeof pullRequest.number !== "number" || !pullRequest.title || !pullRequest.mergedAt) {
         return [];
       }
-      return [{ number: pullRequest.number, title: pullRequest.title, mergedAt: new Date(pullRequest.mergedAt) }];
+      const authorLogin = normalizeLogin(pullRequest.author?.login);
+      return [
+        {
+          number: pullRequest.number,
+          title: pullRequest.title,
+          mergedAt: new Date(pullRequest.mergedAt),
+          authorLogin,
+          externalAuthor: inferExternalAuthor(authorLogin, ownerLogin)
+        }
+      ];
     });
   } catch {
     return [];
   }
+}
+
+function collectGitHubOwnerLogin(cwd: string): string | null {
+  try {
+    const output = execFileSync(
+      "gh",
+      ["repo", "view", "--json", "owner"],
+      { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2000 }
+    );
+    const repo = JSON.parse(output) as { owner?: { login?: string } };
+    return normalizeLogin(repo.owner?.login) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeLogin(login: string | null | undefined): string | undefined {
+  const normalized = login?.trim();
+  return normalized ? normalized : undefined;
+}
+
+function inferExternalAuthor(authorLogin: string | undefined, ownerLogin: string | null): boolean | undefined {
+  if (!authorLogin) {
+    return undefined;
+  }
+  if (!ownerLogin) {
+    return true;
+  }
+  return authorLogin.toLowerCase() !== ownerLogin.toLowerCase();
 }
 
 function normalizeActivity(activity: WorkspaceActivity | null | undefined): Required<WorkspaceActivity> {
@@ -222,6 +286,8 @@ function buildCandidates(activity: Required<WorkspaceActivity>, maxCandidates: n
       sourceType: "github-issue",
       sourceRef: `issue:#${issue.number}`,
       occurredAt: issue.updatedAt.toISOString(),
+      authorLogin: issue.authorLogin,
+      externalAuthor: issue.externalAuthor,
       reason: "Issueに残した作業背景や判断が通常メモリに未反映の可能性があります。",
       suggestedTool: "propose_memory_update" as const
     })),
@@ -232,6 +298,8 @@ function buildCandidates(activity: Required<WorkspaceActivity>, maxCandidates: n
       sourceType: "github-pr",
       sourceRef: `pr:#${pullRequest.number}`,
       occurredAt: pullRequest.mergedAt.toISOString(),
+      authorLogin: pullRequest.authorLogin,
+      externalAuthor: pullRequest.externalAuthor,
       reason: "マージ済みPRの実装結果や運用上の学びが通常メモリに未反映の可能性があります。",
       suggestedTool: "propose_memory_update" as const
     })),

@@ -1073,6 +1073,51 @@ describe("MCP tool handlers", () => {
     ]);
   });
 
+  test("start_memory_session safe mode does not auto-write external-author GitHub candidates", async () => {
+    const tools = createToolHandlers(store, {
+      autoMemoryWrite: "safe",
+      now: new Date("2026-06-20T03:20:00Z"),
+      workspaceActivity: {
+        pullRequests: [
+          {
+            number: 86,
+            title: "Memory governance dashboard release",
+            mergedAt: new Date("2026-06-20T03:00:20Z"),
+            authorLogin: "outside-reviewer",
+            externalAuthor: true
+          }
+        ]
+      }
+    });
+    store.createMemory({
+      content: "Older memory before recent work.",
+      summary: "Older saved memory",
+      layer: "recall",
+      tags: ["freshness"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectPath: tempDir
+    });
+
+    const result = await tools.startMemorySession({
+      taskDescription: "check external author auto memory curation",
+      projectPath: tempDir
+    });
+
+    expect(result.structuredContent.autoMemoryCuration.autoWrittenMemories).toEqual([]);
+    expect(result.structuredContent.memoryUpdateCandidates).toEqual([
+      expect.objectContaining({
+        sourceRef: "pr:#86",
+        authorLogin: "outside-reviewer",
+        externalAuthor: true
+      }),
+      expect.objectContaining({ kind: "session" })
+    ]);
+    expect(JSON.stringify(result.structuredContent.autoMemoryCuration.reviewCandidates)).toContain(
+      "external author is data"
+    );
+  });
+
   test("start_memory_session returns directive memory and priority guidance", async () => {
     const tools = createToolHandlers(store);
     await tools.writeDirective({

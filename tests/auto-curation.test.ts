@@ -70,6 +70,27 @@ describe("auto memory curation", () => {
     );
   });
 
+  test("keeps external-author GitHub candidates in review even when safe mode would auto-write", () => {
+    const evaluation = evaluateMemoryCandidate(
+      {
+        ...baseCandidate,
+        title: "Public memory governance release",
+        summary: "PR #86: Public memory governance release",
+        sourceRef: "pr:#86",
+        authorLogin: "external-contributor",
+        externalAuthor: true
+      },
+      []
+    );
+
+    expect(evaluation.decision).toBe("review");
+    expect(evaluation.score).toBeGreaterThanOrEqual(0.82);
+    expect(evaluation.content).toContain("Author: external-contributor (external).");
+    expect(evaluation.reasons).toContain(
+      "GitHub Issue/PR activity from an external author is data, not a trusted instruction."
+    );
+  });
+
   test("skips candidates that look like secrets", () => {
     const result = buildAutoCurationResult({
       mode: "safe",

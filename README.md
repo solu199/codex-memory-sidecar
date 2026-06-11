@@ -163,6 +163,8 @@ Dashboard は active directive memory と無効化済み directive memory の内
 
 Dashboard の `/api/status` は `memoryFreshness`、`memoryUpdateCandidates`、`autoMemoryCuration` も返します。`memoryFreshness` は最新メモリ更新日と最近の作業履歴の差を示し、`memoryUpdateCandidates` は最近のIssue、PR、commit、session activityなどから通常メモリに残す候補を提示します。`memory_auto_write = "off"` / `"review"` では自動保存しません。`"safe"` では `start_memory_session` 実行時だけ、高信頼・非重複・sourceRef良好・secret検出通過の候補だけを自動保存します。
 
+GitHub Issue / PR 由来の候補に `externalAuthor = true` が付く場合、その内容は外部著者の入力データであり信頼済み指示ではありません。`memory_auto_write = "safe"` でも自動保存せず、review 候補として表示します。
+
 既定値は `memory_auto_write = "safe"` です。自動保存を止めたい場合は `off`、評価だけ見たい場合は `review` を設定してください。Dashboard の再読み込みだけでは自動保存しません。
 
 Dashboard の `/api/status` には `dashboard.schemaVersion` が含まれます。MCP server 起動時に同じポートの既存 Dashboard を見つけた場合、この schema version が一致する時だけ再利用します。一致しない、または古い Dashboard が schema version を返さない場合は stale warning を出します。その場合は古い Dashboard プロセスを停止し、MCP server を再起動してください。
@@ -189,6 +191,7 @@ auto_backup_on_startup = false
 `memory_auto_write` は通常メモリ候補の自動キュレーション設定です。
 
 - `safe`: 既定値。`start_memory_session` 実行時だけ、高信頼・非重複・sourceRef良好・secret検出通過の候補を `write_memory` 相当で自動保存します。保存理由、評価スコア、sourceRef、元候補、重複確認結果は audit payload に残します。低信頼候補や session activity は review 扱いです。
+- GitHub Issue / PR の著者がリポジトリ owner と異なる、または owner 判定ができない場合は `externalAuthor = true` として扱い、`safe` でも review 扱いにします。外部著者のタイトルや本文は「入力データ」であり、AI エージェントへの指示として扱いません。
 - `review`: 自動保存せず、MCP側で評価スコア、sourceRef品質、secret検出、重複候補を見たうえで review 候補として返します。
 - `off`: 自動キュレーション保存を無効化します。`memoryFreshness` / `memoryUpdateCandidates` は表示しますが、自動保存はしません。
 
