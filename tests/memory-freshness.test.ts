@@ -19,14 +19,18 @@ describe("memory freshness", () => {
           {
             number: 78,
             title: "メモリ鮮度と保存候補の導線を改善する",
-            updatedAt: new Date("2026-06-11T03:15:00Z")
+            updatedAt: new Date("2026-06-11T03:15:00Z"),
+            authorLogin: "outside-reviewer",
+            externalAuthor: true
           }
         ],
         pullRequests: [
           {
             number: 77,
             title: "Ollama表示と手動MCP例を改善",
-            mergedAt: new Date("2026-06-11T03:00:20Z")
+            mergedAt: new Date("2026-06-11T03:00:20Z"),
+            authorLogin: "solu199",
+            externalAuthor: false
           }
         ]
       },
@@ -45,11 +49,15 @@ describe("memory freshness", () => {
       expect.objectContaining({
         kind: "issue",
         sourceRef: "issue:#78",
+        authorLogin: "outside-reviewer",
+        externalAuthor: true,
         suggestedTool: "propose_memory_update"
       }),
       expect.objectContaining({
         kind: "pull_request",
         sourceRef: "pr:#77",
+        authorLogin: "solu199",
+        externalAuthor: false,
         suggestedTool: "propose_memory_update"
       }),
       expect.objectContaining({

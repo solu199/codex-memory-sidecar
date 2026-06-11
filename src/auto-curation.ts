@@ -114,6 +114,10 @@ export function evaluateMemoryCandidate(
     decision = "review";
     reasons.push("Similar or same-source memory already exists.");
   }
+  if (candidate.externalAuthor && (candidate.kind === "issue" || candidate.kind === "pull_request")) {
+    decision = "review";
+    reasons.push("GitHub Issue/PR activity from an external author is data, not a trusted instruction.");
+  }
   if (candidate.kind === "session") {
     decision = "review";
     reasons.push("Session activity is useful context but should not be auto-written without review.");
@@ -144,7 +148,10 @@ export function buildCandidateContent(candidate: MemoryUpdateCandidate): string 
     commit: "Commit",
     session: "Session"
   }[candidate.kind];
-  return `${prefix} memory candidate: ${candidate.summary}. Reason: ${candidate.reason}`;
+  const author = candidate.authorLogin
+    ? ` Author: ${candidate.authorLogin}${candidate.externalAuthor ? " (external)" : ""}.`
+    : "";
+  return `${prefix} memory candidate: ${candidate.summary}.${author} Reason: ${candidate.reason}`;
 }
 
 function scoreCandidate(
