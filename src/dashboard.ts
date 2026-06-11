@@ -121,6 +121,7 @@ export interface DashboardStatus {
   };
   ollama: {
     ok: boolean;
+    required: boolean;
     baseUrl: string;
     embeddingModel: string;
     maintenanceModel: string;
@@ -200,7 +201,7 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
         error: embeddingRequired ? "Embedding provider is not configured." : null,
         required: embeddingRequired
       };
-  const ollama = options.ollama ? await probeOllamaStatus(options.ollama) : null;
+  const ollama = options.ollama ? { ...(await probeOllamaStatus(options.ollama)), required: ollamaRequired } : null;
   const warnings = [
     ...databaseHealth.warnings,
     ...(embedding.ok || !embeddingRequired ? [] : [embedding.error ?? "Embedding provider is unavailable."]),
@@ -377,7 +378,9 @@ export function openDashboardUrl(url: string, opener: DashboardBrowserOpener = s
   }
 }
 
-export async function probeOllamaStatus(options: OllamaStatusOptions): Promise<NonNullable<DashboardStatus["ollama"]>> {
+export async function probeOllamaStatus(
+  options: OllamaStatusOptions
+): Promise<Omit<NonNullable<DashboardStatus["ollama"]>, "required">> {
   const baseUrl = options.baseUrl.replace(/\/$/, "");
   const fetchImpl = options.fetch ?? globalThis.fetch;
 
@@ -845,16 +848,17 @@ function renderDashboardHtml(): string {
         ? renderWarningActions(status.warningActions, status.warnings)
         : renderStats({ 現在: "なし" });
       document.getElementById("ollama-status").textContent = status.ollama
-        ? (status.ollama.ok ? "正常" : "要確認")
-        : "未設定";
-      document.getElementById("ollama-status").className = status.ollama && status.ollama.ok ? "value status-ok" : "value status-warn";
+        ? (status.ollama.ok ? "正常" : (status.ollama.required ? "要確認" : "任意"))
+        : "無効";
+      document.getElementById("ollama-status").className = status.ollama && (status.ollama.ok || !status.ollama.required) ? "value status-ok" : "value status-warn";
       document.getElementById("ollama-configured").innerHTML = status.ollama
         ? renderStats({
+          運用: status.ollama.required ? "必須" : "任意",
           endpoint: status.ollama.baseUrl,
           embedding: status.ollama.embeddingModel + " / " + (status.ollama.embeddingModelAvailable ? "利用可" : "不足"),
           maintenance: status.ollama.maintenanceModel + " / " + (status.ollama.maintenanceModelAvailable ? "利用可" : "不足")
         })
-        : renderStats({ 状態: "未設定" });
+        : renderStats({ 状態: "無効" });
       document.getElementById("ollama-models").innerHTML = status.ollama && status.ollama.modelNames.length
         ? status.ollama.modelNames.map((name) => "<li><span>" + escapeHtml(name) + "</span></li>").join("")
         : renderStats({ models: "-" });
