@@ -1,5 +1,6 @@
 import { containsLikelySecret } from "./secret-detection.js";
 import type { MemoryUpdateCandidate } from "./memory-freshness.js";
+import { analyzeSourceRef } from "./source-ref.js";
 import type { Memory, MemoryLayer } from "./types.js";
 
 export type AutoMemoryWriteMode = "off" | "review" | "safe";
@@ -205,27 +206,15 @@ function inferTags(candidate: MemoryUpdateCandidate): string[] {
 }
 
 function looksDurable(value: string): boolean {
-  return /memory|directive|dashboard|backup|restore|repair|startup|session|mcp|readme|agents|skill|security|audit|public|release|config|設定|監査|公開|保存|メモリ|ダッシュボード|バックアップ|修復|起動|運用|検証|安全/i.test(value);
+  return /memory|directive|dashboard|backup|restore|repair|startup|session|mcp|readme|agents|skill|security|audit|public|release|config|\u8a2d\u5b9a|\u76e3\u67fb|\u516c\u958b|\u4fdd\u5b58|\u30e1\u30e2\u30ea|\u30c0\u30c3\u30b7\u30e5\u30dc\u30fc\u30c9|\u30d0\u30c3\u30af\u30a2\u30c3\u30d7|\u4fee\u5fa9|\u8d77\u52d5|\u904b\u7528|\u691c\u8a3c|\u5b89\u5168/i.test(value);
 }
 
 function analyzeAutoCurationProvenance(sourceRef: string): AutoCurationEvaluation["provenance"] {
-  const recognizedRefs: string[] = [];
-  if (/^pr:#\d+$/i.test(sourceRef)) {
-    recognizedRefs.push("pr");
-  }
-  if (/^issue:#\d+$/i.test(sourceRef)) {
-    recognizedRefs.push("issue");
-  }
-  if (/^git:[0-9a-f]{7,40}$/i.test(sourceRef)) {
-    recognizedRefs.push("commit");
-  }
-  if (/^session:[a-z0-9_.:-]+$/i.test(sourceRef)) {
-    recognizedRefs.push("session");
-  }
+  const analysis = analyzeSourceRef(sourceRef);
   return {
-    quality: recognizedRefs.length ? "strong" : "weak",
-    recognizedRefs,
-    suggestions: recognizedRefs.length
+    quality: analysis.quality,
+    recognizedRefs: analysis.recognizedRefs,
+    suggestions: analysis.quality === "strong"
       ? []
       : ["Use sourceRef like pr:#123, issue:#123, git:<hash>, or session:<id> for auto curation."]
   };

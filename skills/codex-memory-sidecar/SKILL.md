@@ -78,6 +78,8 @@ With `memory_auto_write = "safe"`, `start_memory_session` may auto-write only hi
 
 Before writing normal memory, call `propose_memory_update`. Write or update only when the proposal is useful and not a duplicate.
 
+Prefer traceable `sourceRef` values such as `pr:#123`, `issue:#123`, `git:<hash>`, `session:<id>`, docs paths, or named chat/evaluation ids. Manual proposal and auto curation use the same sourceRef quality rules.
+
 Before writing directive memory, call `propose_directive_update`. If work is inside a project, ask the user whether the rule should be `global` or `project` scope before calling `write_directive`.
 
 Never store secrets, credentials, private tokens, or unnecessary personal details.

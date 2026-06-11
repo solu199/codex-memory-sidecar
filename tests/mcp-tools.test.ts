@@ -151,6 +151,48 @@ describe("MCP tool handlers", () => {
     });
   });
 
+  test("propose_memory_update recognizes canonical auto-curation source refs", async () => {
+    const tools = createToolHandlers(store);
+
+    const prResult = await tools.proposeMemoryUpdate({
+      content: "Auto memory curation was implemented in PR #82.",
+      taskContext: "issue follow-up",
+      projectPath: tempDir,
+      sourceType: "github-pr",
+      sourceRef: "pr:#82"
+    });
+    const issueResult = await tools.proposeMemoryUpdate({
+      content: "SourceRef provenance should match auto curation formats.",
+      taskContext: "issue follow-up",
+      projectPath: tempDir,
+      sourceType: "github-issue",
+      sourceRef: "issue:#83"
+    });
+    const sessionResult = await tools.proposeMemoryUpdate({
+      content: "Session candidates are review-only but still traceable.",
+      taskContext: "session follow-up",
+      projectPath: tempDir,
+      sourceType: "mcp-session",
+      sourceRef: "session:2026-06-11T16:31:39.408Z"
+    });
+
+    expect(prResult.structuredContent.provenance).toMatchObject({
+      quality: "strong",
+      recognizedRefs: ["pr"],
+      suggestions: []
+    });
+    expect(issueResult.structuredContent.provenance).toMatchObject({
+      quality: "strong",
+      recognizedRefs: ["issue"],
+      suggestions: []
+    });
+    expect(sessionResult.structuredContent.provenance).toMatchObject({
+      quality: "strong",
+      recognizedRefs: ["session"],
+      suggestions: []
+    });
+  });
+
   test("propose_memory_update suggests stronger provenance for generic source refs", async () => {
     const tools = createToolHandlers(store);
 
@@ -166,7 +208,7 @@ describe("MCP tool handlers", () => {
     expect(result.structuredContent.provenance.recognizedRefs).toEqual([]);
     expect(result.structuredContent.provenance.suggestions).toEqual(
       expect.arrayContaining([
-        "Use a sourceRef that points to a doc path, commit hash, PR number, issue number, or named chat/evaluation id."
+        "Use a sourceRef like pr:#123, issue:#123, git:<hash>, session:<id>, a doc path, or a named chat/evaluation id."
       ])
     );
   });

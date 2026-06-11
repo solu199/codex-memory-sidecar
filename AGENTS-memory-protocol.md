@@ -94,7 +94,7 @@ directive memory が現在のユーザー指示や `AGENTS.md` と矛盾する�
 ## 引用と監査
 
 - メモリ由来の主張をユーザーに伝えるときは、可能な限り memory id、directive id、summary、sourceRef を添えます。
-- 長く残すメモリでは、sourceRef を docs path、commit hash、PR 番号、issue 番号、または named chat/evaluation id に寄せます。
+- 長く残すメモリでは、sourceRef を `pr:#123`、`issue:#123`、`git:<hash>`、`session:<id>`、docs path、または named chat/evaluation id に寄せます。
 - 重要な判断は `audit_memory` で直近の参照・書き込みイベントを確認できる形にします。
 - メモリと実ファイルが矛盾した場合は、実ファイルとユーザーの最新指示を優先し、必要に応じて古いメモリを更新します。
 

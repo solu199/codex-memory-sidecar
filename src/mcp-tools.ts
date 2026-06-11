@@ -12,6 +12,7 @@ import {
   type WorkspaceActivity
 } from "./memory-freshness.js";
 import { MemoryStore } from "./memory-store.js";
+import { analyzeSourceRef } from "./source-ref.js";
 import type { Directive, DirectiveScope, Memory, MemoryLayer, SearchMemoryResult } from "./types.js";
 
 const layerSchema = z.enum(["core", "recall", "archival"]);
@@ -1407,37 +1408,14 @@ function buildCurationGuidance(
 }
 
 function analyzeProvenance(sourceType: string, sourceRef: string) {
-  const recognizedRefs: string[] = [];
-  if (/\b(?:pr|pull request)\s*#?\d+\b/i.test(sourceRef)) {
-    recognizedRefs.push("pr");
-  }
-  if (/\bissue\s*#?\d+\b/i.test(sourceRef)) {
-    recognizedRefs.push("issue");
-  }
-  if (/\b[0-9a-f]{7,40}\b/i.test(sourceRef)) {
-    recognizedRefs.push("commit");
-  }
-  if (/(?:^|[\\/])(?:docs|src|tests|config)[\\/][^\s]+|[^\s]+\.(?:md|ts|tsx|js|json|toml)\b/i.test(sourceRef)) {
-    recognizedRefs.push("doc_path");
-  }
-  if (/\b(?:chat|evaluation|smoke|test)[:-][a-z0-9_.-]+/i.test(sourceRef)) {
-    recognizedRefs.push("named_run");
-  }
-
-  const genericRefs = new Set(["test", "manual", "chat", "codex-chat", "note", "memory"]);
-  const suggestions: string[] = [];
-  if (!recognizedRefs.length || genericRefs.has(sourceRef.trim().toLowerCase())) {
-    suggestions.push(
-      "Use a sourceRef that points to a doc path, commit hash, PR number, issue number, or named chat/evaluation id."
-    );
-  }
+  const analysis = analyzeSourceRef(sourceRef);
 
   return {
     sourceType,
     sourceRef,
-    quality: suggestions.length ? "weak" : "strong",
-    recognizedRefs,
-    suggestions
+    quality: analysis.quality,
+    recognizedRefs: analysis.recognizedRefs,
+    suggestions: analysis.suggestions
   };
 }
 
