@@ -253,35 +253,34 @@ export class MemoryStore {
     }
 
     const limit = Math.max(1, Math.min(input.limit ?? 8, 50));
+    const rows = this.keywordCandidateRows(input, limit, true);
+    const results = rows.map((row) => scoreKeywordRow(row));
+
+    this.recordSearchRetrieval(input, results);
+
+    return results;
+  }
+
+  private keywordCandidateRows(
+    input: SearchMemoryInput,
+    limit: number,
+    includeKeywordRank: true
+  ): (MemoryRow & { keyword_rank: number })[];
+  private keywordCandidateRows(input: SearchMemoryInput, limit: number, includeKeywordRank?: false): MemoryRow[];
+  private keywordCandidateRows(
+    input: SearchMemoryInput,
+    limit: number,
+    includeKeywordRank = false
+  ): (MemoryRow & { keyword_rank: number })[] | MemoryRow[] {
     const clauses = ["memories_fts MATCH @query"];
     const params: Record<string, unknown> = {
       query: quoteFtsQuery(input.query),
       limit
     };
 
-    if (!input.includeSuperseded) {
-      clauses.push("m.status = 'active'");
-    } else {
-      clauses.push("m.status != 'forgotten'");
-    }
+    addMemorySearchFilters(clauses, params, input, "m.");
 
-    if (input.layers?.length) {
-      clauses.push(`m.layer IN (${input.layers.map((_, index) => `@layer${index}`).join(", ")})`);
-      input.layers.forEach((layer, index) => {
-        params[`layer${index}`] = layer;
-      });
-    }
-
-    if (input.tags?.length) {
-      input.tags.forEach((tag, index) => {
-        clauses.push(`m.tags LIKE @tag${index} ESCAPE '\\'`);
-        params[`tag${index}`] = `%${escapeLikePattern(JSON.stringify(tag))}%`;
-      });
-    }
-
-    addProjectScopeFilter(clauses, params, input, "m.");
-
-    const rows = this.db
+    const ftsRows = this.db
       .prepare(
         `SELECT m.*, bm25(memories_fts) AS keyword_rank
          FROM memories_fts
@@ -292,11 +291,17 @@ export class MemoryStore {
       )
       .all(params) as (MemoryRow & { keyword_rank: number })[];
 
-    const results = rows.map((row) => scoreKeywordRow(row));
+    if (ftsRows.length >= limit) {
+      return includeKeywordRank ? ftsRows : ftsRows.map(stripKeywordRank);
+    }
 
-    this.recordSearchRetrieval(input, results);
+    const fallbackRows = this.likeFallbackRows(input, limit - ftsRows.length, new Set(ftsRows.map((row) => row.id)));
+    const mergedRows = [
+      ...ftsRows,
+      ...fallbackRows.map((row) => ({ ...row, keyword_rank: 0.5 }))
+    ].slice(0, limit);
 
-    return results;
+    return includeKeywordRank ? mergedRows : mergedRows.map(stripKeywordRank);
   }
 
   listEvents(memoryId: number): MemoryEvent[] {
@@ -824,7 +829,8 @@ export class MemoryStore {
       CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
         content,
         summary,
-        tags
+        tags,
+        tokenize = 'trigram'
       );
 
       CREATE TABLE IF NOT EXISTS directives (
@@ -871,6 +877,28 @@ export class MemoryStore {
       CREATE INDEX IF NOT EXISTS idx_directives_scope_status_updated
         ON directives(scope, project_scope, status, priority DESC, updated_at DESC);
     `);
+    this.ensureTrigramFtsTable();
+  }
+
+  private ensureTrigramFtsTable(): void {
+    const row = this.db
+      .prepare("SELECT sql FROM sqlite_master WHERE name = 'memories_fts'")
+      .get() as { sql: string | null } | undefined;
+    const sql = row?.sql ?? "";
+    if (sql && /tokenize\s*=\s*['"]?trigram/i.test(sql)) {
+      return;
+    }
+
+    this.db.exec("DROP TABLE IF EXISTS memories_fts");
+    this.db.exec(`
+      CREATE VIRTUAL TABLE memories_fts USING fts5(
+        content,
+        summary,
+        tags,
+        tokenize = 'trigram'
+      );
+    `);
+    this.rebuildFtsIndex();
   }
 
   private searchMemoryWithEmbedding(input: SearchMemoryInput): SearchMemoryResult[] {
@@ -925,42 +953,45 @@ export class MemoryStore {
   }
 
   private hybridKeywordCandidateRows(input: SearchMemoryInput, candidateLimit: number): MemoryRow[] {
-    const clauses = ["memories_fts MATCH @query"];
-    const params: Record<string, unknown> = {
-      query: quoteFtsQuery(input.query),
-      candidateLimit
-    };
+    return this.keywordCandidateRows(input, candidateLimit);
+  }
 
-    if (!input.includeSuperseded) {
-      clauses.push("m.status = 'active'");
-    } else {
-      clauses.push("m.status != 'forgotten'");
+  private likeFallbackRows(input: SearchMemoryInput, limit: number, excludedIds: Set<number>): MemoryRow[] {
+    if (limit <= 0) {
+      return [];
     }
 
-    if (input.layers?.length) {
-      clauses.push(`m.layer IN (${input.layers.map((_, index) => `@layer${index}`).join(", ")})`);
-      input.layers.forEach((layer, index) => {
-        params[`layer${index}`] = layer;
+    const clauses: string[] = [];
+    const params: Record<string, unknown> = { limit };
+    addMemorySearchFilters(clauses, params, input);
+
+    if (excludedIds.size) {
+      clauses.push(`id NOT IN (${[...excludedIds].map((_, index) => `@excluded${index}`).join(", ")})`);
+      [...excludedIds].forEach((id, index) => {
+        params[`excluded${index}`] = id;
       });
     }
 
-    if (input.tags?.length) {
-      input.tags.forEach((tag, index) => {
-        clauses.push(`m.tags LIKE @tag${index} ESCAPE '\\'`);
-        params[`tag${index}`] = `%${escapeLikePattern(JSON.stringify(tag))}%`;
-      });
+    const likeClauses: string[] = [];
+    queryLikeTerms(input.query).forEach((term, index) => {
+      const paramName = `like${index}`;
+      params[paramName] = `%${escapeLikePattern(term)}%`;
+      likeClauses.push(
+        `(content LIKE @${paramName} ESCAPE '\\' OR summary LIKE @${paramName} ESCAPE '\\' OR tags LIKE @${paramName} ESCAPE '\\')`
+      );
+    });
+    if (!likeClauses.length) {
+      return [];
     }
-
-    addProjectScopeFilter(clauses, params, input, "m.");
+    clauses.push(`(${likeClauses.join(" OR ")})`);
 
     return this.db
       .prepare(
-        `SELECT m.*
-         FROM memories_fts
-         JOIN memories m ON m.id = memories_fts.rowid
+        `SELECT *
+         FROM memories
          WHERE ${clauses.join(" AND ")}
-         ORDER BY bm25(memories_fts) ASC, m.importance DESC, m.updated_at DESC
-         LIMIT @candidateLimit`
+         ORDER BY importance DESC, updated_at DESC, id DESC
+         LIMIT @limit`
       )
       .all(params) as MemoryRow[];
   }
@@ -1197,8 +1228,48 @@ function quoteFtsQuery(query: string): string {
   return terms.length ? terms.map((term) => `"${term}"`).join(" OR ") : '""';
 }
 
+function queryLikeTerms(query: string): string[] {
+  const compactQuery = query.trim();
+  const terms = compactQuery.split(/\s+/).filter(Boolean);
+  return [...new Set([compactQuery, ...terms].filter(Boolean))];
+}
+
 function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, (match) => `\\${match}`);
+}
+
+function stripKeywordRank(row: MemoryRow & { keyword_rank: number }): MemoryRow {
+  const { keyword_rank: _keywordRank, ...memoryRow } = row;
+  return memoryRow;
+}
+
+function addMemorySearchFilters(
+  clauses: string[],
+  params: Record<string, unknown>,
+  input: SearchMemoryInput,
+  alias = ""
+): void {
+  if (!input.includeSuperseded) {
+    clauses.push(`${alias}status = 'active'`);
+  } else {
+    clauses.push(`${alias}status != 'forgotten'`);
+  }
+
+  if (input.layers?.length) {
+    clauses.push(`${alias}layer IN (${input.layers.map((_, index) => `@layer${index}`).join(", ")})`);
+    input.layers.forEach((layer, index) => {
+      params[`layer${index}`] = layer;
+    });
+  }
+
+  if (input.tags?.length) {
+    input.tags.forEach((tag, index) => {
+      clauses.push(`${alias}tags LIKE @tag${index} ESCAPE '\\'`);
+      params[`tag${index}`] = `%${escapeLikePattern(JSON.stringify(tag))}%`;
+    });
+  }
+
+  addProjectScopeFilter(clauses, params, input, alias);
 }
 
 function addProjectScopeFilter(

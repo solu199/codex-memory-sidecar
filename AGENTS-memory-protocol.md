@@ -88,6 +88,7 @@ directive memory が現在のユーザー指示や `AGENTS.md` と矛盾する�
 
 - `projectPath` を渡すと、ローカルパスを hash 化した project scope が使われます。
 - 検索時に scope が指定された場合、既定では同じ scope と `global` の通常メモリだけを返します。
+- Ollama が使えない場合も、SQLite FTS trigram と短語LIKE fallback によるキーワード検索が日本語メモリを扱います。
 - `start_memory_session` / `memory_digest` は `projectPath` を検索文に混ぜず、scope の判定だけに使います。
 - 明示的に横断検索したいときだけ `includeCrossProject: true` を使います。
 
