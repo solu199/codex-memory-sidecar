@@ -12,6 +12,8 @@ describe("documentation", () => {
     expect(readme).toContain("手動MCP tool入力例");
     expect(readme).toContain("初めて試す場合は、まず Ollama なし");
     expect(readme).toContain('embedding_mode = "ollama"');
+    expect(readme).toContain("memoryFreshness");
+    expect(readme).toContain("memoryUpdateCandidates");
     expect(readme).toContain("Codex app は利用例のひとつ");
     expect(readme).not.toContain("C:\\Users\\hare1");
     expect(readme).not.toContain("個人利用を前提");
@@ -41,6 +43,8 @@ describe("documentation", () => {
     expect(skill).toContain("name: codex-memory-sidecar");
     expect(skill).toContain("start_memory_session");
     expect(skill).toContain("propose_memory_update");
+    expect(skill).toContain("memoryFreshness");
+    expect(skill).toContain("memoryUpdateCandidates");
     expect(skill).toContain("propose_directive_update");
     expect(skill).toContain("backup_memory");
     expect(skill).toContain("When a new chat starts");
@@ -54,6 +58,8 @@ describe("documentation", () => {
     expect(readme).toContain("npm run check:skill-install");
     expect(readme).toContain("BOM や CRLF/LF の差分は正規化して比較");
     expect(protocol).toContain("not purely read-only");
+    expect(protocol).toContain("memoryFreshness");
+    expect(protocol).toContain("memoryUpdateCandidates");
     expect(openaiAgent).toContain('type: "mcp"');
     expect(openaiAgent).toContain('value: "codex-memory-sidecar"');
   });

@@ -27,7 +27,7 @@ AIコーディングエージェントは、チャットや作業セッション
 - `propose_memory_update` は、DBを書き換えずに保存候補、重複候補、推奨 layer、sourceRef の品質を確認できます。
 - `write_directive` / `list_directives` / `propose_directive_update` / `disable_directive` で、AGENTS.md に近い強い作用を持つ directive memory を扱えます。
 - `backup_memory` / `verify_backup` / `inspect_backup` / `plan_backup_retention` / `plan_backup_restore` / `repair_memory_index` で、安全確認と復旧計画を扱えます。
-- Dashboard で health、バックアップ、Ollama モデル、警告対応、project scope、directive memory、最近のメモリを確認できます。
+- Dashboard で health、バックアップ、Ollama モデル、警告対応、project scope、directive memory、最近のメモリ、メモリ鮮度、保存候補を確認できます。
 
 ## 優先順位
 
@@ -159,6 +159,8 @@ MCP server 起動時の Dashboard 自動起動を止める場合は、MCP 登録
 MCP server と同時起動する Dashboard は、既定では同じ URL を一度だけブラウザで開きます。再起動のたびにタブを増やしたい場合は `CODEX_MEMORY_DASHBOARD_OPEN=always`、一切開きたくない場合は `CODEX_MEMORY_DASHBOARD_OPEN=false` を MCP 登録に追加します。
 
 Dashboard は active directive memory と無効化済み directive memory の内容を表示します。これは強い記憶をユーザーが監査できるようにするためです。通常メモリの本文や audit payload は表示せず、要約とメタデータだけを表示します。
+
+Dashboard の `/api/status` は `memoryFreshness` と `memoryUpdateCandidates` も返します。`memoryFreshness` は最新メモリ更新日と最近の作業履歴の差を示し、`memoryUpdateCandidates` は最近のIssue、PR、commitなどから通常メモリに残す候補を提示します。これは自動保存ではありません。残す価値がある候補だけを `propose_memory_update` にかけ、重複や sourceRef 品質を確認してから `write_memory` / `update_memory` を検討してください。
 
 Dashboard の `/api/status` には `dashboard.schemaVersion` が含まれます。MCP server 起動時に同じポートの既存 Dashboard を見つけた場合、この schema version が一致する時だけ再利用します。一致しない、または古い Dashboard が schema version を返さない場合は stale warning を出します。その場合は古い Dashboard プロセスを停止し、MCP server を再起動してください。
 
@@ -352,11 +354,12 @@ Use the `codex-memory-sidecar` MCP server as the durable local memory layer for 
 1. 作業開始時に `start_memory_session` を呼び、directive、health、backup retention、warnings を確認します。
 2. directive memory がある場合は、優先順位を確認しつつ、現在のユーザー指示・`AGENTS.md`・実ファイルと衝突しないか見ます。
 3. `start_memory_session` は作業開始の監査イベントを記録するため、完全な読み取り専用操作ではありません。実用上は有用な履歴ですが、件数確認だけを厳密に比較するテストでは event count が増える点に注意します。
-4. 過去判断が必要なときだけ `search_memory` を使います。
-5. メモリを残すか迷う場合は `propose_memory_update` を先に使います。
-6. 強い運用指示を残す場合は `propose_directive_update` を先に使います。
-7. 大きな変更、削除、修復の前には `backup_memory` と `verify_backup` を使います。
-8. Dashboard は状態確認専用として使い、修復や変更は MCP tool から実行します。
+4. `start_memory_session` と Dashboard の `memoryFreshness` / `memoryUpdateCandidates` を見て、最近のIssue・PR・commit・設計判断が通常メモリに未反映ではないか確認します。
+5. 保存候補がある場合も自動保存はせず、残す価値があるものだけ `propose_memory_update` にかけ、重複や sourceRef 品質を確認してから `write_memory` / `update_memory` を検討します。
+6. 過去判断が必要なときだけ `search_memory` を使います。
+7. 強い運用指示を残す場合は `propose_directive_update` を先に使います。
+8. 大きな変更、削除、修復の前には `backup_memory` と `verify_backup` を使います。
+9. Dashboard は状態確認と保存候補確認に使い、修復やDB変更は MCP tool から実行します。
 
 詳しい確認手順:
 

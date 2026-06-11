@@ -7,6 +7,13 @@ import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
 import type { EmbeddingProvider } from "./embedding.js";
 import { OllamaEmbeddingProvider } from "./embedding.js";
+import {
+  buildMemoryFreshness,
+  collectWorkspaceActivity,
+  type MemoryFreshness,
+  type MemoryUpdateCandidate,
+  type WorkspaceActivity
+} from "./memory-freshness.js";
 import { MemoryStore } from "./memory-store.js";
 import { runStartupMaintenance } from "./startup-maintenance.js";
 
@@ -17,6 +24,8 @@ export interface DashboardOptions {
   embeddingRequired?: boolean;
   ollama?: OllamaStatusOptions;
   ollamaRequired?: boolean;
+  workspaceActivity?: WorkspaceActivity;
+  now?: Date;
 }
 
 export interface OllamaStatusOptions {
@@ -175,6 +184,8 @@ export interface DashboardStatus {
     eventType: string;
     createdAt: string;
   }>;
+  memoryFreshness: MemoryFreshness;
+  memoryUpdateCandidates: MemoryUpdateCandidate[];
   warnings: string[];
   warningActions: Array<{
     severity: "warning" | "error";
@@ -191,6 +202,12 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
   const counts = store.countRecords();
   const databaseHealth = store.checkDatabaseHealth();
   const memoryStats = store.getStats();
+  const memoryFreshnessReport = buildMemoryFreshness({
+    latestMemoryUpdatedAt: memoryStats.updatedAtRange.newest,
+    memoryCount: counts.memoryCount,
+    activity: options.workspaceActivity ?? collectWorkspaceActivity(process.cwd()),
+    now: options.now
+  });
   const backupRetention = store.planBackupRetention();
   const latestBackup = backupRetention.backups[0] ?? null;
   const embedding = options.embeddingProvider
@@ -211,7 +228,8 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
     warnings,
     repairRecommended: !databaseHealth.ok && (databaseHealth.integrityCheck !== "ok" || !databaseHealth.fts.ok),
     ollama,
-    ollamaRequired
+    ollamaRequired,
+    memoryFreshness: memoryFreshnessReport.freshness
   });
 
   return {
@@ -287,6 +305,8 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
       eventType: event.eventType,
       createdAt: event.createdAt.toISOString()
     })),
+    memoryFreshness: memoryFreshnessReport.freshness,
+    memoryUpdateCandidates: memoryFreshnessReport.candidates,
     warnings,
     warningActions
   };
@@ -445,8 +465,22 @@ function buildWarningActions(options: {
   repairRecommended: boolean;
   ollama: DashboardStatus["ollama"];
   ollamaRequired: boolean;
+  memoryFreshness: MemoryFreshness;
 }): DashboardStatus["warningActions"] {
   const actions: DashboardStatus["warningActions"] = [];
+
+  if (
+    (options.memoryFreshness.status === "stale" || options.memoryFreshness.status === "empty") &&
+    options.memoryFreshness.candidateCount > 0
+  ) {
+    actions.push({
+      severity: "warning",
+      title: "メモリ更新が古い可能性があります",
+      message: options.memoryFreshness.message,
+      action: options.memoryFreshness.recommendedAction,
+      tools: ["propose_memory_update", "write_memory"]
+    });
+  }
 
   if (
     options.repairRecommended ||
@@ -741,6 +775,17 @@ function renderDashboardHtml(): string {
         <ul class="stats-list" id="updated-stats"></ul>
       </div>
     </section>
+    <h2>メモリ鮮度</h2>
+    <section class="stats-grid">
+      <div class="panel">
+        <p class="label">通常メモリの追従状態</p>
+        <ul class="stats-list" id="memory-freshness"></ul>
+      </div>
+      <div class="panel">
+        <p class="label">保存候補</p>
+        <ul class="stats-list action-list" id="memory-candidates"></ul>
+      </div>
+    </section>
     <h2>メンテナンス</h2>
     <section class="stats-grid">
       <div class="panel">
@@ -828,6 +873,18 @@ function renderDashboardHtml(): string {
         最古: status.memoryStats.updatedAtRange.oldest ?? "-",
         最新: status.memoryStats.updatedAtRange.newest ?? "-"
       });
+      document.getElementById("memory-freshness").innerHTML = renderStats({
+        状態: renderFreshnessStatus(status.memoryFreshness.status),
+        最新メモリ更新: status.memoryFreshness.latestMemoryUpdatedAt ?? "-",
+        最新作業: status.memoryFreshness.latestWorkspaceActivityAt ?? "-",
+        更新からの日数: status.memoryFreshness.daysSinceLatestMemoryUpdate ?? "-",
+        作業との差: status.memoryFreshness.daysBehindWorkspaceActivity ?? "-",
+        保存候補: status.memoryFreshness.candidateCount,
+        対応: status.memoryFreshness.recommendedAction
+      });
+      document.getElementById("memory-candidates").innerHTML = status.memoryUpdateCandidates.length
+        ? renderMemoryCandidates(status.memoryUpdateCandidates)
+        : renderStats({ 保存候補: "なし" });
       document.getElementById("repair").textContent = status.maintenance.repairRecommended ? "推奨" : "不要";
       document.getElementById("repair").className = status.maintenance.repairRecommended ? "value status-warn" : "value status-ok";
       document.getElementById("backup-stats").innerHTML = status.maintenance.latestBackup
@@ -899,6 +956,23 @@ function renderDashboardHtml(): string {
       return directives.map((directive) => (
         "<tr><td>" + directive.id + "</td><td>" + escapeHtml(directive.scope) + "</td><td class=\\"tags\\">" + escapeHtml(directive.projectScope) + "</td><td class=\\"summary\\">" + escapeHtml(directive.content) + "</td><td class=\\"summary\\">" + escapeHtml(directive.rationale) + "</td><td class=\\"tags\\">" + escapeHtml(directive.sourceType + ': ' + directive.sourceRef) + "</td><td>" + escapeHtml(directive.updatedAt) + "</td></tr>"
       )).join("");
+    }
+    function renderMemoryCandidates(candidates) {
+      return candidates.map((candidate) => (
+        "<li><span class=\\"action-title\\">" + escapeHtml(candidate.summary) + "</span>"
+        + "<span class=\\"action-body\\">理由: " + escapeHtml(candidate.reason) + "</span>"
+        + "<span class=\\"action-body\\">情報源: " + escapeHtml(candidate.sourceType + ': ' + candidate.sourceRef) + "</span>"
+        + "<span class=\\"action-body\\">推奨: " + escapeHtml(candidate.suggestedTool) + "</span>"
+        + "</li>"
+      )).join("");
+    }
+    function renderFreshnessStatus(status) {
+      return {
+        fresh: "新しい",
+        stale: "古い可能性",
+        empty: "未保存",
+        unknown: "不明"
+      }[status] ?? status;
     }
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, (char) => ({

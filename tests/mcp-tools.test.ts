@@ -890,6 +890,60 @@ describe("MCP tool handlers", () => {
     expect(JSON.stringify(result.structuredContent)).not.toContain("Daily startup private body");
   });
 
+  test("start_memory_session returns memory freshness and safe update candidates", async () => {
+    const tools = createToolHandlers(store, {
+      now: new Date("2026-06-20T03:20:00Z"),
+      workspaceActivity: {
+        commits: [
+          {
+            hash: "92e5fcb1234567890",
+            subject: "Ollama表示と手動MCP例を改善",
+            committedAt: new Date("2026-06-20T03:00:20Z")
+          }
+        ],
+        pullRequests: [
+          {
+            number: 77,
+            title: "Ollama表示と手動MCP例を改善",
+            mergedAt: new Date("2026-06-20T03:00:20Z")
+          }
+        ]
+      }
+    });
+    store.createMemory({
+      content: "Older memory before recent work.",
+      summary: "Older saved memory",
+      layer: "recall",
+      tags: ["freshness"],
+      sourceType: "manual",
+      sourceRef: "test",
+      projectPath: tempDir
+    });
+
+    const result = await tools.startMemorySession({
+      taskDescription: "check memory freshness",
+      projectPath: tempDir
+    });
+
+    expect(result.structuredContent.memoryFreshness).toMatchObject({
+      status: "stale",
+      latestWorkspaceActivityAt: "2026-06-20T03:00:20.000Z",
+      candidateCount: 2
+    });
+    expect(result.structuredContent.memoryUpdateCandidates).toEqual([
+      expect.objectContaining({
+        kind: "pull_request",
+        sourceRef: "pr:#77",
+        suggestedTool: "propose_memory_update"
+      }),
+      expect.objectContaining({
+        kind: "commit",
+        sourceRef: "git:92e5fcb",
+        suggestedTool: "propose_memory_update"
+      })
+    ]);
+  });
+
   test("start_memory_session returns directive memory and priority guidance", async () => {
     const tools = createToolHandlers(store);
     await tools.writeDirective({

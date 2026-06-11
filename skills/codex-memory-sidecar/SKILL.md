@@ -26,6 +26,8 @@ Read these returned fields before acting:
 
 - `directives`
 - `memories` / `relevantMemories`
+- `memoryFreshness`
+- `memoryUpdateCandidates`
 - `backupRetention`
 - `repairRecommended`
 - `warnings`
@@ -68,6 +70,8 @@ Use `read_memory` or `audit_memory` when a memory affects an important decision 
 ## Write And Curate
 
 Do not save every work log. Save only reusable decisions, verified lessons, durable preferences, environment-specific cautions, and repeated failure patterns.
+
+Use `memoryFreshness` and `memoryUpdateCandidates` from `start_memory_session` or Dashboard as prompts to review recent work. They are not automatic writes. If a recent issue, PR, commit, design decision, or operational lesson looks worth preserving, call `propose_memory_update` first.
 
 Before writing normal memory, call `propose_memory_update`. Write or update only when the proposal is useful and not a duplicate.
 

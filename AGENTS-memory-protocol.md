@@ -9,6 +9,7 @@
 - 参照・書き込みはローカル MCP tool 経由で行います。外部サービスへ自動送信しません。
 - 新しいチャット開始時、または自己紹介・persona・memory・preferences に関する軽い質問でも、directive memory を読む必要があるため `start_memory_session(taskDescription, projectPath)` を呼びます。
 - 非自明な作業では、最初に `start_memory_session(taskDescription, projectPath)` を呼び、directive、health、stats、backup retention、digest、修復推奨をまとめて確認します。
+- `start_memory_session` が返す `memoryFreshness` / `memoryUpdateCandidates` を確認し、最新メモリ更新が最近のIssue・PR・commit・設計判断に追いついていない場合は保存候補として扱います。
 - `health_check` やメモリ状態確認だけを頼まれた場合でも、先に `start_memory_session` を単独で呼び、返ってきた directive、warnings、repair 推奨を読んでから `health_check` を呼びます。`start_memory_session` と `health_check` は並列実行しません。
 - 設計判断、仕様解釈、既存方針の確認が必要なときは `search_memory` で関連する通常メモリを探します。
 - 作業後、次回以降の助けになる知見がある場合だけ `propose_memory_update` を先に使い、重複候補を確認してから `write_memory` または `update_memory` を検討します。
@@ -71,6 +72,7 @@ directive memory が現在のユーザー指示や `AGENTS.md` と矛盾する�
   - 秘密情報、トークン、個人情報の詳細
   - 実ファイルや git 履歴で十分に追跡できる内容
 - 通常メモリに迷う場合は `propose_memory_update` を使います。
+- Dashboard の `memoryFreshness` / `memoryUpdateCandidates` は自動保存ではありません。候補を見て、残す価値があるものだけ `propose_memory_update` にかけ、重複や sourceRef 品質を確認してから `write_memory` / `update_memory` を検討します。
 - directive memory に迷う場合は `propose_directive_update` を使います。
 
 ## directive memory の扱い
