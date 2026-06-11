@@ -21,6 +21,7 @@ describe("createMemoryServer", () => {
 
   test("creates a server and store from resolved config", () => {
     const runtime = createMemoryServer({
+      memoryAutoWrite: "off",
       embeddingMode: "auto",
       ollamaBaseUrl: "http://localhost:11434",
       embeddingModel: "embeddinggemma",
@@ -42,6 +43,7 @@ describe("createMemoryServer", () => {
 
   test("registers the expected MCP tools", async () => {
     const runtime = createMemoryServer({
+      memoryAutoWrite: "off",
       embeddingMode: "auto",
       ollamaBaseUrl: "http://localhost:11434",
       embeddingModel: "embeddinggemma",
@@ -98,6 +100,7 @@ describe("createMemoryServer", () => {
 
   test("can run with embeddings disabled for Ollama-free operation", async () => {
     const runtime = createMemoryServer({
+      memoryAutoWrite: "off",
       embeddingMode: "off",
       ollamaBaseUrl: "http://localhost:11434",
       embeddingModel: "embeddinggemma",

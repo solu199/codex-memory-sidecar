@@ -215,8 +215,10 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         session.structuredContent.backupRetention.wouldDelete === false,
       startMemorySessionMemoryFreshness:
         session.structuredContent.memoryFreshness.status === "stale" &&
-        session.structuredContent.memoryUpdateCandidates.some((candidate) => candidate.sourceRef === "pr:#77") &&
-        session.structuredContent.memoryUpdateCandidates.some((candidate) => candidate.sourceRef === "git:92e5fcb"),
+        session.structuredContent.autoMemoryCuration.mode === "safe" &&
+        session.structuredContent.autoMemoryCuration.autoWrittenMemories.some((item) => item.sourceRef === "pr:#77") &&
+        session.structuredContent.memoryUpdateCandidates.some((candidate) => candidate.sourceRef === "git:92e5fcb") &&
+        session.structuredContent.memoryUpdateCandidates.some((candidate) => candidate.kind === "session"),
       consolidateNearDuplicate:
         consolidation.structuredContent.proposedMerges.some(
           (proposal) =>
@@ -244,8 +246,8 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         restorePlan.structuredContent.backup.memoryCount < restorePlan.structuredContent.current.memoryCount &&
         existsSync(backupPath),
       inspectBackupScoped:
-        inspection.structuredContent.memories.length === 1 &&
-        inspection.structuredContent.memories[0]?.id === alpha.structuredContent.memory.id,
+        inspection.structuredContent.memories.some((memory) => memory.id === alpha.structuredContent.memory.id) &&
+        inspection.structuredContent.memories.some((memory) => memory.sourceRef === "pr:#77"),
       repairMemoryIndex:
         repair.structuredContent.repaired === true &&
         repair.structuredContent.before.fts.missingCount === 1 &&
@@ -261,6 +263,7 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         dashboard.directives.some((item) => item.id === directive.structuredContent.directive.id),
       dashboardShowsMemoryFreshness:
         dashboard.memoryFreshness.status === "stale" &&
+        dashboard.autoMemoryCuration.mode === "safe" &&
         dashboard.memoryUpdateCandidates.some((candidate) => candidate.sourceRef === "pr:#77") &&
         dashboard.memoryUpdateCandidates.some((candidate) => candidate.sourceRef === "git:92e5fcb")
     };
@@ -314,7 +317,11 @@ async function fetchDashboardSnapshot(
       recentMemories: Array<{ sourceType: string; sourceRef: string }>;
       directives: Array<{ id: number; content: string }>;
       memoryFreshness: { status: string };
-      memoryUpdateCandidates: Array<{ sourceRef: string }>;
+      memoryUpdateCandidates: Array<{ sourceRef: string; kind?: string }>;
+      autoMemoryCuration: {
+        mode: string;
+        autoWrittenMemories?: Array<{ sourceRef: string }>;
+      };
     };
   } finally {
     await new Promise<void>((resolve, reject) => {

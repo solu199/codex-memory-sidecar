@@ -55,6 +55,7 @@ export async function startDashboardCompanion(options: DashboardCompanionOptions
   const server = createDashboardServer(options.store, {
     embeddingProvider,
     embeddingRequired: options.config.embeddingMode === "ollama",
+    autoMemoryWrite: options.config.memoryAutoWrite,
     ollama:
       options.config.embeddingMode === "off"
         ? undefined

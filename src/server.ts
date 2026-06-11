@@ -26,7 +26,8 @@ export function createMemoryServer(config: MemorySidecarConfig): MemoryServerRun
 
   registerMemoryTools(server, store, {
     embeddingProvider,
-    embeddingRequired: config.embeddingMode === "ollama"
+    embeddingRequired: config.embeddingMode === "ollama",
+    autoMemoryWrite: config.memoryAutoWrite
   });
 
   return { server, store };

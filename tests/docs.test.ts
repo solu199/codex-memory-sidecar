@@ -14,6 +14,9 @@ describe("documentation", () => {
     expect(readme).toContain('embedding_mode = "ollama"');
     expect(readme).toContain("memoryFreshness");
     expect(readme).toContain("memoryUpdateCandidates");
+    expect(readme).toContain('memory_auto_write = "off"');
+    expect(readme).toContain('memory_auto_write = "safe"');
+    expect(readme).toContain("autoMemoryCuration");
     expect(readme).toContain("Codex app は利用例のひとつ");
     expect(readme).not.toContain("C:\\Users\\hare1");
     expect(readme).not.toContain("個人利用を前提");
@@ -45,6 +48,8 @@ describe("documentation", () => {
     expect(skill).toContain("propose_memory_update");
     expect(skill).toContain("memoryFreshness");
     expect(skill).toContain("memoryUpdateCandidates");
+    expect(skill).toContain("autoMemoryCuration");
+    expect(skill).toContain('memory_auto_write = "safe"');
     expect(skill).toContain("propose_directive_update");
     expect(skill).toContain("backup_memory");
     expect(skill).toContain("When a new chat starts");
@@ -60,6 +65,8 @@ describe("documentation", () => {
     expect(protocol).toContain("not purely read-only");
     expect(protocol).toContain("memoryFreshness");
     expect(protocol).toContain("memoryUpdateCandidates");
+    expect(protocol).toContain("autoMemoryCuration");
+    expect(protocol).toContain('memory_auto_write = "safe"');
     expect(openaiAgent).toContain('type: "mcp"');
     expect(openaiAgent).toContain('value: "codex-memory-sidecar"');
   });

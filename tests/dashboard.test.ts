@@ -256,12 +256,54 @@ describe("dashboard", () => {
         suggestedTool: "propose_memory_update"
       })
     ]);
+    expect(status.autoMemoryCuration).toMatchObject({
+      mode: "safe",
+      evaluatedCount: 1,
+      reviewCount: 1,
+      autoWriteEligibleCount: 0,
+      skippedCount: 0
+    });
     expect(status.warningActions).toContainEqual(
       expect.objectContaining({
         title: "メモリ更新が古い可能性があります",
         tools: ["propose_memory_update", "write_memory"]
       })
     );
+  });
+
+  test("buildDashboardStatus reports auto memory curation safe eligibility without writing", async () => {
+    store.createMemory({
+      content: "Old memory before recent repository work.",
+      summary: "Old saved memory",
+      layer: "recall",
+      tags: ["freshness"],
+      sourceType: "manual",
+      sourceRef: "memory:freshness",
+      projectScope: "alpha"
+    });
+
+    const status = await buildDashboardStatus(store, {
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) },
+      autoMemoryWrite: "safe",
+      now: new Date("2026-06-20T03:20:00Z"),
+      workspaceActivity: {
+        pullRequests: [
+          {
+            number: 79,
+            title: "メモリ鮮度と保存候補を表示",
+            mergedAt: new Date("2026-06-20T03:00:20Z")
+          }
+        ]
+      }
+    });
+
+    expect(status.autoMemoryCuration).toMatchObject({
+      mode: "safe",
+      evaluatedCount: 1,
+      autoWriteEligibleCount: 1,
+      note: expect.stringContaining("start_memory_session")
+    });
+    expect(status.database.memoryCount).toBe(1);
   });
 
   test("serves HTML and JSON status over HTTP", async () => {
@@ -281,6 +323,7 @@ describe("dashboard", () => {
       expect(page.headers.get("content-type")).toContain("text/html");
       const html = await page.text();
       expect(html).toContain("Codex Memory Sidecar");
+      expect(html).toContain("Auto Memory Curation");
       expect(html).toContain("メモリ統計");
       expect(html).toContain("Directive Memory");
       expect(html).toContain("無効化済み Directive Memory");
@@ -309,7 +352,10 @@ describe("dashboard", () => {
           },
           byProjectScope: []
         },
-        recentMemories: []
+        recentMemories: [],
+        autoMemoryCuration: {
+          mode: "safe"
+        }
       });
     } finally {
       await new Promise<void>((resolve, reject) => {

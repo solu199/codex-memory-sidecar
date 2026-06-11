@@ -160,7 +160,9 @@ MCP server と同時起動する Dashboard は、既定では同じ URL を一�
 
 Dashboard は active directive memory と無効化済み directive memory の内容を表示します。これは強い記憶をユーザーが監査できるようにするためです。通常メモリの本文や audit payload は表示せず、要約とメタデータだけを表示します。
 
-Dashboard の `/api/status` は `memoryFreshness` と `memoryUpdateCandidates` も返します。`memoryFreshness` は最新メモリ更新日と最近の作業履歴の差を示し、`memoryUpdateCandidates` は最近のIssue、PR、commitなどから通常メモリに残す候補を提示します。これは自動保存ではありません。残す価値がある候補だけを `propose_memory_update` にかけ、重複や sourceRef 品質を確認してから `write_memory` / `update_memory` を検討してください。
+Dashboard の `/api/status` は `memoryFreshness`、`memoryUpdateCandidates`、`autoMemoryCuration` も返します。`memoryFreshness` は最新メモリ更新日と最近の作業履歴の差を示し、`memoryUpdateCandidates` は最近のIssue、PR、commit、session activityなどから通常メモリに残す候補を提示します。`memory_auto_write = "off"` / `"review"` では自動保存しません。`"safe"` では `start_memory_session` 実行時だけ、高信頼・非重複・sourceRef良好・secret検出通過の候補だけを自動保存します。
+
+既定値は `memory_auto_write = "safe"` です。自動保存を止めたい場合は `off`、評価だけ見たい場合は `review` を設定してください。Dashboard の再読み込みだけでは自動保存しません。
 
 Dashboard の `/api/status` には `dashboard.schemaVersion` が含まれます。MCP server 起動時に同じポートの既存 Dashboard を見つけた場合、この schema version が一致する時だけ再利用します。一致しない、または古い Dashboard が schema version を返さない場合は stale warning を出します。その場合は古い Dashboard プロセスを停止し、MCP server を再起動してください。
 
@@ -169,6 +171,7 @@ Dashboard の `/api/status` には `dashboard.schemaVersion` が含まれます�
 `config/memory-sidecar.toml` を作ると既定値を上書きできます。
 
 ```toml
+memory_auto_write = "safe"
 embedding_mode = "auto"
 ollama_base_url = "http://localhost:11434"
 embedding_model = "embeddinggemma"
@@ -182,6 +185,14 @@ startup_wal_checkpoint = true
 auto_backup_on_startup = false
 ```
 
+`memory_auto_write` は通常メモリ候補の自動キュレーション設定です。
+
+- `safe`: 既定値。`start_memory_session` 実行時だけ、高信頼・非重複・sourceRef良好・secret検出通過の候補を `write_memory` 相当で自動保存します。保存理由、評価スコア、sourceRef、元候補、重複確認結果は audit payload に残します。低信頼候補や session activity は review 扱いです。
+- `review`: 自動保存せず、MCP側で評価スコア、sourceRef品質、secret検出、重複候補を見たうえで review 候補として返します。
+- `off`: 自動キュレーション保存を無効化します。`memoryFreshness` / `memoryUpdateCandidates` は表示しますが、自動保存はしません。
+
+Dashboard は `autoMemoryCuration` を表示しますが、Dashboard の再読み込みだけでは自動保存しません。`safe` の実書き込みは `start_memory_session` のタイミングに限定しています。
+
 `embedding_mode` は次の3種類です。
 
 - `auto`: 既定値。Ollama が使える場合は semantic search を使い、使えない場合は警告で作業を止めず SQLite FTS で動きます。
@@ -191,6 +202,7 @@ auto_backup_on_startup = false
 主な環境変数:
 
 - `CODEX_MEMORY_DB`
+- `CODEX_MEMORY_AUTO_WRITE`
 - `CODEX_MEMORY_EMBEDDING_MODE`
 - `OLLAMA_BASE_URL`
 - `CODEX_MEMORY_EMBEDDING_MODEL`
@@ -354,8 +366,9 @@ Use the `codex-memory-sidecar` MCP server as the durable local memory layer for 
 1. 作業開始時に `start_memory_session` を呼び、directive、health、backup retention、warnings を確認します。
 2. directive memory がある場合は、優先順位を確認しつつ、現在のユーザー指示・`AGENTS.md`・実ファイルと衝突しないか見ます。
 3. `start_memory_session` は作業開始の監査イベントを記録するため、完全な読み取り専用操作ではありません。実用上は有用な履歴ですが、件数確認だけを厳密に比較するテストでは event count が増える点に注意します。
-4. `start_memory_session` と Dashboard の `memoryFreshness` / `memoryUpdateCandidates` を見て、最近のIssue・PR・commit・設計判断が通常メモリに未反映ではないか確認します。
-5. 保存候補がある場合も自動保存はせず、残す価値があるものだけ `propose_memory_update` にかけ、重複や sourceRef 品質を確認してから `write_memory` / `update_memory` を検討します。
+4. `start_memory_session` と Dashboard の `memoryFreshness` / `memoryUpdateCandidates` / `autoMemoryCuration` を見て、最近のIssue・PR・commit・session activity・設計判断が通常メモリに未反映ではないか確認します。
+5. `memory_auto_write = "off"` / `"review"` では自動保存せず、残す価値があるものだけ `propose_memory_update` にかけます。`"safe"` では `start_memory_session` 実行時だけ高信頼候補を自動保存し、評価理由と重複確認結果を audit に残します。
+   既定値は `"safe"` です。自動保存を避けたい運用では `off` または `review` を明示してください。
 6. 過去判断が必要なときだけ `search_memory` を使います。
 7. 強い運用指示を残す場合は `propose_directive_update` を先に使います。
 8. 大きな変更、削除、修復の前には `backup_memory` と `verify_backup` を使います。

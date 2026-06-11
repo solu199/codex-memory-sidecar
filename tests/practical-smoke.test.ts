@@ -25,7 +25,7 @@ describe("runPracticalSmoke", () => {
       auditRecorded: true,
       dashboardShowsProjectScopes: true
     });
-    expect(result.memoryCount).toBe(4);
+    expect(result.memoryCount).toBe(5);
     expect(result.eventCount).toBeGreaterThan(0);
     expect(result.warnings).toEqual([]);
   });
