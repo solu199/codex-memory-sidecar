@@ -8,6 +8,7 @@ import Database from "better-sqlite3";
 
 import { createDashboardServer } from "./dashboard.js";
 import type { EmbeddingProvider } from "./embedding.js";
+import type { WorkspaceActivity } from "./memory-freshness.js";
 import { createToolHandlers } from "./mcp-tools.js";
 import { MemoryStore } from "./memory-store.js";
 
@@ -40,7 +41,27 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
   const projectPath = path.join(tempDir, "project-alpha");
   const store = new MemoryStore(databasePath);
   const embeddingProvider = new DeterministicEmbeddingProvider();
-  const tools = createToolHandlers(store, { embeddingProvider });
+  const workspaceActivity: WorkspaceActivity = {
+    commits: [
+      {
+        hash: "92e5fcb1234567890",
+        subject: "Ollama表示と手動MCP例を改善",
+        committedAt: new Date("2026-06-20T03:00:20Z")
+      }
+    ],
+    pullRequests: [
+      {
+        number: 77,
+        title: "Ollama表示と手動MCP例を改善",
+        mergedAt: new Date("2026-06-20T03:00:20Z")
+      }
+    ]
+  };
+  const tools = createToolHandlers(store, {
+    embeddingProvider,
+    workspaceActivity,
+    now: new Date("2026-06-20T03:20:00Z")
+  });
   let backupPath = "";
 
   try {
@@ -153,7 +174,7 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
     }
     const repair = await tools.repairMemoryIndex({});
     const audit = await tools.auditMemory({ limit: 20 });
-    const dashboard = await fetchDashboardSnapshot(store, embeddingProvider);
+    const dashboard = await fetchDashboardSnapshot(store, embeddingProvider, workspaceActivity);
     const counts = store.countRecords();
 
     const scopedIds = scopedSearch.structuredContent.memories.map((memory) => memory.id);
@@ -192,6 +213,10 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         session.structuredContent.backupRetention.backupCount === 0 &&
         session.structuredContent.backupRetention.prunableCount === 0 &&
         session.structuredContent.backupRetention.wouldDelete === false,
+      startMemorySessionMemoryFreshness:
+        session.structuredContent.memoryFreshness.status === "stale" &&
+        session.structuredContent.memoryUpdateCandidates.some((candidate) => candidate.sourceRef === "pr:#77") &&
+        session.structuredContent.memoryUpdateCandidates.some((candidate) => candidate.sourceRef === "git:92e5fcb"),
       consolidateNearDuplicate:
         consolidation.structuredContent.proposedMerges.some(
           (proposal) =>
@@ -233,7 +258,11 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         dashboardRecentSources.includes("smoke:npm run smoke:practical"),
       dashboardShowsDirectiveMemory:
         dashboard.directives.some((item) => item.content.includes("directive memory must be visible")) &&
-        dashboard.directives.some((item) => item.id === directive.structuredContent.directive.id)
+        dashboard.directives.some((item) => item.id === directive.structuredContent.directive.id),
+      dashboardShowsMemoryFreshness:
+        dashboard.memoryFreshness.status === "stale" &&
+        dashboard.memoryUpdateCandidates.some((candidate) => candidate.sourceRef === "pr:#77") &&
+        dashboard.memoryUpdateCandidates.some((candidate) => candidate.sourceRef === "git:92e5fcb")
     };
 
     return {
@@ -253,8 +282,16 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
   }
 }
 
-async function fetchDashboardSnapshot(store: MemoryStore, embeddingProvider: EmbeddingProvider) {
-  const server = createDashboardServer(store, { embeddingProvider });
+async function fetchDashboardSnapshot(
+  store: MemoryStore,
+  embeddingProvider: EmbeddingProvider,
+  workspaceActivity: WorkspaceActivity
+) {
+  const server = createDashboardServer(store, {
+    embeddingProvider,
+    workspaceActivity,
+    now: new Date("2026-06-20T03:20:00Z")
+  });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   try {
     const address = server.address();
@@ -276,6 +313,8 @@ async function fetchDashboardSnapshot(store: MemoryStore, embeddingProvider: Emb
       };
       recentMemories: Array<{ sourceType: string; sourceRef: string }>;
       directives: Array<{ id: number; content: string }>;
+      memoryFreshness: { status: string };
+      memoryUpdateCandidates: Array<{ sourceRef: string }>;
     };
   } finally {
     await new Promise<void>((resolve, reject) => {

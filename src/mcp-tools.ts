@@ -2,6 +2,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { EmbeddingProvider } from "./embedding.js";
+import {
+  buildMemoryFreshness,
+  collectWorkspaceActivity,
+  type WorkspaceActivity
+} from "./memory-freshness.js";
 import { MemoryStore } from "./memory-store.js";
 import type { Directive, DirectiveScope, Memory, MemoryLayer, SearchMemoryResult } from "./types.js";
 
@@ -367,6 +372,8 @@ interface AuditMemoryToolInput {
 interface ToolHandlerOptions {
   embeddingProvider?: EmbeddingProvider;
   embeddingRequired?: boolean;
+  workspaceActivity?: WorkspaceActivity;
+  now?: Date;
 }
 
 export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptions = {}) {
@@ -754,6 +761,12 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
     async startMemorySession(input: StartMemorySessionToolInput) {
       const databaseHealth = store.checkDatabaseHealth();
       const stats = store.getStats();
+      const memoryFreshnessReport = buildMemoryFreshness({
+        latestMemoryUpdatedAt: stats.updatedAtRange.newest,
+        memoryCount: stats.memoryCount,
+        activity: options.workspaceActivity ?? collectWorkspaceActivity(input.projectPath ?? process.cwd()),
+        now: options.now
+      });
       const backupRetention = serializeBackupRetentionSummary(store.planBackupRetention());
       const embedding = await tryEmbed(options.embeddingProvider, input.taskDescription);
       const database = {
@@ -791,6 +804,8 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           repairRecommended,
           sessionGuidance,
           directives: directives.map(serializeDirective),
+          memoryFreshness: memoryFreshnessReport.freshness,
+          memoryUpdateCandidates: memoryFreshnessReport.candidates,
           digest: "",
           memories: [] as unknown[],
           warnings,
@@ -820,6 +835,8 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         repairRecommended,
         sessionGuidance,
         directives: directives.map(serializeDirective),
+        memoryFreshness: memoryFreshnessReport.freshness,
+        memoryUpdateCandidates: memoryFreshnessReport.candidates,
         digest: compactDigest(serialized, input.maxTokens ?? 800),
         memories: results.map(serializeSessionMemory),
         warnings,

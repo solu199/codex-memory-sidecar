@@ -218,6 +218,52 @@ describe("dashboard", () => {
     ]);
   });
 
+  test("buildDashboardStatus reports memory freshness and update candidates from workspace activity", async () => {
+    store.createMemory({
+      content: "Old memory before recent repository work.",
+      summary: "Old saved memory",
+      layer: "recall",
+      tags: ["freshness"],
+      sourceType: "manual",
+      sourceRef: "memory:freshness",
+      projectScope: "alpha"
+    });
+
+    const status = await buildDashboardStatus(store, {
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) },
+      now: new Date("2026-06-20T03:20:00Z"),
+      workspaceActivity: {
+        commits: [
+          {
+            hash: "92e5fcb1234567890",
+            subject: "Ollama表示と手動MCP例を改善",
+            committedAt: new Date("2026-06-20T03:00:20Z")
+          }
+        ]
+      }
+    });
+
+    expect(status.memoryFreshness).toMatchObject({
+      status: "stale",
+      latestMemoryUpdatedAt: expect.any(String),
+      latestWorkspaceActivityAt: "2026-06-20T03:00:20.000Z",
+      candidateCount: 1
+    });
+    expect(status.memoryUpdateCandidates).toEqual([
+      expect.objectContaining({
+        kind: "commit",
+        sourceRef: "git:92e5fcb",
+        suggestedTool: "propose_memory_update"
+      })
+    ]);
+    expect(status.warningActions).toContainEqual(
+      expect.objectContaining({
+        title: "メモリ更新が古い可能性があります",
+        tools: ["propose_memory_update", "write_memory"]
+      })
+    );
+  });
+
   test("serves HTML and JSON status over HTTP", async () => {
     const server = createDashboardServer(store, {
       embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) }
@@ -364,6 +410,8 @@ describe("dashboard", () => {
       });
       expect(elementFor("warnings").innerHTML).toContain("現在");
       expect(elementFor("warnings").innerHTML).toContain("なし");
+      expect(elementFor("memory-freshness").innerHTML).toContain("最新メモリ更新");
+      expect(elementFor("memory-candidates").innerHTML).toContain("保存候補");
       expect(elementFor("ollama-status")).toMatchObject({
         textContent: "正常",
         className: "value status-ok"
@@ -516,7 +564,8 @@ describe("dashboard", () => {
           throw new Error("Ollama offline");
         })
       },
-      ollamaRequired: false
+      ollamaRequired: false,
+      workspaceActivity: { commits: [] }
     });
 
     expect(status.ok).toBe(true);
