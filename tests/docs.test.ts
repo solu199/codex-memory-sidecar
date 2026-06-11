@@ -9,6 +9,9 @@ describe("documentation", () => {
     expect(readme).toContain("MCP対応AIエージェント向け");
     expect(readme).toContain("Ollamaなしでも利用できます");
     expect(readme).toContain("Ollamaを使うと");
+    expect(readme).toContain("手動MCP tool入力例");
+    expect(readme).toContain("初めて試す場合は、まず Ollama なし");
+    expect(readme).toContain('embedding_mode = "ollama"');
     expect(readme).toContain("Codex app は利用例のひとつ");
     expect(readme).not.toContain("C:\\Users\\hare1");
     expect(readme).not.toContain("個人利用を前提");
@@ -53,6 +56,18 @@ describe("documentation", () => {
     expect(protocol).toContain("not purely read-only");
     expect(openaiAgent).toContain('type: "mcp"');
     expect(openaiAgent).toContain('value: "codex-memory-sidecar"');
+  });
+
+  test("README includes manual MCP examples and Ollama mode guidance", () => {
+    const readme = readFileSync("README.md", "utf8");
+
+    expect(readme).toContain('"tool": "start_memory_session"');
+    expect(readme).toContain('"tool": "write_memory"');
+    expect(readme).toContain('"tool": "propose_memory_update"');
+    expect(readme).toContain('"tool": "search_memory"');
+    expect(readme).toContain('"tool": "propose_directive_update"');
+    expect(readme).toContain("Dashboard では Ollama が無効または任意扱いとして表示されます");
+    expect(readme).toContain("Ollama を必須扱いにします");
   });
 
   test("public safety and contribution documents are present", () => {

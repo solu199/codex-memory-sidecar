@@ -79,6 +79,8 @@ npm run smoke:ollama
 
 `smoke:ollama` は、Ollama と embedding model が使える環境だけで実行する追加検証です。通常の CI や基本利用には必須ではありません。
 
+初めて試す場合は、まず Ollama なしのまま `npm run smoke:mcp` と `npm run smoke:practical` が通ることを確認してください。その後、意味検索も試したい場合だけ Ollama を起動して `npm run smoke:ollama` を追加で実行します。
+
 ## 公開・貢献・安全性
 
 - セキュリティ方針: `SECURITY.md`
@@ -121,6 +123,8 @@ Ollamaなしでも利用できます。通常メモリの保存、SQLite FTS に
 
 この構成は、初めて試す人や CI での検証に向いています。
 
+Dashboard では Ollama が無効または任意扱いとして表示されます。`embedding_mode = "auto"` では Ollama が使えない場合も作業を止めず、検索は SQLite FTS にフォールバックします。
+
 ### Ollamaあり
 
 Ollamaを使うと、embedding による semantic search が有効になり、キーワードが完全一致しない過去メモリも見つけやすくなります。Dashboard では設定済みモデルの状態も確認できます。
@@ -133,6 +137,8 @@ ollama pull qwen3
 ```
 
 既定設定では、embedding model に `embeddinggemma`、maintenance model に `qwen3` を使います。必要に応じて環境変数または設定ファイルで変更できます。
+
+`embedding_mode = "ollama"` にした場合は Ollama を必須扱いにします。Ollama が起動していない、または設定済みモデルが不足している場合、health / Dashboard は要確認として警告と対応アクションを表示します。
 
 ## Dashboard
 
@@ -213,6 +219,94 @@ directive memory は通常メモリより強い「運用指示の記憶」です
 - プロジェクト作業中に directive を追加・変更する場合は、`propose_directive_update` を先に使い、global か project かをユーザーに確認してから `write_directive` を実行します。
 - 古くなった directive は削除せず、まず `disable_directive` で無効化します。
 - 秘密情報、トークン、個人情報の詳細、一時的な作業ログは保存しません。
+
+## 手動MCP tool入力例
+
+Codex app などの MCP client からは自然文で依頼しても使えますが、tool の引数を明示したい場合は次の形を目安にします。
+
+### 作業開始・状態確認
+
+```json
+{
+  "tool": "start_memory_session",
+  "arguments": {
+    "taskDescription": "READMEの導入説明を確認する",
+    "projectPath": "C:\\Users\\you\\projects\\codex-memory-sidecar"
+  }
+}
+```
+
+`health_check` だけを頼みたい場合も、エージェント運用では先に `start_memory_session` を単独で呼び、directive、warnings、repair 推奨を読んでから `health_check` を呼びます。
+
+```json
+{
+  "tool": "health_check",
+  "arguments": {}
+}
+```
+
+### 通常メモリの保存
+
+```json
+{
+  "tool": "write_memory",
+  "arguments": {
+    "content": "このプロジェクトではREADME、Issue、PR、コミットメッセージを日本語で書く。",
+    "layer": "recall",
+    "tags": ["documentation", "japanese"],
+    "sourceType": "manual",
+    "sourceRef": "README.md",
+    "projectPath": "C:\\Users\\you\\projects\\codex-memory-sidecar"
+  }
+}
+```
+
+迷う場合は、いきなり保存せず `propose_memory_update` を先に使います。
+
+```json
+{
+  "tool": "propose_memory_update",
+  "arguments": {
+    "content": "Dashboardが古く見える時は stale process と port reuse を疑う。",
+    "taskContext": "ローカルDashboardの運用注意",
+    "sourceType": "manual",
+    "sourceRef": "docs/daily-operations.md",
+    "projectPath": "C:\\Users\\you\\projects\\codex-memory-sidecar"
+  }
+}
+```
+
+### 検索
+
+```json
+{
+  "tool": "search_memory",
+  "arguments": {
+    "query": "Dashboard stale process port reuse",
+    "projectPath": "C:\\Users\\you\\projects\\codex-memory-sidecar",
+    "limit": 5
+  }
+}
+```
+
+通常は `includeEmbedding: true` を指定しません。embedding 配列は大きく、普段の判断には不要です。
+
+### directive memory の提案
+
+```json
+{
+  "tool": "propose_directive_update",
+  "arguments": {
+    "content": "READMEを更新するときは日本語を基本にする。",
+    "taskContext": "ユーザー向け文書の長期方針",
+    "preferredScope": "global",
+    "sourceType": "manual",
+    "sourceRef": "AGENTS-memory-protocol.md"
+  }
+}
+```
+
+directive memory は強い運用ルールなので、`write_directive` の前に global / project のどちらにするかを確認してください。
 
 ## Codex app で使う場合
 

@@ -368,6 +368,7 @@ describe("dashboard", () => {
         textContent: "正常",
         className: "value status-ok"
       });
+      expect(elementFor("ollama-configured").innerHTML).toContain("必須");
       expect(elementFor("ollama-models").innerHTML).toContain("embeddinggemma:latest");
       expect(elementFor("directives").innerHTML).toContain("DOM rendered directive content");
       expect(elementFor("recent-memories").innerHTML).toContain("DOM rendered memory summary");
@@ -488,6 +489,7 @@ describe("dashboard", () => {
     expect(status.ok).toBe(false);
     expect(status.ollama).toMatchObject({
       ok: false,
+      required: true,
       embeddingModelAvailable: true,
       maintenanceModelAvailable: false,
       modelNames: ["embeddinggemma:latest"]
@@ -525,9 +527,85 @@ describe("dashboard", () => {
     });
     expect(status.ollama).toMatchObject({
       ok: false,
+      required: false,
       error: "Ollama offline"
     });
     expect(status.warnings).toEqual([]);
     expect(status.warningActions).toEqual([]);
+  });
+
+  test("renders optional Ollama mode as non-blocking in the DOM", async () => {
+    const server = createDashboardServer(store, {
+      embeddingProvider: { embed: vi.fn(async () => Promise.reject(new Error("Ollama offline"))) },
+      embeddingRequired: false,
+      ollama: {
+        baseUrl: "http://localhost:11434",
+        embeddingModel: "embeddinggemma",
+        maintenanceModel: "qwen3",
+        fetch: vi.fn(async () => {
+          throw new Error("Ollama offline");
+        })
+      },
+      ollamaRequired: false
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Expected TCP server address.");
+      }
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const html = await (await fetch(baseUrl)).text();
+      const status = await (await fetch(`${baseUrl}/api/status`)).json();
+      const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
+      if (!script) {
+        throw new Error("Dashboard script was not found.");
+      }
+      const elements = new Map<string, { textContent: string; innerHTML: string; className: string; listeners: string[] }>();
+      const elementFor = (id: string) => {
+        const existing = elements.get(id);
+        if (existing) {
+          return existing;
+        }
+        const created = {
+          textContent: "",
+          innerHTML: "",
+          className: "",
+          listeners: [] as string[],
+          addEventListener(eventName: string) {
+            this.listeners.push(eventName);
+          }
+        };
+        elements.set(id, created);
+        return created;
+      };
+      const context = {
+        fetch: vi.fn(async () => ({
+          json: async () => status
+        })),
+        document: {
+          getElementById: elementFor
+        }
+      };
+
+      vm.runInNewContext(script, context);
+      await vi.waitFor(() => {
+        expect(elementFor("ollama-status").textContent).toBe("任意");
+      });
+
+      expect(status.ok).toBe(true);
+      expect(status.ollama.required).toBe(false);
+      expect(elementFor("ollama-status")).toMatchObject({
+        textContent: "任意",
+        className: "value status-ok"
+      });
+      expect(elementFor("ollama-configured").innerHTML).toContain("任意");
+      expect(elementFor("warnings").innerHTML).toContain("なし");
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
   });
 });
