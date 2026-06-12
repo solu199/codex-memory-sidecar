@@ -13,12 +13,15 @@ Codex Memory Sidecar を日本企業向けポートフォリオとして公開�
 - Security / Contribution / License: 追加済み
 - Ollama: 任意機能として整理済み
 - Codex Skill: 配布用雛形を追加済み
+- v0.1.0 release draft: `.github/releases/v0.1.0.md` として準備中
+- Dashboard画像: `docs/assets/dashboard-overview.png` としてREADMEに掲載
+- GitHub About / topics: `docs/github-repository-metadata.md` に候補を整理済み。実設定はユーザー承認後に行う
 
 ## 確認結果
 
 ### 0. 公開後の最終確認
 
-2026-06-11 時点で、GitHub repository は public です。公開済みの状態を前提に、tracked file、Git履歴、Issue/PR本文、依存関係、CI、ローカル生成物を確認しました。
+2026-06-12 時点で、GitHub repository は public です。公開済みの状態を前提に、tracked file、Git履歴、Issue/PR本文、依存関係、CI、ローカル生成物を確認しました。
 
 確認結果:
 
@@ -27,6 +30,8 @@ Codex Memory Sidecar を日本企業向けポートフォリオとして公開�
 - `npm audit --omit=dev` は `npm audit fix` 後に 0 vulnerabilities
 - build / test / smoke / skill install check はローカルで成功
 - 最新の GitHub Actions は `main` で成功
+- README は日本語のまま、概要、3分セットアップ、Dashboard画像、安全設計、詳細docs導線が冒頭で分かる構成に更新中
+- `CHANGELOG.md` と v0.1.0 GitHub Release draft を追加中
 
 注意点:
 
@@ -41,6 +46,7 @@ README の主語は「MCP対応AIエージェント向けのローカルメモ�
 
 - #61 READMEを日本語公開向けに再構成
 - #63 Codex Skillとして詳細運用プロトコルを切り出し
+- #92 READMEを日本語ポートフォリオ向けに再整理してDashboard画像を追加
 
 ### 2. ローカル絶対パス
 
@@ -51,6 +57,12 @@ README と tracked docs の主要な手順から、開発者固有のローカ�
 - untracked な作業ファイルは公開対象に含めない
 - サンプルパスは `<repo>`、`<node-install-dir>` のような表記に寄せる
 - Issue / PR / commit message にも、不要なローカル絶対パスや個人情報を書かない
+
+Dashboard画像について:
+
+- 公開用画像は実DBではなくデモDBを使って生成する
+- ローカル絶対パス、ユーザー名、実メモリ本文、秘密情報が写っていないことを目視確認してからREADMEへ掲載する
+- 画像は `docs/assets/dashboard-overview.png` に配置する
 
 ### 3. Ollama の扱い
 
@@ -81,10 +93,13 @@ Issue起点、ブランチ、PR、CI、テスト結果を追える形に整備�
 
 - #59 GitHub運用整備
 - #69 CIのNode.js 20 deprecation annotation対応
+- #91 v0.1.0リリース準備とCHANGELOG整備
+- #92 READMEを日本語ポートフォリオ向けに再整理してDashboard画像を追加
+- #93 GitHub About欄とtopicsをポートフォリオ向けに設定する
 
 ## 後続Issue
 
-この監査から切り出した主要Issueは完了済みです。
+この監査から切り出した主要Issueの多くは完了済みです。v0.1.0公開準備として、次のIssueを継続管理しています。
 
 - #59 GitHub運用整備: 完了
 - #61 README公開向け再構成: 完了
@@ -92,6 +107,9 @@ Issue起点、ブランチ、PR、CI、テスト結果を追える形に整備�
 - #63 Codex Skill化: 完了
 - #64 SECURITY / CONTRIBUTING / LICENSE追加: 完了
 - #69 CI annotation対応: 完了
+- #91 v0.1.0リリース準備とCHANGELOG整備: 対応中
+- #92 READMEを日本語ポートフォリオ向けに再整理してDashboard画像を追加: 対応中
+- #93 GitHub About欄とtopicsをポートフォリオ向けに設定する: 候補提示中。ユーザー承認後に設定する
 
 ## 公開後の定期チェック
 
@@ -103,6 +121,7 @@ Issue起点、ブランチ、PR、CI、テスト結果を追える形に整備�
 - README のセットアップ手順が現在の実装と一致している
 - Issue/PRに不要な個人情報やローカル絶対パスがないか確認する
 - `npm audit --omit=dev`、`npm run build`、`npm test`、主要 smoke を実行する
+- Release draft、CHANGELOG、README、Dashboard画像の内容が同じ説明になっているか確認する
 
 ## 判断
 
