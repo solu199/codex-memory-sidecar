@@ -283,7 +283,7 @@ function inferExternalAuthor(
   ownerLogin: string | null,
 ): boolean | undefined {
   if (!authorLogin) {
-    return undefined;
+    return true;
   }
   if (!ownerLogin) {
     return true;
@@ -326,7 +326,7 @@ function buildCandidates(
       sourceRef: `issue:#${issue.number}`,
       occurredAt: issue.updatedAt.toISOString(),
       authorLogin: issue.authorLogin,
-      externalAuthor: issue.externalAuthor,
+      externalAuthor: issue.externalAuthor ?? true,
       reason: "Issueに残した作業背景や判断が通常メモリに未反映の可能性があります。",
       suggestedTool: "propose_memory_update" as const,
     })),
@@ -338,7 +338,7 @@ function buildCandidates(
       sourceRef: `pr:#${pullRequest.number}`,
       occurredAt: pullRequest.mergedAt.toISOString(),
       authorLogin: pullRequest.authorLogin,
-      externalAuthor: pullRequest.externalAuthor,
+      externalAuthor: pullRequest.externalAuthor ?? true,
       reason: "マージ済みPRの実装結果や運用上の学びが通常メモリに未反映の可能性があります。",
       suggestedTool: "propose_memory_update" as const,
     })),

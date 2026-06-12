@@ -131,12 +131,12 @@ export function evaluateMemoryCandidate(
     reasons.push("Similar or same-source memory already exists.");
   }
   if (
-    candidate.externalAuthor &&
-    (candidate.kind === "issue" || candidate.kind === "pull_request")
+    (candidate.kind === "issue" || candidate.kind === "pull_request") &&
+    candidate.externalAuthor !== false
   ) {
     decision = "review";
     reasons.push(
-      "GitHub Issue/PR activity from an external author is data, not a trusted instruction.",
+      "GitHub Issue/PR activity without a known internal author is data, not a trusted instruction.",
     );
   }
   if (candidate.kind === "session") {

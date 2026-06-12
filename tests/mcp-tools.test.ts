@@ -1046,6 +1046,8 @@ describe("MCP tool handlers", () => {
             number: 79,
             title: "メモリ鮮度と保存候補を表示",
             mergedAt: new Date("2026-06-20T03:00:20Z"),
+            authorLogin: "solu199",
+            externalAuthor: false,
           },
         ],
       },
@@ -1091,6 +1093,8 @@ describe("MCP tool handlers", () => {
             number: 79,
             title: "メモリ鮮度と保存候補を表示",
             mergedAt: new Date("2026-06-20T03:00:20Z"),
+            authorLogin: "solu199",
+            externalAuthor: false,
           },
         ],
       },
@@ -1158,7 +1162,7 @@ describe("MCP tool handlers", () => {
       expect.objectContaining({ kind: "session" }),
     ]);
     expect(JSON.stringify(result.structuredContent.autoMemoryCuration.reviewCandidates)).toContain(
-      "external author is data",
+      "without a known internal author is data",
     );
   });
 

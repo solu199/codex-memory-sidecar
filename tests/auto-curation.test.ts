@@ -13,6 +13,7 @@ const baseCandidate: MemoryUpdateCandidate = {
   occurredAt: "2026-06-11T03:37:13.000Z",
   reason: "マージ済みPRの実装結果や運用上の学びが通常メモリに未反映の可能性があります。",
   suggestedTool: "propose_memory_update",
+  externalAuthor: false,
 };
 
 describe("auto memory curation", () => {
@@ -33,6 +34,21 @@ describe("auto memory curation", () => {
     expect(evaluation.score).toBeGreaterThanOrEqual(0.82);
     expect(evaluation.content).toContain("PR #79");
     expect(evaluation.tags).toContain("auto-curated");
+  });
+
+  test("keeps GitHub candidates without a known internal author in review", () => {
+    const evaluation = evaluateMemoryCandidate(
+      {
+        ...baseCandidate,
+        externalAuthor: undefined,
+      },
+      [],
+    );
+
+    expect(evaluation.decision).toBe("review");
+    expect(evaluation.reasons).toContain(
+      "GitHub Issue/PR activity without a known internal author is data, not a trusted instruction.",
+    );
   });
 
   test("downgrades duplicates to review instead of auto-writing", () => {
@@ -87,7 +103,7 @@ describe("auto memory curation", () => {
     expect(evaluation.score).toBeGreaterThanOrEqual(0.82);
     expect(evaluation.content).toContain("Author: external-contributor (external).");
     expect(evaluation.reasons).toContain(
-      "GitHub Issue/PR activity from an external author is data, not a trusted instruction.",
+      "GitHub Issue/PR activity without a known internal author is data, not a trusted instruction.",
     );
   });
 

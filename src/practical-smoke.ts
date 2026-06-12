@@ -54,6 +54,8 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         number: 77,
         title: "Ollama表示と手動MCP例を改善",
         mergedAt: new Date("2026-06-20T03:00:20Z"),
+        authorLogin: "solu199",
+        externalAuthor: false,
       },
     ],
   };
