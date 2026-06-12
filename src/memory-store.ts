@@ -279,24 +279,7 @@ export class MemoryStore {
     limit: number,
     includeKeywordRank = false,
   ): (MemoryRow & { keyword_rank: number })[] | MemoryRow[] {
-    const clauses = ["memories_fts MATCH @query"];
-    const params: Record<string, unknown> = {
-      query: quoteFtsQuery(input.query),
-      limit,
-    };
-
-    addMemorySearchFilters(clauses, params, input, "m.");
-
-    const ftsRows = this.db
-      .prepare(
-        `SELECT m.*, bm25(memories_fts) AS keyword_rank
-         FROM memories_fts
-         JOIN memories m ON m.id = memories_fts.rowid
-         WHERE ${clauses.join(" AND ")}
-         ORDER BY keyword_rank ASC, m.importance DESC, m.updated_at DESC
-         LIMIT @limit`,
-      )
-      .all(params) as (MemoryRow & { keyword_rank: number })[];
+    const ftsRows = this.rrfKeywordRows(input, limit);
 
     if (ftsRows.length >= limit) {
       return includeKeywordRank ? ftsRows : ftsRows.map(stripKeywordRank);
@@ -313,6 +296,82 @@ export class MemoryStore {
     ].slice(0, limit);
 
     return includeKeywordRank ? mergedRows : mergedRows.map(stripKeywordRank);
+  }
+
+  private rrfKeywordRows(
+    input: SearchMemoryInput,
+    limit: number,
+  ): (MemoryRow & { keyword_rank: number })[] {
+    const candidateLimit = Math.max(limit, Math.min(limit * 4, 100));
+    const trigramRows = this.ftsRows(input, "memories_fts", candidateLimit);
+    const porterRows = this.ftsRows(input, "memories_fts_porter", candidateLimit);
+    const rowById = new Map<number, MemoryRow>();
+    const rrfScoreById = new Map<number, number>();
+    const bestRankById = new Map<number, number>();
+
+    for (const rows of [trigramRows, porterRows]) {
+      rows.forEach((row, index) => {
+        rowById.set(row.id, row);
+        rrfScoreById.set(row.id, (rrfScoreById.get(row.id) ?? 0) + 1 / (60 + index + 1));
+        bestRankById.set(
+          row.id,
+          Math.min(bestRankById.get(row.id) ?? Number.POSITIVE_INFINITY, row.keyword_rank),
+        );
+      });
+    }
+
+    return [...rowById.values()]
+      .map((row) => ({
+        ...row,
+        keyword_rank: -(rrfScoreById.get(row.id) ?? 0),
+        best_keyword_rank: bestRankById.get(row.id) ?? 0,
+      }))
+      .sort((left, right) => {
+        const byRrf = left.keyword_rank - right.keyword_rank;
+        if (byRrf !== 0) {
+          return byRrf;
+        }
+
+        const byKeywordRank = left.best_keyword_rank - right.best_keyword_rank;
+        if (byKeywordRank !== 0) {
+          return byKeywordRank;
+        }
+
+        const byImportance = right.importance - left.importance;
+        if (byImportance !== 0) {
+          return byImportance;
+        }
+
+        const byUpdated = right.updated_at.localeCompare(left.updated_at);
+        return byUpdated || right.id - left.id;
+      })
+      .slice(0, limit)
+      .map(({ best_keyword_rank: _bestKeywordRank, ...row }) => row);
+  }
+
+  private ftsRows(
+    input: SearchMemoryInput,
+    table: "memories_fts" | "memories_fts_porter",
+    limit: number,
+  ): (MemoryRow & { keyword_rank: number })[] {
+    const clauses = [`${table} MATCH @query`];
+    const params: Record<string, unknown> = {
+      query: quoteFtsQuery(input.query),
+      limit,
+    };
+
+    addMemorySearchFilters(clauses, params, input, "m.");
+
+    return this.db
+      .prepare(
+        `SELECT m.*, bm25(${table}) AS keyword_rank
+         FROM ${table}
+         JOIN memories m ON m.id = ${table}.rowid
+         WHERE ${clauses.join(" AND ")}
+         ORDER BY keyword_rank ASC, m.importance DESC, m.updated_at DESC
+         LIMIT @limit`,
+      )
+      .all(params) as (MemoryRow & { keyword_rank: number })[];
   }
 
   listEvents(memoryId: number): MemoryEvent[] {
@@ -783,9 +842,19 @@ export class MemoryStore {
   private rebuildFtsIndex(): void {
     const rebuild = this.db.transaction(() => {
       this.db.prepare("DELETE FROM memories_fts").run();
+      this.db.prepare("DELETE FROM memories_fts_porter").run();
       this.db
         .prepare(
           `INSERT INTO memories_fts(rowid, content, summary, tags)
+           SELECT id, content, summary, tags
+           FROM memories
+           WHERE status != 'forgotten'
+           ORDER BY id ASC`,
+        )
+        .run();
+      this.db
+        .prepare(
+          `INSERT INTO memories_fts_porter(rowid, content, summary, tags)
            SELECT id, content, summary, tags
            FROM memories
            WHERE status != 'forgotten'
@@ -871,6 +940,13 @@ export class MemoryStore {
         tokenize = 'trigram'
       );
 
+      CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts_porter USING fts5(
+        content,
+        summary,
+        tags,
+        tokenize = 'porter unicode61'
+      );
+
       CREATE TABLE IF NOT EXISTS directives (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         scope TEXT NOT NULL CHECK (scope IN ('global', 'project')),
@@ -916,6 +992,7 @@ export class MemoryStore {
         ON directives(scope, project_scope, status, priority DESC, updated_at DESC);
     `);
     this.ensureTrigramFtsTable();
+    this.ensurePorterFtsTable();
   }
 
   private ensureTrigramFtsTable(): void {
@@ -934,6 +1011,27 @@ export class MemoryStore {
         summary,
         tags,
         tokenize = 'trigram'
+      );
+    `);
+    this.rebuildFtsIndex();
+  }
+
+  private ensurePorterFtsTable(): void {
+    const row = this.db
+      .prepare("SELECT sql FROM sqlite_master WHERE name = 'memories_fts_porter'")
+      .get() as { sql: string | null } | undefined;
+    const sql = row?.sql ?? "";
+    if (sql && /tokenize\s*=\s*['"]?porter unicode61/i.test(sql)) {
+      return;
+    }
+
+    this.db.exec("DROP TABLE IF EXISTS memories_fts_porter");
+    this.db.exec(`
+      CREATE VIRTUAL TABLE memories_fts_porter USING fts5(
+        content,
+        summary,
+        tags,
+        tokenize = 'porter unicode61'
       );
     `);
     this.rebuildFtsIndex();
@@ -1119,10 +1217,14 @@ export class MemoryStore {
     this.db
       .prepare("INSERT INTO memories_fts(rowid, content, summary, tags) VALUES (?, ?, ?, ?)")
       .run(memory.id, memory.content, memory.summary, memory.tags.join(" "));
+    this.db
+      .prepare("INSERT INTO memories_fts_porter(rowid, content, summary, tags) VALUES (?, ?, ?, ?)")
+      .run(memory.id, memory.content, memory.summary, memory.tags.join(" "));
   }
 
   private deleteFtsRow(memoryId: number): void {
     this.db.prepare("DELETE FROM memories_fts WHERE rowid = ?").run(memoryId);
+    this.db.prepare("DELETE FROM memories_fts_porter WHERE rowid = ?").run(memoryId);
   }
 
   private recordEvent(

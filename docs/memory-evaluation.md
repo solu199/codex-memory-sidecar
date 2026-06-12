@@ -14,7 +14,7 @@ npm run bench:recall
 
 ## 評価していること
 
-- `keyword`: Ollamaなし相当の検索です。SQLite FTS trigram と LIKE fallback で、fixture内の期待メモリを拾えるかを見ます。
+- `keyword`: Ollamaなし相当の検索です。SQLite FTS trigram / porter と RRF、LIKE fallback で、fixture内の期待メモリを拾えるかを見ます。
 - `semantic`: Ollamaあり相当の検索です。CIでは外部モデルを呼ばず、決定的な疑似embeddingを使って semantic search の経路を通します。
 - `recallAt3`: 期待したメモリが上位3件に入った割合です。
 - `precisionAt3`: 上位3件のうち期待メモリだった割合です。

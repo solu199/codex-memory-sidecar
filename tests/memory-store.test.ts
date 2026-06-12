@@ -144,6 +144,9 @@ describe("MemoryStore", () => {
       const ftsSql = migratedDb
         .prepare("SELECT sql FROM sqlite_master WHERE name = 'memories_fts'")
         .get() as { sql: string };
+      const porterFtsSql = migratedDb
+        .prepare("SELECT sql FROM sqlite_master WHERE name = 'memories_fts_porter'")
+        .get() as { sql: string };
       migratedDb.close();
 
       expect(migrated?.projectScope).toBe("global");
@@ -155,6 +158,7 @@ describe("MemoryStore", () => {
         }),
       ).toHaveLength(1);
       expect(ftsSql.sql).toContain("tokenize = 'trigram'");
+      expect(porterFtsSql.sql).toContain("tokenize = 'porter unicode61'");
       expect(legacyStore.getStats().byProjectScope).toEqual([
         expect.objectContaining({
           projectScope: "global",
@@ -188,6 +192,35 @@ describe("MemoryStore", () => {
     expect(store.searchMemory({ query: "stale", limit: 5 })[0]?.memory.id).toBe(created.id);
     expect(store.searchMemory({ query: "ポート再利用", limit: 5 })[0]?.memory.id).toBe(created.id);
     expect(store.searchMemory({ query: "運用", limit: 5 })[0]?.memory.id).toBe(created.id);
+  });
+
+  test("fuses trigram and porter FTS results for English stemming and mixed queries", () => {
+    const running = store.createMemory({
+      content:
+        "Search quality should support running operational checks and repeated indexing repairs.",
+      layer: "recall",
+      tags: ["search", "operations"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8,
+    });
+    const japanese = store.createMemory({
+      content: "検索品質は日本語のダッシュボード運用メモと英語のoperational contextを同時に扱う。",
+      layer: "recall",
+      tags: ["検索", "dashboard"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8,
+    });
+
+    expect(store.searchMemory({ query: "run operation repair", limit: 5 })[0]?.memory.id).toBe(
+      running.id,
+    );
+    expect(store.searchMemory({ query: "検索 dashboard", limit: 5 })[0]?.memory.id).toBe(
+      japanese.id,
+    );
   });
 
   test("checks active database integrity and FTS consistency", () => {

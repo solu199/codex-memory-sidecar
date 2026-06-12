@@ -11,7 +11,7 @@ Codex app は利用例のひとつです。MCP に対応したエージェント
 - **何をするものか**: AIエージェントのための、ローカル保存型の作業メモリ基盤です。
 - **なぜ作ったか**: チャットをまたいでも、設計判断、運用ルール、検証結果、ユーザーの長期的な好みを安全に参照できるようにするためです。
 - **どこに保存するか**: ローカルの SQLite に保存します。外部サービスへ自動送信しません。
-- **Ollama は必須か**: 必須ではありません。Ollamaなしでも利用できます。SQLite FTS trigram と短語LIKE fallback で基本検索が動きます。Ollamaを使うと semantic search とモデル状態確認がより便利になります。
+- **Ollama は必須か**: 必須ではありません。Ollamaなしでも利用できます。SQLite FTS trigram / porter と RRF、短語LIKE fallback で基本検索が動きます。Ollamaを使うと semantic search とモデル状態確認がより便利になります。
 - **安全設計**: `propose_memory_update` / `propose_directive_update` による保存前レビュー、backup / verify / restore plan、secret検出、audit log、Dashboard の警告表示を備えています。
 
 ## 3分セットアップ
@@ -65,7 +65,7 @@ AIコーディングエージェントは、チャットや作業セッション
 
 - MCP server として動作し、AIエージェントから tool 経由で利用できます。
 - SQLite にローカル保存します。外部サービスへの自動送信はしません。
-- Ollamaなしでも利用できます。SQLite FTS trigram と短語LIKE fallback によるキーワード検索だけで、write / search / digest / start session の基本機能が動きます。
+- Ollamaなしでも利用できます。SQLite FTS trigram / porter と RRF、短語LIKE fallback によるキーワード検索だけで、write / search / digest / start session の基本機能が動きます。
 - Ollamaを使うと、embedding による semantic search と Dashboard のモデル状態確認が使えます。
 - `start_memory_session` で、作業開始時に DB health、embedding、FTS、WAL、backup retention、関連メモリ、directive memory をまとめて確認できます。
 - `propose_memory_update` は、DBを書き換えずに保存候補、重複候補、推奨 layer、sourceRef の品質を確認できます。
@@ -116,7 +116,7 @@ npm run bench:recall
 
 - `smoke:mcp`: MCP server 登録、`health_check`、`start_memory_session` を確認します。
 - `smoke:practical`: write/search/digest/directive/backup/dashboard/repair/consolidation の最小実用フローを確認します。
-- `bench:recall`: 小さな固定fixtureで recall / precision / sourceRef品質 / duplicate抑制を確認します。CI向けに Ollama 実体へは接続しません。
+- `bench:recall`: 小さな固定fixtureで recall / precision / sourceRef品質 / duplicate抑制を確認します。CI向けに Ollama 実体へは接続せず、keyword と semantic 経路を分けて確認します。
 
 任意で Ollama を使う場合:
 
