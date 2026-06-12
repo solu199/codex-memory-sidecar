@@ -92,4 +92,30 @@ describe("memory freshness", () => {
     });
     expect(report.candidates).toEqual([]);
   });
+
+  test("treats unknown GitHub authors as external for safe curation review", () => {
+    const report = buildMemoryFreshness({
+      latestMemoryUpdatedAt: new Date("2026-05-18T03:18:00Z"),
+      memoryCount: 4,
+      activity: {
+        issues: [
+          {
+            number: 101,
+            title: "削除済みアカウント由来のIssue",
+            updatedAt: new Date("2026-06-11T03:25:00Z"),
+          },
+        ],
+      },
+      now: new Date("2026-06-11T03:30:00Z"),
+    });
+
+    expect(report.candidates).toEqual([
+      expect.objectContaining({
+        kind: "issue",
+        sourceRef: "issue:#101",
+        authorLogin: undefined,
+        externalAuthor: true,
+      }),
+    ]);
+  });
 });

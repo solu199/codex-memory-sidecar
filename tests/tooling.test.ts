@@ -14,9 +14,14 @@ describe("tooling configuration", () => {
   });
 
   test("ESLint and Prettier configuration files are present", () => {
+    const prettier = JSON.parse(readFileSync(".prettierrc.json", "utf8")) as {
+      endOfLine?: string;
+    };
+
     expect(existsSync("eslint.config.js")).toBe(true);
     expect(existsSync(".prettierrc.json")).toBe(true);
     expect(existsSync(".prettierignore")).toBe(true);
+    expect(prettier.endOfLine).toBe("auto");
   });
 
   test("CI runs format and lint checks before build and tests", () => {

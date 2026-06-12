@@ -302,6 +302,8 @@ describe("dashboard", () => {
             number: 79,
             title: "メモリ鮮度と保存候補を表示",
             mergedAt: new Date("2026-06-20T03:00:20Z"),
+            authorLogin: "solu199",
+            externalAuthor: false,
           },
         ],
       },
