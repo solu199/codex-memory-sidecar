@@ -23,7 +23,7 @@ describe("runOllamaSmoke", () => {
 
     const result = await runOllamaSmoke({
       databasePath: path.join(tempDir, "memory.sqlite"),
-      embeddingProvider: { embed }
+      embeddingProvider: { embed },
     });
 
     expect(result.ok).toBe(true);
@@ -43,7 +43,7 @@ describe("runOllamaSmoke", () => {
 
     const result = await runOllamaSmoke({
       databasePath: path.join(tempDir, "memory.sqlite"),
-      embeddingProvider: { embed }
+      embeddingProvider: { embed },
     });
 
     expect(result.ok).toBe(false);

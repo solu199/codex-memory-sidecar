@@ -27,14 +27,14 @@ describe("runStartupMaintenance", () => {
       layer: "recall",
       tags: ["startup"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const result = await runStartupMaintenance(store, {
       startupIntegrityCheck: true,
       startupFtsSanityCheck: true,
       startupWalCheckpoint: true,
-      autoBackupOnStartup: false
+      autoBackupOnStartup: false,
     });
 
     expect(result.ok).toBe(true);
@@ -50,14 +50,14 @@ describe("runStartupMaintenance", () => {
       layer: "recall",
       tags: ["startup"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const result = await runStartupMaintenance(store, {
       startupIntegrityCheck: true,
       startupFtsSanityCheck: true,
       startupWalCheckpoint: true,
-      autoBackupOnStartup: true
+      autoBackupOnStartup: true,
     });
 
     expect(result.ok).toBe(true);

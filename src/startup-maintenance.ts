@@ -19,12 +19,12 @@ export type StartupMaintenanceOptions = Pick<
 
 export async function runStartupMaintenance(
   store: MemoryStore,
-  options: StartupMaintenanceOptions
+  options: StartupMaintenanceOptions,
 ): Promise<StartupMaintenanceResult> {
   const databaseHealth = store.checkDatabaseHealth({
     integrityCheck: options.startupIntegrityCheck,
     ftsSanityCheck: options.startupFtsSanityCheck,
-    walCheckpoint: options.startupWalCheckpoint
+    walCheckpoint: options.startupWalCheckpoint,
   });
   const warnings = [...databaseHealth.warnings];
 
@@ -33,7 +33,7 @@ export async function runStartupMaintenance(
       ok: databaseHealth.ok,
       databaseHealth,
       backup: null,
-      warnings
+      warnings,
     };
   }
 
@@ -50,9 +50,9 @@ export async function runStartupMaintenance(
       databaseHealth,
       backup: {
         backupPath: backup.backupPath,
-        verification
+        verification,
       },
-      warnings
+      warnings,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -61,7 +61,7 @@ export async function runStartupMaintenance(
       ok: false,
       databaseHealth,
       backup: null,
-      warnings
+      warnings,
     };
   }
 }

@@ -1,20 +1,23 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import {
-  buildAutoCurationResult,
-  type AutoMemoryWriteMode
-} from "./auto-curation.js";
+import { buildAutoCurationResult, type AutoMemoryWriteMode } from "./auto-curation.js";
 import type { EmbeddingProvider } from "./embedding.js";
 import {
   buildMemoryFreshness,
   collectWorkspaceActivity,
-  type WorkspaceActivity
+  type WorkspaceActivity,
 } from "./memory-freshness.js";
 import { MemoryStore } from "./memory-store.js";
 import { containsLikelySecret } from "./secret-detection.js";
 import { analyzeSourceRef } from "./source-ref.js";
-import type { Directive, DirectiveScope, Memory, MemoryLayer, SearchMemoryResult } from "./types.js";
+import type {
+  Directive,
+  DirectiveScope,
+  Memory,
+  MemoryLayer,
+  SearchMemoryResult,
+} from "./types.js";
 
 const layerSchema = z.enum(["core", "recall", "archival"]);
 const directiveScopeSchema = z.enum(["global", "project"]);
@@ -24,7 +27,7 @@ const directivePriorityOrder = [
   "AGENTS.md",
   "directive_memory",
   "normal_memory",
-  "inference"
+  "inference",
 ];
 
 const writeMemorySchema = {
@@ -37,7 +40,7 @@ const writeMemorySchema = {
   projectPath: z.string().min(1).optional(),
   importance: z.number().min(0).max(1).default(0.5),
   confidence: z.number().min(0).max(1).default(0.5),
-  allowSecret: z.boolean().default(false)
+  allowSecret: z.boolean().default(false),
 };
 
 const proposeMemoryUpdateSchema = {
@@ -47,7 +50,7 @@ const proposeMemoryUpdateSchema = {
   projectPath: z.string().min(1).optional(),
   sourceType: z.string().min(1),
   sourceRef: z.string().min(1),
-  allowSecret: z.boolean().default(false)
+  allowSecret: z.boolean().default(false),
 };
 
 const writeDirectiveSchema = {
@@ -60,7 +63,7 @@ const writeDirectiveSchema = {
   sourceType: z.string().min(1),
   sourceRef: z.string().min(1),
   priority: z.number().min(0).max(1).default(0.75),
-  allowSecret: z.boolean().default(false)
+  allowSecret: z.boolean().default(false),
 };
 
 const listDirectivesSchema = {
@@ -69,7 +72,7 @@ const listDirectivesSchema = {
   includeGlobal: z.boolean().default(true),
   includeProject: z.boolean().default(true),
   includeDisabled: z.boolean().default(false),
-  limit: z.number().int().min(1).max(100).default(20)
+  limit: z.number().int().min(1).max(100).default(20),
 };
 
 const proposeDirectiveUpdateSchema = {
@@ -80,12 +83,12 @@ const proposeDirectiveUpdateSchema = {
   preferredScope: directiveScopeSchema.optional(),
   sourceType: z.string().min(1),
   sourceRef: z.string().min(1),
-  allowSecret: z.boolean().default(false)
+  allowSecret: z.boolean().default(false),
 };
 
 const disableDirectiveSchema = {
   directiveId: z.number().int().positive(),
-  reason: z.string().min(1)
+  reason: z.string().min(1),
 };
 
 const healthCheckSchema = {};
@@ -95,7 +98,7 @@ const memoryStatsSchema = {};
 const readMemorySchema = {
   memoryId: z.number().int().positive(),
   includeForgotten: z.boolean().default(false),
-  includeEmbedding: z.boolean().default(false)
+  includeEmbedding: z.boolean().default(false),
 };
 
 const listMemorySummariesSchema = {
@@ -106,7 +109,7 @@ const listMemorySummariesSchema = {
   limit: z.number().int().min(1).max(100).default(20),
   projectScope: z.string().min(1).optional(),
   projectPath: z.string().min(1).optional(),
-  includeCrossProject: z.boolean().default(false)
+  includeCrossProject: z.boolean().default(false),
 };
 
 const searchMemorySchema = {
@@ -118,7 +121,7 @@ const searchMemorySchema = {
   includeEmbedding: z.boolean().default(false),
   projectScope: z.string().min(1).optional(),
   projectPath: z.string().min(1).optional(),
-  includeCrossProject: z.boolean().default(false)
+  includeCrossProject: z.boolean().default(false),
 };
 
 const updateMemorySchema = {
@@ -126,14 +129,14 @@ const updateMemorySchema = {
   newContent: z.string().min(1),
   updateNote: z.string().min(1),
   tags: z.array(z.string()).optional(),
-  allowSecret: z.boolean().default(false)
+  allowSecret: z.boolean().default(false),
 };
 
 const forgetMemorySchema = {
   memoryId: z.number().int().positive(),
   reason: z.string().min(1),
   hardDelete: z.boolean().default(false),
-  confirmHardDelete: z.boolean().default(false)
+  confirmHardDelete: z.boolean().default(false),
 };
 
 const consolidateMemorySchema = {
@@ -143,7 +146,7 @@ const consolidateMemorySchema = {
   maxCandidates: z.number().int().min(1).max(100).default(20),
   projectScope: z.string().min(1).optional(),
   projectPath: z.string().min(1).optional(),
-  includeCrossProject: z.boolean().default(false)
+  includeCrossProject: z.boolean().default(false),
 };
 
 const memoryDigestSchema = {
@@ -151,7 +154,7 @@ const memoryDigestSchema = {
   projectScope: z.string().min(1).optional(),
   projectPath: z.string().optional(),
   includeCrossProject: z.boolean().default(false),
-  maxTokens: z.number().int().min(50).max(4000).default(800)
+  maxTokens: z.number().int().min(50).max(4000).default(800),
 };
 
 const startMemorySessionSchema = {
@@ -159,23 +162,23 @@ const startMemorySessionSchema = {
   projectScope: z.string().min(1).optional(),
   projectPath: z.string().optional(),
   includeCrossProject: z.boolean().default(false),
-  maxTokens: z.number().int().min(50).max(4000).default(800)
+  maxTokens: z.number().int().min(50).max(4000).default(800),
 };
 
 const backupMemorySchema = {
-  backupPath: z.string().min(1).optional()
+  backupPath: z.string().min(1).optional(),
 };
 
 const planBackupRetentionSchema = {
-  keepCount: z.number().int().min(0).max(1000).optional()
+  keepCount: z.number().int().min(0).max(1000).optional(),
 };
 
 const verifyBackupSchema = {
-  backupPath: z.string().min(1)
+  backupPath: z.string().min(1),
 };
 
 const planBackupRestoreSchema = {
-  backupPath: z.string().min(1)
+  backupPath: z.string().min(1),
 };
 
 const inspectBackupSchema = {
@@ -186,17 +189,17 @@ const inspectBackupSchema = {
   limit: z.number().int().min(1).max(100).default(20),
   projectScope: z.string().min(1).optional(),
   projectPath: z.string().min(1).optional(),
-  includeCrossProject: z.boolean().default(false)
+  includeCrossProject: z.boolean().default(false),
 };
 
 const repairMemoryIndexSchema = {
   backupPath: z.string().min(1).optional(),
-  createBackup: z.boolean().default(true)
+  createBackup: z.boolean().default(true),
 };
 
 const auditMemorySchema = {
   memoryId: z.number().int().positive().optional(),
-  limit: z.number().int().min(1).max(100).default(20)
+  limit: z.number().int().min(1).max(100).default(20),
 };
 
 type ToolResult<T extends Record<string, unknown>> = {
@@ -401,7 +404,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         importance: input.importance,
         confidence: input.confidence,
         allowSecret: input.allowSecret ?? false,
-        embedding: embedding.value
+        embedding: embedding.value,
       });
       const duplicateCandidates = findDuplicateCandidatesForMemory(
         memory,
@@ -409,14 +412,14 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           limit: 500,
           projectScope: input.projectScope,
           projectPath: input.projectPath,
-          includeCrossProject: false
-        })
+          includeCrossProject: false,
+        }),
       );
 
       return toolResult({
         memory: serializeMemory(memory),
         duplicateCandidates,
-        warnings: embeddingWarnings(embedding.warning, embeddingRequired)
+        warnings: embeddingWarnings(embedding.warning, embeddingRequired),
       });
     },
 
@@ -428,12 +431,14 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           limit: 500,
           projectScope: input.projectScope,
           projectPath: input.projectPath,
-          includeCrossProject: false
+          includeCrossProject: false,
         }),
-        proposal.layer
+        proposal.layer,
       );
       const reasons = [...proposal.reasons];
-      let recommendation: "create" | "update" | "skip" = duplicateCandidates.length ? "update" : "create";
+      let recommendation: "create" | "update" | "skip" = duplicateCandidates.length
+        ? "update"
+        : "create";
 
       if (!input.allowSecret && looksLikeSecret(input.content)) {
         recommendation = "skip";
@@ -458,7 +463,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           projectScope: input.projectScope ?? null,
           projectPath: input.projectPath ?? null,
           importance: proposal.importance,
-          confidence: proposal.confidence
+          confidence: proposal.confidence,
         },
         curation,
         provenance,
@@ -470,7 +475,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
             : recommendation === "update"
               ? "Consider update_memory for the best matching existing memory instead of creating a duplicate."
               : "Do not write this memory unless the user explicitly overrides the recommendation.",
-        warnings: [] as string[]
+        warnings: [] as string[],
       });
     },
 
@@ -485,13 +490,13 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         sourceType: input.sourceType,
         sourceRef: input.sourceRef,
         priority: input.priority,
-        allowSecret: input.allowSecret ?? false
+        allowSecret: input.allowSecret ?? false,
       });
 
       return toolResult({
         directive: serializeDirective(directive),
         priorityOrder: directivePriorityOrder,
-        warnings: [] as string[]
+        warnings: [] as string[],
       });
     },
 
@@ -502,13 +507,14 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         includeGlobal: input.includeGlobal ?? true,
         includeProject: input.includeProject ?? true,
         includeDisabled: input.includeDisabled ?? false,
-        limit: input.limit ?? 20
+        limit: input.limit ?? 20,
       });
 
       return toolResult({
         directives: directives.map(serializeDirective),
         priorityOrder: directivePriorityOrder,
-        guidance: "Directive memory is stronger than normal memory but never overrides system/developer instructions, the latest user instruction, or AGENTS.md."
+        guidance:
+          "Directive memory is stronger than normal memory but never overrides system/developer instructions, the latest user instruction, or AGENTS.md.",
       });
     },
 
@@ -517,29 +523,41 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         projectScope: input.projectScope,
         projectPath: input.projectPath,
         includeDisabled: false,
-        limit: 100
+        limit: 100,
       });
-      const duplicateCandidates = findDuplicateCandidatesForDirectiveContent(input.content, directives);
+      const duplicateCandidates = findDuplicateCandidatesForDirectiveContent(
+        input.content,
+        directives,
+      );
       const reasons: string[] = [];
       const warnings: string[] = [];
-      let recommendation: "create" | "update" | "skip" | "ask_user" = duplicateCandidates.length ? "update" : "create";
+      let recommendation: "create" | "update" | "skip" | "ask_user" = duplicateCandidates.length
+        ? "update"
+        : "create";
 
       if (!input.allowSecret && looksLikeSecret(input.content)) {
         recommendation = "skip";
         reasons.push("Content looks like a secret; do not store as directive memory.");
       }
-      const durableDirectivePattern = looksLikeDurableDirectivePattern(input.content, input.taskContext);
+      const durableDirectivePattern = looksLikeDurableDirectivePattern(
+        input.content,
+        input.taskContext,
+      );
       if (isEphemeralMemory(input.content, input.taskContext) && !durableDirectivePattern) {
         recommendation = "skip";
         reasons.push("Content looks temporary and is too strong for directive memory.");
       }
       if (!looksLikeDirective(input.content, input.taskContext) && !durableDirectivePattern) {
-        warnings.push("Directive memory should contain a durable instruction, preference, or policy. Consider normal memory instead.");
+        warnings.push(
+          "Directive memory should contain a durable instruction, preference, or policy. Consider normal memory instead.",
+        );
       }
       const scopeGuidance = buildDirectiveScopeGuidance(input);
       if (recommendation === "create" && scopeGuidance.requiresUserChoice) {
         recommendation = "ask_user";
-        reasons.push("Project context is present; ask the user whether this belongs in global or project directive memory.");
+        reasons.push(
+          "Project context is present; ask the user whether this belongs in global or project directive memory.",
+        );
       }
 
       const provenance = analyzeProvenance(input.sourceType, input.sourceRef);
@@ -554,7 +572,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           projectPath: input.projectPath ?? null,
           sourceType: input.sourceType,
           sourceRef: input.sourceRef,
-          priority: 0.75
+          priority: 0.75,
         },
         scopeGuidance,
         priorityOrder: directivePriorityOrder,
@@ -569,19 +587,19 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
               ? "Call write_directive with the chosen scope if the user approves."
               : recommendation === "update"
                 ? "Disable or supersede the matching directive before writing a replacement."
-                : "Do not write this directive unless the user explicitly overrides the recommendation."
+                : "Do not write this directive unless the user explicitly overrides the recommendation.",
       });
     },
 
     async disableDirective(input: DisableDirectiveToolInput) {
       const directive = store.disableDirective({
         directiveId: input.directiveId,
-        reason: input.reason
+        reason: input.reason,
       });
 
       return toolResult({
         directive: serializeDirective(directive),
-        event: "disabled"
+        event: "disabled",
       });
     },
 
@@ -590,7 +608,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         ? await tryEmbed(options.embeddingProvider, "codex memory sidecar health check")
         : {
             value: null,
-            warning: embeddingRequired ? "Embedding provider is not configured." : null
+            warning: embeddingRequired ? "Embedding provider is not configured." : null,
           };
       const counts = store.countRecords();
       const health = store.checkDatabaseHealth();
@@ -600,9 +618,12 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         eventCount: counts.eventCount,
         integrityCheck: health.integrityCheck,
         fts: health.fts,
-        walCheckpoint: health.walCheckpoint
+        walCheckpoint: health.walCheckpoint,
       };
-      const warnings = [...health.warnings, ...embeddingWarnings(embedding.warning, embeddingRequired)];
+      const warnings = [
+        ...health.warnings,
+        ...embeddingWarnings(embedding.warning, embeddingRequired),
+      ];
 
       return toolResult({
         ok: database.ok && warnings.length === 0,
@@ -610,10 +631,12 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         embedding: {
           ok: embedding.warning === null || !embeddingRequired,
           dimensions: embedding.value?.length ?? 0,
-          error: embedding.warning ? embedding.warning.replace(/^Embedding unavailable: /, "") : null,
-          required: embeddingRequired
+          error: embedding.warning
+            ? embedding.warning.replace(/^Embedding unavailable: /, "")
+            : null,
+          required: embeddingRequired,
         },
-        warnings
+        warnings,
       });
     },
 
@@ -629,12 +652,12 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           projectScope: scope.projectScope,
           total: scope.total,
           active: scope.active,
-          latestUpdatedAt: scope.latestUpdatedAt?.toISOString() ?? null
+          latestUpdatedAt: scope.latestUpdatedAt?.toISOString() ?? null,
         })),
         updatedAtRange: {
           oldest: stats.updatedAtRange.oldest?.toISOString() ?? null,
-          newest: stats.updatedAtRange.newest?.toISOString() ?? null
-        }
+          newest: stats.updatedAtRange.newest?.toISOString() ?? null,
+        },
       });
     },
 
@@ -644,11 +667,13 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         throw new Error(`Memory ${input.memoryId} was not found.`);
       }
       if (memory.status === "forgotten" && !input.includeForgotten) {
-        throw new Error(`Memory ${input.memoryId} is forgotten. Set includeForgotten=true to read it explicitly.`);
+        throw new Error(
+          `Memory ${input.memoryId} is forgotten. Set includeForgotten=true to read it explicitly.`,
+        );
       }
 
       return toolResult({
-        memory: serializeMemory(memory, { includeEmbedding: input.includeEmbedding ?? false })
+        memory: serializeMemory(memory, { includeEmbedding: input.includeEmbedding ?? false }),
       });
     },
 
@@ -661,11 +686,11 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         limit: input.limit ?? 20,
         projectScope: input.projectScope,
         projectPath: input.projectPath,
-        includeCrossProject: input.includeCrossProject ?? false
+        includeCrossProject: input.includeCrossProject ?? false,
       });
 
       return toolResult({
-        memories: memories.map(serializeMemorySummary)
+        memories: memories.map(serializeMemorySummary),
       });
     },
 
@@ -680,12 +705,14 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         includeSuperseded: input.includeSuperseded ?? false,
         projectScope: input.projectScope,
         projectPath: input.projectPath,
-        includeCrossProject: input.includeCrossProject ?? false
+        includeCrossProject: input.includeCrossProject ?? false,
       });
 
       return toolResult({
-        memories: results.map((result) => serializeSearchResult(result, { includeEmbedding: input.includeEmbedding ?? false })),
-        warnings: embeddingWarnings(embedding.warning, embeddingRequired)
+        memories: results.map((result) =>
+          serializeSearchResult(result, { includeEmbedding: input.includeEmbedding ?? false }),
+        ),
+        warnings: embeddingWarnings(embedding.warning, embeddingRequired),
       });
     },
 
@@ -697,13 +724,13 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         updateNote: input.updateNote,
         tags: input.tags,
         embedding: embedding.value,
-        allowSecret: input.allowSecret ?? false
+        allowSecret: input.allowSecret ?? false,
       });
 
       return toolResult({
         memory: serializeMemory(memory),
         event: "updated",
-        warnings: embeddingWarnings(embedding.warning, embeddingRequired)
+        warnings: embeddingWarnings(embedding.warning, embeddingRequired),
       });
     },
 
@@ -712,12 +739,12 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         memoryId: input.memoryId,
         reason: input.reason,
         hardDelete: input.hardDelete ?? false,
-        confirmHardDelete: input.confirmHardDelete ?? false
+        confirmHardDelete: input.confirmHardDelete ?? false,
       });
 
       return toolResult({
         memory: serializeMemory(memory),
-        event: "forgotten"
+        event: "forgotten",
       });
     },
 
@@ -728,7 +755,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         limit: input.maxCandidates ?? 20,
         projectScope: input.projectScope,
         projectPath: input.projectPath,
-        includeCrossProject: input.includeCrossProject ?? false
+        includeCrossProject: input.includeCrossProject ?? false,
       });
       const proposedMerges = findDuplicateMergeProposals(memories);
 
@@ -741,7 +768,10 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         proposedSummaries: [] as unknown[],
         proposedForgottenRecords: [] as unknown[],
         contradictionWarnings: [] as unknown[],
-        warnings: input.dryRun === false ? ["Automatic consolidation is not implemented; no changes were applied."] : []
+        warnings:
+          input.dryRun === false
+            ? ["Automatic consolidation is not implemented; no changes were applied."]
+            : [],
       });
     },
 
@@ -754,7 +784,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         limit: 8,
         projectScope: input.projectScope,
         projectPath: input.projectPath,
-        includeCrossProject: input.includeCrossProject ?? false
+        includeCrossProject: input.includeCrossProject ?? false,
       });
       const serialized = results.map((result) => serializeSearchResult(result));
       const digest = compactDigest(serialized, input.maxTokens ?? 800);
@@ -762,7 +792,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       return toolResult({
         digest,
         memories: serialized,
-        warnings: embeddingWarnings(embedding.warning, embeddingRequired)
+        warnings: embeddingWarnings(embedding.warning, embeddingRequired),
       });
     },
 
@@ -772,10 +802,14 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       const memoryFreshnessReport = buildMemoryFreshness({
         latestMemoryUpdatedAt: stats.updatedAtRange.newest,
         memoryCount: stats.memoryCount,
-        activity: options.workspaceActivity ?? collectWorkspaceActivity(input.projectPath ?? process.cwd()),
-        now: options.now
+        activity:
+          options.workspaceActivity ?? collectWorkspaceActivity(input.projectPath ?? process.cwd()),
+        now: options.now,
       });
-      const sessionCandidate = buildSessionMemoryCandidate(input.taskDescription, options.now ?? new Date());
+      const sessionCandidate = buildSessionMemoryCandidate(
+        input.taskDescription,
+        options.now ?? new Date(),
+      );
       const autoCurationCandidates = [...memoryFreshnessReport.candidates, sessionCandidate];
       const backupRetention = serializeBackupRetentionSummary(store.planBackupRetention());
       const embedding = await tryEmbed(options.embeddingProvider, input.taskDescription);
@@ -783,22 +817,25 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         ok: databaseHealth.ok,
         integrityCheck: databaseHealth.integrityCheck,
         fts: databaseHealth.fts,
-        walCheckpoint: databaseHealth.walCheckpoint
+        walCheckpoint: databaseHealth.walCheckpoint,
       };
       const embeddingStatus = {
         ok: embedding.warning === null || !embeddingRequired,
         dimensions: embedding.value?.length ?? 0,
         error: embedding.warning ? embedding.warning.replace(/^Embedding unavailable: /, "") : null,
-        required: embeddingRequired
+        required: embeddingRequired,
       };
       const repairRecommended =
         !databaseHealth.ok && (databaseHealth.integrityCheck !== "ok" || !databaseHealth.fts.ok);
-      const warnings = [...databaseHealth.warnings, ...embeddingWarnings(embedding.warning, embeddingRequired)];
+      const warnings = [
+        ...databaseHealth.warnings,
+        ...embeddingWarnings(embedding.warning, embeddingRequired),
+      ];
       const sessionGuidance = buildSessionGuidance();
       const directives = store.listDirectives({
         projectScope: input.projectScope,
         projectPath: input.projectPath,
-        limit: 20
+        limit: 20,
       });
 
       if (!databaseHealth.ok) {
@@ -807,7 +844,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           taskDescription: input.taskDescription,
           health: {
             database,
-            embedding: embeddingStatus
+            embedding: embeddingStatus,
           },
           memoryStats: serializeMemoryStats(stats),
           backupRetention,
@@ -823,14 +860,14 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
               limit: 500,
               projectScope: input.projectScope,
               projectPath: input.projectPath,
-              includeCrossProject: false
+              includeCrossProject: false,
             }),
-            now: options.now
+            now: options.now,
           }),
           digest: "",
           memories: [] as unknown[],
           warnings,
-          startedAt: new Date().toISOString()
+          startedAt: new Date().toISOString(),
         });
       }
 
@@ -840,7 +877,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         limit: 8,
         projectScope: input.projectScope,
         projectPath: input.projectPath,
-        includeCrossProject: input.includeCrossProject ?? false
+        includeCrossProject: input.includeCrossProject ?? false,
       });
       const serialized = results.map((result) => serializeSearchResult(result));
       const autoMemoryCuration = buildAutoCurationResult({
@@ -850,9 +887,9 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           limit: 500,
           projectScope: input.projectScope,
           projectPath: input.projectPath,
-          includeCrossProject: false
+          includeCrossProject: false,
         }),
-        now: options.now
+        now: options.now,
       });
       const autoWrittenMemories = [];
       for (const evaluation of autoMemoryCuration.autoWriteCandidates) {
@@ -879,14 +916,14 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
             originalCandidate: evaluation.candidate,
             duplicateCandidates: evaluation.duplicateCandidates,
             provenance: evaluation.provenance,
-            safety: evaluation.safety
-          }
+            safety: evaluation.safety,
+          },
         });
         autoWrittenMemories.push({
           memory: serializeMemorySummary(memory),
           score: evaluation.score,
           reasons: evaluation.reasons,
-          sourceRef: evaluation.candidate.sourceRef
+          sourceRef: evaluation.candidate.sourceRef,
         });
       }
       const finalStats = autoWrittenMemories.length ? store.getStats() : stats;
@@ -896,7 +933,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         taskDescription: input.taskDescription,
         health: {
           database,
-          embedding: embeddingStatus
+          embedding: embeddingStatus,
         },
         memoryStats: serializeMemoryStats(finalStats),
         backupRetention,
@@ -904,15 +941,17 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         sessionGuidance,
         directives: directives.map(serializeDirective),
         memoryFreshness: memoryFreshnessReport.freshness,
-        memoryUpdateCandidates: autoMemoryCuration.reviewCandidates.map((evaluation) => evaluation.candidate),
+        memoryUpdateCandidates: autoMemoryCuration.reviewCandidates.map(
+          (evaluation) => evaluation.candidate,
+        ),
         autoMemoryCuration: {
           ...autoMemoryCuration,
-          autoWrittenMemories
+          autoWrittenMemories,
         },
         digest: compactDigest(serialized, input.maxTokens ?? 800),
         memories: results.map(serializeSessionMemory),
         warnings,
-        startedAt: new Date().toISOString()
+        startedAt: new Date().toISOString(),
       });
     },
 
@@ -922,7 +961,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       return toolResult({
         backupPath: backup.backupPath,
         createdAt: backup.createdAt.toISOString(),
-        warning: null
+        warning: null,
       });
     },
 
@@ -937,7 +976,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         prunable: plan.prunable.map(serializeBackupRetentionEntry),
         wouldDelete: false,
         plannedAt: plan.plannedAt.toISOString(),
-        warnings: [] as string[]
+        warnings: [] as string[],
       });
     },
 
@@ -952,7 +991,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         integrityCheck: verification.integrityCheck,
         schemaOk: verification.schemaOk,
         warnings: verification.warnings,
-        checkedAt: verification.checkedAt.toISOString()
+        checkedAt: verification.checkedAt.toISOString(),
       });
     },
 
@@ -973,7 +1012,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           eventCount: currentCounts.eventCount,
           integrityCheck: currentHealth.integrityCheck,
           fts: currentHealth.fts,
-          walCheckpoint: currentHealth.walCheckpoint
+          walCheckpoint: currentHealth.walCheckpoint,
         },
         backup: {
           ok: backupVerification.ok,
@@ -981,7 +1020,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           eventCount: backupVerification.eventCount,
           integrityCheck: backupVerification.integrityCheck,
           schemaOk: backupVerification.schemaOk,
-          checkedAt: backupVerification.checkedAt.toISOString()
+          checkedAt: backupVerification.checkedAt.toISOString(),
         },
         note: "This is a dry-run restore plan. No database files were changed.",
         steps: [
@@ -989,9 +1028,9 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           "Create a fresh safety backup of the current database and verify it.",
           "Replace the current database file with the selected backup file outside the running MCP process.",
           "Restart the Codex Memory Sidecar MCP server.",
-          "Run health_check and verify warnings is empty before resuming normal use."
+          "Run health_check and verify warnings is empty before resuming normal use.",
         ],
-        warnings
+        warnings,
       });
     },
 
@@ -1004,7 +1043,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         limit: input.limit ?? 20,
         projectScope: input.projectScope,
         projectPath: input.projectPath,
-        includeCrossProject: input.includeCrossProject ?? false
+        includeCrossProject: input.includeCrossProject ?? false,
       });
 
       return toolResult({
@@ -1016,14 +1055,14 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
         schemaOk: inspection.schemaOk,
         warnings: inspection.warnings,
         checkedAt: inspection.checkedAt.toISOString(),
-        memories: inspection.memories.map(serializeBackupMemorySummary)
+        memories: inspection.memories.map(serializeBackupMemorySummary),
       });
     },
 
     async repairMemoryIndex(input: RepairMemoryIndexToolInput) {
       const repair = await store.repairMemoryIndex({
         backupPath: input.backupPath,
-        createBackup: input.createBackup ?? true
+        createBackup: input.createBackup ?? true,
       });
 
       return toolResult({
@@ -1038,20 +1077,20 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
               integrityCheck: repair.backupVerification.integrityCheck,
               schemaOk: repair.backupVerification.schemaOk,
               warnings: repair.backupVerification.warnings,
-              checkedAt: repair.backupVerification.checkedAt.toISOString()
+              checkedAt: repair.backupVerification.checkedAt.toISOString(),
             }
           : null,
         before: serializeDatabaseHealth(repair.before),
         after: serializeDatabaseHealth(repair.after),
         warnings: repair.warnings,
-        repairedAt: repair.repairedAt.toISOString()
+        repairedAt: repair.repairedAt.toISOString(),
       });
     },
 
     async auditMemory(input: AuditMemoryToolInput) {
       const events = store.listRecentEvents({
         memoryId: input.memoryId,
-        limit: input.limit
+        limit: input.limit,
       });
 
       return toolResult({
@@ -1060,221 +1099,235 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
           memoryId: event.memoryId,
           eventType: event.eventType,
           payload: event.payload,
-          createdAt: event.createdAt.toISOString()
-        }))
+          createdAt: event.createdAt.toISOString(),
+        })),
       });
-    }
+    },
   };
 }
 
-export function registerMemoryTools(server: McpServer, store: MemoryStore, options: ToolHandlerOptions = {}): void {
+export function registerMemoryTools(
+  server: McpServer,
+  store: MemoryStore,
+  options: ToolHandlerOptions = {},
+): void {
   const handlers = createToolHandlers(store, options);
 
   server.registerTool(
     "write_memory",
     {
       description: "Create a local memory record after explicit user or Codex instruction.",
-      inputSchema: writeMemorySchema
+      inputSchema: writeMemorySchema,
     },
-    handlers.writeMemory
+    handlers.writeMemory,
   );
 
   server.registerTool(
     "propose_memory_update",
     {
       description: "Dry-run a memory write/update decision without modifying the database.",
-      inputSchema: proposeMemoryUpdateSchema
+      inputSchema: proposeMemoryUpdateSchema,
     },
-    handlers.proposeMemoryUpdate
+    handlers.proposeMemoryUpdate,
   );
 
   server.registerTool(
     "write_directive",
     {
       description: "Create a strong directive memory after explicit user approval.",
-      inputSchema: writeDirectiveSchema
+      inputSchema: writeDirectiveSchema,
     },
-    handlers.writeDirective
+    handlers.writeDirective,
   );
 
   server.registerTool(
     "list_directives",
     {
-      description: "List active directive memories, including contents, so strong memory can be audited.",
-      inputSchema: listDirectivesSchema
+      description:
+        "List active directive memories, including contents, so strong memory can be audited.",
+      inputSchema: listDirectivesSchema,
     },
-    handlers.listDirectives
+    handlers.listDirectives,
   );
 
   server.registerTool(
     "propose_directive_update",
     {
-      description: "Dry-run a directive memory write/update decision and require scope choice when needed.",
-      inputSchema: proposeDirectiveUpdateSchema
+      description:
+        "Dry-run a directive memory write/update decision and require scope choice when needed.",
+      inputSchema: proposeDirectiveUpdateSchema,
     },
-    handlers.proposeDirectiveUpdate
+    handlers.proposeDirectiveUpdate,
   );
 
   server.registerTool(
     "disable_directive",
     {
       description: "Disable a directive memory without hard deleting it.",
-      inputSchema: disableDirectiveSchema
+      inputSchema: disableDirectiveSchema,
     },
-    handlers.disableDirective
+    handlers.disableDirective,
   );
 
   server.registerTool(
     "health_check",
     {
       description: "Check local memory database and embedding provider readiness.",
-      inputSchema: healthCheckSchema
+      inputSchema: healthCheckSchema,
     },
-    handlers.healthCheck
+    handlers.healthCheck,
   );
 
   server.registerTool(
     "memory_stats",
     {
-      description: "Return aggregate memory database counts by status and layer without memory contents.",
-      inputSchema: memoryStatsSchema
+      description:
+        "Return aggregate memory database counts by status and layer without memory contents.",
+      inputSchema: memoryStatsSchema,
     },
-    handlers.memoryStats
+    handlers.memoryStats,
   );
 
   server.registerTool(
     "search_memory",
     {
       description: "Search local memory using SQLite FTS and metadata filters.",
-      inputSchema: searchMemorySchema
+      inputSchema: searchMemorySchema,
     },
-    handlers.searchMemory
+    handlers.searchMemory,
   );
 
   server.registerTool(
     "read_memory",
     {
-      description: "Read a single memory by id, excluding forgotten records unless explicitly requested.",
-      inputSchema: readMemorySchema
+      description:
+        "Read a single memory by id, excluding forgotten records unless explicitly requested.",
+      inputSchema: readMemorySchema,
     },
-    handlers.readMemory
+    handlers.readMemory,
   );
 
   server.registerTool(
     "list_memory_summaries",
     {
       description: "List memory metadata and summaries without returning full memory content.",
-      inputSchema: listMemorySummariesSchema
+      inputSchema: listMemorySummariesSchema,
     },
-    handlers.listMemorySummaries
+    handlers.listMemorySummaries,
   );
 
   server.registerTool(
     "update_memory",
     {
       description: "Update an existing memory while preserving audit history.",
-      inputSchema: updateMemorySchema
+      inputSchema: updateMemorySchema,
     },
-    handlers.updateMemory
+    handlers.updateMemory,
   );
 
   server.registerTool(
     "forget_memory",
     {
       description: "Logically forget a memory by default, with optional hard delete.",
-      inputSchema: forgetMemorySchema
+      inputSchema: forgetMemorySchema,
     },
-    handlers.forgetMemory
+    handlers.forgetMemory,
   );
 
   server.registerTool(
     "consolidate_memory",
     {
-      description: "Return dry-run consolidation proposals such as duplicate_content and near_duplicate_content merge candidates.",
-      inputSchema: consolidateMemorySchema
+      description:
+        "Return dry-run consolidation proposals such as duplicate_content and near_duplicate_content merge candidates.",
+      inputSchema: consolidateMemorySchema,
     },
-    handlers.consolidateMemory
+    handlers.consolidateMemory,
   );
 
   server.registerTool(
     "memory_digest",
     {
       description: "Build compact relevant memory context for a task.",
-      inputSchema: memoryDigestSchema
+      inputSchema: memoryDigestSchema,
     },
-    handlers.memoryDigest
+    handlers.memoryDigest,
   );
 
   server.registerTool(
     "start_memory_session",
     {
-      description: "Check readiness and return compact project-scoped memory context for starting work.",
-      inputSchema: startMemorySessionSchema
+      description:
+        "Check readiness and return compact project-scoped memory context for starting work.",
+      inputSchema: startMemorySessionSchema,
     },
-    handlers.startMemorySession
+    handlers.startMemorySession,
   );
 
   server.registerTool(
     "backup_memory",
     {
       description: "Create an explicit SQLite backup of the local memory database.",
-      inputSchema: backupMemorySchema
+      inputSchema: backupMemorySchema,
     },
-    handlers.backupMemory
+    handlers.backupMemory,
   );
 
   server.registerTool(
     "plan_backup_retention",
     {
-      description: "Dry-run default backup retention and report kept/prunable backup files without deleting anything.",
-      inputSchema: planBackupRetentionSchema
+      description:
+        "Dry-run default backup retention and report kept/prunable backup files without deleting anything.",
+      inputSchema: planBackupRetentionSchema,
     },
-    handlers.planBackupRetention
+    handlers.planBackupRetention,
   );
 
   server.registerTool(
     "verify_backup",
     {
       description: "Verify that a SQLite memory backup can be opened and report record counts.",
-      inputSchema: verifyBackupSchema
+      inputSchema: verifyBackupSchema,
     },
-    handlers.verifyBackup
+    handlers.verifyBackup,
   );
 
   server.registerTool(
     "plan_backup_restore",
     {
-      description: "Dry-run a backup restore by comparing current database health/counts with a verified backup.",
-      inputSchema: planBackupRestoreSchema
+      description:
+        "Dry-run a backup restore by comparing current database health/counts with a verified backup.",
+      inputSchema: planBackupRestoreSchema,
     },
-    handlers.planBackupRestore
+    handlers.planBackupRestore,
   );
 
   server.registerTool(
     "inspect_backup",
     {
-      description: "Inspect a SQLite memory backup in read-only mode and return counts plus summaries without content.",
-      inputSchema: inspectBackupSchema
+      description:
+        "Inspect a SQLite memory backup in read-only mode and return counts plus summaries without content.",
+      inputSchema: inspectBackupSchema,
     },
-    handlers.inspectBackup
+    handlers.inspectBackup,
   );
 
   server.registerTool(
     "repair_memory_index",
     {
-      description: "Create a safety backup, rebuild the SQLite FTS index, and report before/after health.",
-      inputSchema: repairMemoryIndexSchema
+      description:
+        "Create a safety backup, rebuild the SQLite FTS index, and report before/after health.",
+      inputSchema: repairMemoryIndexSchema,
     },
-    handlers.repairMemoryIndex
+    handlers.repairMemoryIndex,
   );
 
   server.registerTool(
     "audit_memory",
     {
       description: "Read recent audit events without returning full memory contents.",
-      inputSchema: auditMemorySchema
+      inputSchema: auditMemorySchema,
     },
-    handlers.auditMemory
+    handlers.auditMemory,
   );
 }
 
@@ -1285,7 +1338,7 @@ function serializeDatabaseHealth(health: ReturnType<MemoryStore["checkDatabaseHe
     fts: health.fts,
     walCheckpoint: health.walCheckpoint,
     warnings: health.warnings,
-    checkedAt: health.checkedAt.toISOString()
+    checkedAt: health.checkedAt.toISOString(),
   };
 }
 
@@ -1299,20 +1352,22 @@ function serializeMemoryStats(stats: ReturnType<MemoryStore["getStats"]>) {
       projectScope: scope.projectScope,
       total: scope.total,
       active: scope.active,
-      latestUpdatedAt: scope.latestUpdatedAt?.toISOString() ?? null
+      latestUpdatedAt: scope.latestUpdatedAt?.toISOString() ?? null,
     })),
     updatedAtRange: {
       oldest: stats.updatedAtRange.oldest?.toISOString() ?? null,
-      newest: stats.updatedAtRange.newest?.toISOString() ?? null
-    }
+      newest: stats.updatedAtRange.newest?.toISOString() ?? null,
+    },
   };
 }
 
-function serializeBackupRetentionEntry(entry: ReturnType<MemoryStore["planBackupRetention"]>["backups"][number]) {
+function serializeBackupRetentionEntry(
+  entry: ReturnType<MemoryStore["planBackupRetention"]>["backups"][number],
+) {
   return {
     backupPath: entry.backupPath,
     sizeBytes: entry.sizeBytes,
-    mtime: entry.mtime.toISOString()
+    mtime: entry.mtime.toISOString(),
   };
 }
 
@@ -1329,7 +1384,7 @@ function serializeBackupRetentionSummary(plan: ReturnType<MemoryStore["planBacku
     latestBackup: latestBackup ? serializeBackupRetentionEntry(latestBackup) : null,
     prunable: plan.prunable.map(serializeBackupRetentionEntry),
     wouldDelete: false,
-    plannedAt: plan.plannedAt.toISOString()
+    plannedAt: plan.plannedAt.toISOString(),
   };
 }
 
@@ -1338,18 +1393,21 @@ function toolResult<T extends Record<string, unknown>>(structuredContent: T): To
     content: [
       {
         type: "text",
-        text: JSON.stringify(structuredContent, null, 2)
-      }
+        text: JSON.stringify(structuredContent, null, 2),
+      },
     ],
-    structuredContent
+    structuredContent,
   };
 }
 
-function serializeSearchResult(result: SearchMemoryResult, options: { includeEmbedding?: boolean } = {}) {
+function serializeSearchResult(
+  result: SearchMemoryResult,
+  options: { includeEmbedding?: boolean } = {},
+) {
   return {
     ...serializeMemory(result.memory, options),
     score: result.score,
-    scoreBreakdown: result.scoreBreakdown
+    scoreBreakdown: result.scoreBreakdown,
   };
 }
 
@@ -1360,18 +1418,24 @@ function buildSessionGuidance() {
     canAnswer: [
       "Directive memory can provide durable operating instructions for this project.",
       "Relevant saved memory summaries and their sourceRefs can inform this task.",
-      "Health, embedding, FTS, WAL, backup retention, and recent project memory availability are reflected in this session."
+      "Health, embedding, FTS, WAL, backup retention, and recent project memory availability are reflected in this session.",
     ],
     mustVerify: [
       "Directive memory is below system/developer instructions, the user's latest instruction, and AGENTS.md.",
       "Validate memory-derived claims against the user's latest instruction, README/docs, actual files, or git history before treating them as facts.",
-      "Use read_memory or audit_memory when a memory summary affects an important decision."
+      "Use read_memory or audit_memory when a memory summary affects an important decision.",
     ],
     limitations: [
       "The digest may omit relevant memories when the query is too narrow or the database has not captured the decision yet.",
-      "Memory can be stale, incomplete, or less precise than current repository files."
+      "Memory can be stale, incomplete, or less precise than current repository files.",
     ],
-    suggestedNextTools: ["list_directives", "read_memory", "search_memory", "audit_memory", "propose_directive_update"]
+    suggestedNextTools: [
+      "list_directives",
+      "read_memory",
+      "search_memory",
+      "audit_memory",
+      "propose_directive_update",
+    ],
   };
 }
 
@@ -1384,14 +1448,14 @@ function buildSessionMemoryCandidate(taskDescription: string, now: Date) {
     sourceRef: `session:${now.toISOString()}`,
     occurredAt: now.toISOString(),
     reason: "start_memory_session で扱った作業内容が、通常メモリ候補になる可能性があります。",
-    suggestedTool: "propose_memory_update" as const
+    suggestedTool: "propose_memory_update" as const,
   };
 }
 
 function buildCurationGuidance(
   recommendedLayer: MemoryLayer,
   recommendation: "create" | "update" | "skip",
-  rationale: string[]
+  rationale: string[],
 ) {
   return {
     recommendedLayer,
@@ -1404,7 +1468,7 @@ function buildCurationGuidance(
             ? "archival"
             : "task_recall",
     shouldPromoteToCore: recommendation !== "skip" && recommendedLayer === "core",
-    rationale
+    rationale,
   };
 }
 
@@ -1416,7 +1480,7 @@ function analyzeProvenance(sourceType: string, sourceRef: string) {
     sourceRef,
     quality: analysis.quality,
     recognizedRefs: analysis.recognizedRefs,
-    suggestions: analysis.suggestions
+    suggestions: analysis.suggestions,
   };
 }
 
@@ -1437,7 +1501,7 @@ function serializeMemory(memory: Memory, options: { includeEmbedding?: boolean }
     updatedAt: memory.updatedAt.toISOString(),
     lastAccessedAt: memory.lastAccessedAt?.toISOString() ?? null,
     expiresAt: memory.expiresAt?.toISOString() ?? null,
-    status: memory.status
+    status: memory.status,
   };
 }
 
@@ -1454,7 +1518,7 @@ function serializeDirective(directive: Directive) {
     priority: directive.priority,
     createdAt: directive.createdAt.toISOString(),
     updatedAt: directive.updatedAt.toISOString(),
-    status: directive.status
+    status: directive.status,
   };
 }
 
@@ -1473,7 +1537,7 @@ function serializeMemorySummary(memory: Memory) {
     updatedAt: memory.updatedAt.toISOString(),
     lastAccessedAt: memory.lastAccessedAt?.toISOString() ?? null,
     expiresAt: memory.expiresAt?.toISOString() ?? null,
-    status: memory.status
+    status: memory.status,
   };
 }
 
@@ -1491,11 +1555,13 @@ function serializeSessionMemory(result: SearchMemoryResult) {
     updatedAt: result.memory.updatedAt.toISOString(),
     status: result.memory.status,
     score: result.score,
-    scoreBreakdown: result.scoreBreakdown
+    scoreBreakdown: result.scoreBreakdown,
   };
 }
 
-function serializeBackupMemorySummary(memory: ReturnType<MemoryStore["inspectBackup"]>["memories"][number]) {
+function serializeBackupMemorySummary(
+  memory: ReturnType<MemoryStore["inspectBackup"]>["memories"][number],
+) {
   return {
     id: memory.id,
     layer: memory.layer,
@@ -1510,13 +1576,13 @@ function serializeBackupMemorySummary(memory: ReturnType<MemoryStore["inspectBac
     updatedAt: memory.updatedAt.toISOString(),
     lastAccessedAt: memory.lastAccessedAt?.toISOString() ?? null,
     expiresAt: memory.expiresAt?.toISOString() ?? null,
-    status: memory.status
+    status: memory.status,
   };
 }
 
 async function tryEmbed(
   embeddingProvider: EmbeddingProvider | undefined,
-  input: string
+  input: string,
 ): Promise<{ value: number[] | null; warning: string | null }> {
   if (!embeddingProvider) {
     return { value: null, warning: null };
@@ -1534,7 +1600,10 @@ function embeddingWarnings(warning: string | null, required: boolean): string[] 
   return warning && required ? [warning] : [];
 }
 
-function compactDigest(memories: ReturnType<typeof serializeSearchResult>[], maxTokens: number): string {
+function compactDigest(
+  memories: ReturnType<typeof serializeSearchResult>[],
+  maxTokens: number,
+): string {
   const maxChars = maxTokens * 4;
   const lines = memories.map((memory) => `- [${memory.layer}] ${memory.summary}`);
   const digest = lines.join("\n");
@@ -1558,7 +1627,7 @@ function findDuplicateMergeProposals(memories: Memory[]) {
       return {
         memoryIds: ordered.map((memory) => memory.id),
         reason: "duplicate_content",
-        summary: ordered[0]?.summary ?? ""
+        summary: ordered[0]?.summary ?? "",
       };
     });
   const exactPairKeys = new Set<string>();
@@ -1601,24 +1670,32 @@ function findNearDuplicateMergeProposals(memories: Memory[], excludedPairs: Set<
         memoryIds: ordered.map((memory) => memory.id),
         reason: "near_duplicate_content",
         summary: ordered[0]?.summary ?? "",
-        confidence: Number(confidence.toFixed(4))
+        confidence: Number(confidence.toFixed(4)),
       });
     }
   }
 
-  return proposals.sort((left, right) => left.memoryIds[0] - right.memoryIds[0] || left.memoryIds[1] - right.memoryIds[1]);
+  return proposals.sort(
+    (left, right) =>
+      left.memoryIds[0] - right.memoryIds[0] || left.memoryIds[1] - right.memoryIds[1],
+  );
 }
 
 function findDuplicateCandidatesForMemory(memory: Memory, candidates: Memory[]) {
   const key = normalizeMemoryContent(memory.content);
   const exactCandidates = candidates
-    .filter((candidate) => candidate.id !== memory.id && normalizeMemoryContent(candidate.content) === key)
-    .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || left.id - right.id)
+    .filter(
+      (candidate) =>
+        candidate.id !== memory.id && normalizeMemoryContent(candidate.content) === key,
+    )
+    .sort(
+      (left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || left.id - right.id,
+    )
     .slice(0, 5)
     .map((candidate) => ({
       memoryId: candidate.id,
       reason: "duplicate_content",
-      summary: candidate.summary
+      summary: candidate.summary,
     }));
   if (exactCandidates.length >= 5) {
     return exactCandidates;
@@ -1626,20 +1703,31 @@ function findDuplicateCandidatesForMemory(memory: Memory, candidates: Memory[]) 
 
   return [
     ...exactCandidates,
-    ...findNearDuplicateCandidates(memory.content, memory.layer, candidates, new Set([memory.id, ...exactCandidates.map((candidate) => candidate.memoryId)]))
+    ...findNearDuplicateCandidates(
+      memory.content,
+      memory.layer,
+      candidates,
+      new Set([memory.id, ...exactCandidates.map((candidate) => candidate.memoryId)]),
+    ),
   ].slice(0, 5);
 }
 
-function findDuplicateCandidatesForContent(content: string, candidates: Memory[], layer?: MemoryLayer) {
+function findDuplicateCandidatesForContent(
+  content: string,
+  candidates: Memory[],
+  layer?: MemoryLayer,
+) {
   const key = normalizeMemoryContent(content);
   const exactCandidates = candidates
     .filter((candidate) => normalizeMemoryContent(candidate.content) === key)
-    .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || left.id - right.id)
+    .sort(
+      (left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || left.id - right.id,
+    )
     .slice(0, 5)
     .map((candidate) => ({
       memoryId: candidate.id,
       reason: "duplicate_content",
-      summary: candidate.summary
+      summary: candidate.summary,
     }));
   if (exactCandidates.length >= 5) {
     return exactCandidates;
@@ -1647,7 +1735,12 @@ function findDuplicateCandidatesForContent(content: string, candidates: Memory[]
 
   return [
     ...exactCandidates,
-    ...findNearDuplicateCandidates(content, layer, candidates, new Set(exactCandidates.map((candidate) => candidate.memoryId)))
+    ...findNearDuplicateCandidates(
+      content,
+      layer,
+      candidates,
+      new Set(exactCandidates.map((candidate) => candidate.memoryId)),
+    ),
   ].slice(0, 5);
 }
 
@@ -1655,14 +1748,16 @@ function findDuplicateCandidatesForDirectiveContent(content: string, candidates:
   const key = normalizeMemoryContent(content);
   const exactCandidates = candidates
     .filter((candidate) => normalizeMemoryContent(candidate.content) === key)
-    .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || left.id - right.id)
+    .sort(
+      (left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || left.id - right.id,
+    )
     .slice(0, 5)
     .map((candidate) => ({
       directiveId: candidate.id,
       reason: "duplicate_content",
       scope: candidate.scope,
       projectScope: candidate.projectScope,
-      content: candidate.content
+      content: candidate.content,
     }));
   if (exactCandidates.length >= 5) {
     return exactCandidates;
@@ -1674,10 +1769,13 @@ function findDuplicateCandidatesForDirectiveContent(content: string, candidates:
       .filter((candidate) => !exactCandidates.some((exact) => exact.directiveId === candidate.id))
       .map((candidate) => ({
         candidate,
-        confidence: contentSimilarity(content, candidate.content)
+        confidence: contentSimilarity(content, candidate.content),
       }))
       .filter((entry) => entry.confidence >= 0.72)
-      .sort((left, right) => right.confidence - left.confidence || left.candidate.id - right.candidate.id)
+      .sort(
+        (left, right) =>
+          right.confidence - left.confidence || left.candidate.id - right.candidate.id,
+      )
       .slice(0, 5)
       .map(({ candidate, confidence }) => ({
         directiveId: candidate.id,
@@ -1685,8 +1783,8 @@ function findDuplicateCandidatesForDirectiveContent(content: string, candidates:
         scope: candidate.scope,
         projectScope: candidate.projectScope,
         content: candidate.content,
-        confidence: Number(confidence.toFixed(4))
-      }))
+        confidence: Number(confidence.toFixed(4)),
+      })),
   ].slice(0, 5);
 }
 
@@ -1704,52 +1802,64 @@ function buildDirectiveScopeGuidance(input: ProposeDirectiveUpdateToolInput) {
     options: [
       {
         scope: "project" as const,
-        when: "Use for repository-specific rules, workflows, paths, tools, or documentation preferences."
+        when: "Use for repository-specific rules, workflows, paths, tools, or documentation preferences.",
       },
       {
         scope: "global" as const,
-        when: "Use for durable user-wide behavior that should apply across projects."
-      }
-    ]
+        when: "Use for durable user-wide behavior that should apply across projects.",
+      },
+    ],
   };
 }
 
 function looksLikeDirective(content: string, taskContext: string | undefined): boolean {
   const combined = `${taskContext ?? ""} ${content}`.toLowerCase();
   return /\b(always|never|must|should|prefer|priority|policy|directive|instruction|rule|必ず|常に|禁止|優先|方針|ルール|指示)\b/i.test(
-    combined
+    combined,
   );
 }
 
-function looksLikeDurableDirectivePattern(content: string, taskContext: string | undefined): boolean {
+function looksLikeDurableDirectivePattern(
+  content: string,
+  taskContext: string | undefined,
+): boolean {
   const combined = `${taskContext ?? ""} ${content}`.toLowerCase();
-  const recurrence = /\b(repeated|recurs?|recurring|same problem|same correction|again|operating pattern|reusable|future work|learned rule|繰り返|再発|再利用|運用パターン)\b/i.test(
-    combined
-  );
-  const memoryIntent = /\b(directive memory|directive candidate|capture|preserve|save|保存|記憶|候補)\b/i.test(combined);
+  const recurrence =
+    /\b(repeated|recurs?|recurring|same problem|same correction|again|operating pattern|reusable|future work|learned rule|繰り返|再発|再利用|運用パターン)\b/i.test(
+      combined,
+    );
+  const memoryIntent =
+    /\b(directive memory|directive candidate|capture|preserve|save|保存|記憶|候補)\b/i.test(
+      combined,
+    );
   return recurrence && memoryIntent;
 }
 
-function findNearDuplicateCandidates(content: string, layer: MemoryLayer | undefined, candidates: Memory[], excludedIds: Set<number>) {
+function findNearDuplicateCandidates(
+  content: string,
+  layer: MemoryLayer | undefined,
+  candidates: Memory[],
+  excludedIds: Set<number>,
+) {
   return candidates
     .filter((candidate) => !excludedIds.has(candidate.id) && (!layer || candidate.layer === layer))
     .map((candidate) => ({
       candidate,
-      confidence: contentSimilarity(content, candidate.content)
+      confidence: contentSimilarity(content, candidate.content),
     }))
     .filter((entry) => entry.confidence >= 0.72)
     .sort(
       (left, right) =>
         right.confidence - left.confidence ||
         right.candidate.updatedAt.getTime() - left.candidate.updatedAt.getTime() ||
-        left.candidate.id - right.candidate.id
+        left.candidate.id - right.candidate.id,
     )
     .slice(0, 5)
     .map(({ candidate, confidence }) => ({
       memoryId: candidate.id,
       reason: "near_duplicate_content",
       summary: candidate.summary,
-      confidence: Number(confidence.toFixed(4))
+      confidence: Number(confidence.toFixed(4)),
     }));
 }
 
@@ -1761,7 +1871,11 @@ function buildMemoryProposal(input: ProposeMemoryUpdateToolInput) {
   let importance = 0.5;
   let confidence = 0.75;
 
-  if (/\b(rule|policy|preference|always|never|must|should|運用|方針|ルール|毎回|必ず)\b/i.test(combined)) {
+  if (
+    /\b(rule|policy|preference|always|never|must|should|運用|方針|ルール|毎回|必ず)\b/i.test(
+      combined,
+    )
+  ) {
     layer = "core";
     importance = 0.75;
     confidence = 0.85;
@@ -1788,7 +1902,7 @@ function buildMemoryProposal(input: ProposeMemoryUpdateToolInput) {
     tags: [...tags].sort(),
     importance,
     confidence,
-    reasons
+    reasons,
   };
 }
 
@@ -1812,13 +1926,26 @@ function contentSimilarity(left: string, right: string): number {
 }
 
 function tokenizeMemoryContent(content: string): Set<string> {
-  const stopWords = new Set(["a", "an", "and", "are", "be", "for", "in", "is", "of", "the", "to", "with"]);
+  const stopWords = new Set([
+    "a",
+    "an",
+    "and",
+    "are",
+    "be",
+    "for",
+    "in",
+    "is",
+    "of",
+    "the",
+    "to",
+    "with",
+  ]);
   return new Set(
     content
       .toLowerCase()
       .replace(/[_-]/g, " ")
       .split(/[^a-z0-9]+/)
-      .filter((token) => token.length > 2 && !stopWords.has(token))
+      .filter((token) => token.length > 2 && !stopWords.has(token)),
   );
 }
 
@@ -1828,7 +1955,10 @@ function characterSimilarity(left: string, right: string): number {
   if (!leftShingles.size || !rightShingles.size) {
     return 0;
   }
-  return (2 * setIntersectionSize(leftShingles, rightShingles)) / (leftShingles.size + rightShingles.size);
+  return (
+    (2 * setIntersectionSize(leftShingles, rightShingles)) /
+    (leftShingles.size + rightShingles.size)
+  );
 }
 
 function characterShingles(content: string): Set<string> {

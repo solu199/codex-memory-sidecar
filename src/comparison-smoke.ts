@@ -30,7 +30,7 @@ class DeterministicEmbeddingProvider implements EmbeddingProvider {
     return [
       normalized.includes("comparison") ? 1 : 0,
       normalized.includes("session") ? 1 : 0,
-      normalized.includes("provenance") ? 1 : 0
+      normalized.includes("provenance") ? 1 : 0,
     ];
   }
 }
@@ -40,7 +40,9 @@ export async function runComparisonSmoke(): Promise<ComparisonSmokeResult> {
   const databasePath = path.join(tempDir, "memory.sqlite");
   const projectPath = path.join(tempDir, "project-alpha");
   const store = new MemoryStore(databasePath);
-  const tools = createToolHandlers(store, { embeddingProvider: new DeterministicEmbeddingProvider() });
+  const tools = createToolHandlers(store, {
+    embeddingProvider: new DeterministicEmbeddingProvider(),
+  });
 
   try {
     await tools.writeMemory({
@@ -52,19 +54,19 @@ export async function runComparisonSmoke(): Promise<ComparisonSmokeResult> {
       sourceRef: "evaluation:comparison-smoke",
       projectPath,
       importance: 0.8,
-      confidence: 0.85
+      confidence: 0.85,
     });
 
     const noMcpBaseline = buildEvaluationMatrix()[0];
     const session = await tools.startMemorySession({
       taskDescription: "comparison evaluation session provenance",
       projectPath,
-      maxTokens: 300
+      maxTokens: 300,
     });
     const search = await tools.searchMemory({
       query: "comparison evaluation provenance",
       projectPath,
-      limit: 5
+      limit: 5,
     });
     const proposal = await tools.proposeMemoryUpdate({
       content:
@@ -72,7 +74,7 @@ export async function runComparisonSmoke(): Promise<ComparisonSmokeResult> {
       taskContext: "comparison evaluation durable rule",
       sourceType: "evaluation",
       sourceRef: "evaluation:comparison-smoke / docs/daily-operations.md",
-      projectPath
+      projectPath,
     });
     const audit = await tools.auditMemory({ limit: 20 });
 
@@ -84,7 +86,9 @@ export async function runComparisonSmoke(): Promise<ComparisonSmokeResult> {
       startSessionGuidance:
         session.structuredContent.ready === true &&
         session.structuredContent.sessionGuidance.memoryUse === "supporting_context" &&
-        session.structuredContent.sessionGuidance.mustVerify.some((item: string) => item.includes("README/docs")),
+        session.structuredContent.sessionGuidance.mustVerify.some((item: string) =>
+          item.includes("README/docs"),
+        ),
       fullOperationFindsComparisonMemory:
         search.structuredContent.memories.length > 0 &&
         search.structuredContent.memories[0]?.summary.includes("comparison evaluation"),
@@ -92,9 +96,12 @@ export async function runComparisonSmoke(): Promise<ComparisonSmokeResult> {
         proposal.structuredContent.provenance.quality === "strong" &&
         proposal.structuredContent.provenance.recognizedRefs.includes("named_run") &&
         proposal.structuredContent.provenance.recognizedRefs.includes("doc_path"),
-      searchKeepsEmbeddingsHiddenByDefault:
-        search.structuredContent.memories.every((memory) => memory.embedding === null),
-      auditRecorded: audit.structuredContent.events.some((event) => event.eventType === "retrieved")
+      searchKeepsEmbeddingsHiddenByDefault: search.structuredContent.memories.every(
+        (memory) => memory.embedding === null,
+      ),
+      auditRecorded: audit.structuredContent.events.some(
+        (event) => event.eventType === "retrieved",
+      ),
     };
 
     return {
@@ -105,13 +112,13 @@ export async function runComparisonSmoke(): Promise<ComparisonSmokeResult> {
       recommendations: [
         "Use MCP as supporting context, not as a replacement for README/docs/git/current files.",
         "Use start_memory_session to check health, backup retention, and memory availability before nontrivial work.",
-        "Use propose_memory_update before saving evaluation outcomes so weak sourceRef values can be improved first."
+        "Use propose_memory_update before saving evaluation outcomes so weak sourceRef values can be improved first.",
       ],
       warnings: [
         ...session.structuredContent.warnings,
         ...search.structuredContent.warnings,
-        ...proposal.structuredContent.warnings
-      ]
+        ...proposal.structuredContent.warnings,
+      ],
     };
   } finally {
     store.close();
@@ -125,20 +132,23 @@ function buildEvaluationMatrix(): ComparisonSmokeResult["evaluationMatrix"] {
       condition: "mcp_off",
       purpose: "Establish what README/docs/git/current files can answer without memory.",
       primarySources: ["README/docs", "actual files", "git history"],
-      expectedStrength: "Current implementation facts and exact provenance."
+      expectedStrength: "Current implementation facts and exact provenance.",
     },
     {
       condition: "start_session_only",
-      purpose: "Check startup safety, relevant summaries, backup retention, and over-trust guidance.",
+      purpose:
+        "Check startup safety, relevant summaries, backup retention, and over-trust guidance.",
       primarySources: ["start_memory_session"],
-      expectedStrength: "Fast startup context and safety status."
+      expectedStrength: "Fast startup context and safety status.",
     },
     {
       condition: "full_mcp_operation",
-      purpose: "Use search, audit, and propose flows to evaluate whether memory improves future work.",
+      purpose:
+        "Use search, audit, and propose flows to evaluate whether memory improves future work.",
       primarySources: ["search_memory", "audit_memory", "propose_memory_update"],
-      expectedStrength: "Prior chat-derived operational memory, auditability, and durable lesson capture."
-    }
+      expectedStrength:
+        "Prior chat-derived operational memory, auditability, and durable lesson capture.",
+    },
   ];
 }
 

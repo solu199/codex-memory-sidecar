@@ -19,7 +19,7 @@ describe("runMcpSmoke", () => {
 
   test("checks registered tools and calls health_check through MCP", async () => {
     const result = await runMcpSmoke({
-      databasePath: path.join(tempDir, "memory.sqlite")
+      databasePath: path.join(tempDir, "memory.sqlite"),
     });
 
     expect(result.ok).toBe(true);
@@ -40,10 +40,10 @@ describe("runMcpSmoke", () => {
     expect(result.startMemorySession.backupRetention).toMatchObject({
       backupCount: 0,
       prunableCount: 0,
-      wouldDelete: false
+      wouldDelete: false,
     });
     expect(result.startMemorySession.sessionGuidance).toMatchObject({
-      memoryUse: "supporting_context"
+      memoryUse: "supporting_context",
     });
     expect(result.startMemorySession.sessionGuidance.suggestedNextTools).toContain("audit_memory");
   }, 20_000);

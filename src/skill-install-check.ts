@@ -19,25 +19,29 @@ export function normalizeSkillText(input: string): string {
   return input.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
 }
 
-export function compareSkillInstall(repoSkillDir: string, installedSkillDir: string): SkillInstallCheckResult {
+export function compareSkillInstall(
+  repoSkillDir: string,
+  installedSkillDir: string,
+): SkillInstallCheckResult {
   const files = checkedFiles.map((file) => {
     const sourcePath = path.join(repoSkillDir, file);
     const installedPath = path.join(installedSkillDir, file);
     const exists = existsSync(sourcePath) && existsSync(installedPath);
     const matches =
       exists &&
-      normalizeSkillText(readFileSync(sourcePath, "utf8")) === normalizeSkillText(readFileSync(installedPath, "utf8"));
+      normalizeSkillText(readFileSync(sourcePath, "utf8")) ===
+        normalizeSkillText(readFileSync(installedPath, "utf8"));
 
     return {
       file,
       exists,
-      matches
+      matches,
     };
   });
 
   return {
     ok: files.every((file) => file.exists && file.matches),
-    files
+    files,
   };
 }
 
@@ -68,11 +72,11 @@ function main(): void {
       {
         ...result,
         repoSkillDir,
-        installedSkillDir
+        installedSkillDir,
       },
       null,
-      2
-    )
+      2,
+    ),
   );
 
   if (!result.ok) {

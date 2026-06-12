@@ -28,11 +28,17 @@ describe("skill install check", () => {
     mkdirSync(path.join(installed, "agents"), { recursive: true });
 
     writeFileSync(path.join(repo, "SKILL.md"), "---\nname: codex-memory-sidecar\n---\nBody\n");
-    writeFileSync(path.join(installed, "SKILL.md"), "\uFEFF---\r\nname: codex-memory-sidecar\r\n---\r\nBody\r\n");
-    writeFileSync(path.join(repo, "agents", "openai.yaml"), "interface:\n  display_name: Codex Memory Sidecar\n");
+    writeFileSync(
+      path.join(installed, "SKILL.md"),
+      "\uFEFF---\r\nname: codex-memory-sidecar\r\n---\r\nBody\r\n",
+    );
+    writeFileSync(
+      path.join(repo, "agents", "openai.yaml"),
+      "interface:\n  display_name: Codex Memory Sidecar\n",
+    );
     writeFileSync(
       path.join(installed, "agents", "openai.yaml"),
-      "\uFEFFinterface:\r\n  display_name: Codex Memory Sidecar\r\n"
+      "\uFEFFinterface:\r\n  display_name: Codex Memory Sidecar\r\n",
     );
 
     expect(compareSkillInstall(repo, installed)).toEqual({
@@ -41,14 +47,14 @@ describe("skill install check", () => {
         {
           file: "SKILL.md",
           exists: true,
-          matches: true
+          matches: true,
         },
         {
           file: path.join("agents", "openai.yaml"),
           exists: true,
-          matches: true
-        }
-      ]
+          matches: true,
+        },
+      ],
     });
   });
 
@@ -69,7 +75,7 @@ describe("skill install check", () => {
     expect(result.files).toContainEqual({
       file: "SKILL.md",
       exists: true,
-      matches: false
+      matches: false,
     });
   });
 });

@@ -14,20 +14,20 @@ export function createMemoryServer(config: MemorySidecarConfig): MemoryServerRun
   const store = new MemoryStore(config.databasePath);
   const server = new McpServer({
     name: "codex-memory-sidecar",
-    version: "0.1.0"
+    version: "0.1.0",
   });
   const embeddingProvider =
     config.embeddingMode === "off"
       ? undefined
       : new OllamaEmbeddingProvider({
           baseUrl: config.ollamaBaseUrl,
-          model: config.embeddingModel
+          model: config.embeddingModel,
         });
 
   registerMemoryTools(server, store, {
     embeddingProvider,
     embeddingRequired: config.embeddingMode === "ollama",
-    autoMemoryWrite: config.memoryAutoWrite
+    autoMemoryWrite: config.memoryAutoWrite,
   });
 
   return { server, store };

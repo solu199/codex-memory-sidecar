@@ -46,12 +46,12 @@ export interface McpSmokeResult {
 export async function runMcpSmoke(options: McpSmokeOptions = {}): Promise<McpSmokeResult> {
   const config = {
     ...loadConfig(),
-    ...(options.databasePath ? { databasePath: options.databasePath } : {})
+    ...(options.databasePath ? { databasePath: options.databasePath } : {}),
   } satisfies MemorySidecarConfig;
   const runtime = createMemoryServer(config);
   const client = new Client({
     name: "codex-memory-sidecar-smoke",
-    version: "0.1.0"
+    version: "0.1.0",
   });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -60,15 +60,15 @@ export async function runMcpSmoke(options: McpSmokeOptions = {}): Promise<McpSmo
     const tools = await client.listTools();
     const health = await client.callTool({
       name: "health_check",
-      arguments: {}
+      arguments: {},
     });
     const healthCheck = health.structuredContent as McpSmokeResult["healthCheck"];
     const session = await client.callTool({
       name: "start_memory_session",
       arguments: {
         taskDescription: "MCP smoke session startup",
-        maxTokens: 100
-      }
+        maxTokens: 100,
+      },
     });
     const startMemorySession = session.structuredContent as McpSmokeResult["startMemorySession"];
 
@@ -76,7 +76,7 @@ export async function runMcpSmoke(options: McpSmokeOptions = {}): Promise<McpSmo
       ok: tools.tools.length > 0 && healthCheck.database.ok && startMemorySession.ready,
       toolNames: tools.tools.map((tool) => tool.name).sort(),
       healthCheck,
-      startMemorySession
+      startMemorySession,
     };
   } finally {
     await client.close();

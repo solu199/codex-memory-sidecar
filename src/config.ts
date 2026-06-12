@@ -34,14 +34,16 @@ const DEFAULTS = {
   startupIntegrityCheck: true,
   startupFtsSanityCheck: true,
   startupWalCheckpoint: true,
-  autoBackupOnStartup: false
+  autoBackupOnStartup: false,
 };
 
 export function loadConfig(options: LoadConfigOptions = {}): MemorySidecarConfig {
   const cwd = options.cwd ?? process.cwd();
   const env = options.env ?? process.env;
   const configPath = options.configPath ?? path.join(cwd, "config", "memory-sidecar.toml");
-  const fileConfig = existsSync(configPath) ? parseConfigToml(readFileSync(configPath, "utf8")) : {};
+  const fileConfig = existsSync(configPath)
+    ? parseConfigToml(readFileSync(configPath, "utf8"))
+    : {};
 
   const databasePath =
     env.CODEX_MEMORY_DB ?? stringValue(fileConfig.database_path) ?? DEFAULTS.databasePath;
@@ -55,9 +57,12 @@ export function loadConfig(options: LoadConfigOptions = {}): MemorySidecarConfig
       embeddingModeValue(env.CODEX_MEMORY_EMBEDDING_MODE) ??
       embeddingModeValue(fileConfig.embedding_mode) ??
       DEFAULTS.embeddingMode,
-    ollamaBaseUrl: env.OLLAMA_BASE_URL ?? stringValue(fileConfig.ollama_base_url) ?? DEFAULTS.ollamaBaseUrl,
+    ollamaBaseUrl:
+      env.OLLAMA_BASE_URL ?? stringValue(fileConfig.ollama_base_url) ?? DEFAULTS.ollamaBaseUrl,
     embeddingModel:
-      env.CODEX_MEMORY_EMBEDDING_MODEL ?? stringValue(fileConfig.embedding_model) ?? DEFAULTS.embeddingModel,
+      env.CODEX_MEMORY_EMBEDDING_MODEL ??
+      stringValue(fileConfig.embedding_model) ??
+      DEFAULTS.embeddingModel,
     maintenanceModel:
       env.CODEX_MEMORY_MAINTENANCE_MODEL ??
       stringValue(fileConfig.maintenance_model) ??
@@ -86,7 +91,7 @@ export function loadConfig(options: LoadConfigOptions = {}): MemorySidecarConfig
     autoBackupOnStartup:
       booleanValue(env.CODEX_MEMORY_AUTO_BACKUP_ON_STARTUP) ??
       booleanValue(fileConfig.auto_backup_on_startup) ??
-      DEFAULTS.autoBackupOnStartup
+      DEFAULTS.autoBackupOnStartup,
   };
 }
 

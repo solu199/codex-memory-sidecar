@@ -29,7 +29,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.9,
-      confidence: 0.8
+      confidence: 0.8,
     });
 
     expect(created.id).toBeGreaterThan(0);
@@ -52,7 +52,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.5,
-      confidence: 0.8
+      confidence: 0.8,
     });
 
     expect(created.status).toBe("active");
@@ -60,7 +60,10 @@ describe("MemoryStore", () => {
   });
 
   test("creates indexes for common status layer and recency queries", () => {
-    const db = new Database(path.join(tempDir, "memory.sqlite"), { readonly: true, fileMustExist: true });
+    const db = new Database(path.join(tempDir, "memory.sqlite"), {
+      readonly: true,
+      fileMustExist: true,
+    });
     try {
       const indexes = db.prepare("PRAGMA index_list(memories)").all() as { name: string }[];
 
@@ -68,8 +71,8 @@ describe("MemoryStore", () => {
         expect.arrayContaining([
           "idx_memories_status_updated",
           "idx_memories_layer_status",
-          "idx_memories_active_embedding_candidates"
-        ])
+          "idx_memories_active_embedding_candidates",
+        ]),
       );
     } finally {
       db.close();
@@ -125,7 +128,7 @@ describe("MemoryStore", () => {
         ) VALUES (
           'recall', 'Legacy scoped migration memory.', 'Legacy scoped migration memory.', '["legacy"]',
           'manual', 'test', 0.6, 0.8, @now, @now, 'active'
-        )`
+        )`,
       )
       .run({ now });
     legacyDb
@@ -144,16 +147,24 @@ describe("MemoryStore", () => {
       migratedDb.close();
 
       expect(migrated?.projectScope).toBe("global");
-      expect(legacyStore.searchMemory({ query: "legacy scoped migration", projectScope: "alpha", limit: 5 })).toHaveLength(1);
+      expect(
+        legacyStore.searchMemory({
+          query: "legacy scoped migration",
+          projectScope: "alpha",
+          limit: 5,
+        }),
+      ).toHaveLength(1);
       expect(ftsSql.sql).toContain("tokenize = 'trigram'");
       expect(legacyStore.getStats().byProjectScope).toEqual([
         expect.objectContaining({
           projectScope: "global",
           active: 1,
-          total: 1
-        })
+          total: 1,
+        }),
       ]);
-      expect(indexes.map((index) => index.name)).toContain("idx_memories_project_scope_status_updated");
+      expect(indexes.map((index) => index.name)).toContain(
+        "idx_memories_project_scope_status_updated",
+      );
     } finally {
       legacyStore.close();
     }
@@ -161,16 +172,19 @@ describe("MemoryStore", () => {
 
   test("searches Japanese and mixed-language memory text with trigram FTS and LIKE fallback", () => {
     const created = store.createMemory({
-      content: "ダッシュボードが古く見える時はstaleプロセスとポート再利用を疑う。運用メモとして残す。",
+      content:
+        "ダッシュボードが古く見える時はstaleプロセスとポート再利用を疑う。運用メモとして残す。",
       layer: "recall",
       tags: ["dashboard", "運用"],
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.5,
-      confidence: 0.8
+      confidence: 0.8,
     });
 
-    expect(store.searchMemory({ query: "ダッシュボード", limit: 5 })[0]?.memory.id).toBe(created.id);
+    expect(store.searchMemory({ query: "ダッシュボード", limit: 5 })[0]?.memory.id).toBe(
+      created.id,
+    );
     expect(store.searchMemory({ query: "stale", limit: 5 })[0]?.memory.id).toBe(created.id);
     expect(store.searchMemory({ query: "ポート再利用", limit: 5 })[0]?.memory.id).toBe(created.id);
     expect(store.searchMemory({ query: "運用", limit: 5 })[0]?.memory.id).toBe(created.id);
@@ -184,7 +198,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.5,
-      confidence: 0.8
+      confidence: 0.8,
     });
 
     const health = store.checkDatabaseHealth();
@@ -196,7 +210,7 @@ describe("MemoryStore", () => {
       expectedCount: 1,
       indexedCount: 1,
       missingCount: 0,
-      orphanCount: 0
+      orphanCount: 0,
     });
     expect(health.walCheckpoint.busy).toBe(0);
     expect(health.warnings).toEqual([]);
@@ -211,7 +225,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.5,
-      confidence: 0.8
+      confidence: 0.8,
     });
     const db = new Database(path.join(tempDir, "memory.sqlite"));
     try {
@@ -228,7 +242,7 @@ describe("MemoryStore", () => {
       expectedCount: 1,
       indexedCount: 0,
       missingCount: 1,
-      orphanCount: 0
+      orphanCount: 0,
     });
     expect(health.warnings).toContain("FTS index is missing 1 active memory row(s).");
   });
@@ -241,7 +255,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.5,
-      confidence: 0.8
+      confidence: 0.8,
     });
     const db = new Database(path.join(tempDir, "memory.sqlite"));
     try {
@@ -264,7 +278,7 @@ describe("MemoryStore", () => {
       expectedCount: 1,
       indexedCount: 1,
       missingCount: 0,
-      orphanCount: 0
+      orphanCount: 0,
     });
     expect(store.searchMemory({ query: "Repair", limit: 1 })[0]?.memory.id).toBe(created.id);
   });
@@ -278,14 +292,14 @@ describe("MemoryStore", () => {
       sourceRef: "test",
       embedding: [1, 0],
       importance: 0.5,
-      confidence: 0.6
+      confidence: 0.6,
     });
 
     const updated = store.updateMemory({
       memoryId: created.id,
       newContent: "Use TypeScript for the memory sidecar.",
       updateNote: "Design default changed.",
-      embedding: [0, 1]
+      embedding: [0, 1],
     });
 
     expect(updated.content).toBe("Use TypeScript for the memory sidecar.");
@@ -304,12 +318,12 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.2,
-      confidence: 0.7
+      confidence: 0.7,
     });
 
     const forgotten = store.forgetMemory({
       memoryId: created.id,
-      reason: "No longer useful."
+      reason: "No longer useful.",
     });
 
     expect(forgotten.status).toBe("forgotten");
@@ -325,15 +339,15 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.4,
-      confidence: 0.8
+      confidence: 0.8,
     });
 
     expect(() =>
       store.forgetMemory({
         memoryId: created.id,
         reason: "testing hard delete guard",
-        hardDelete: true
-      })
+        hardDelete: true,
+      }),
     ).toThrow(/confirm/i);
 
     expect(store.getMemory(created.id)?.status).toBe("active");
@@ -347,7 +361,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.7,
-      confidence: 0.9
+      confidence: 0.9,
     });
     const second = store.createMemory({
       content: "Old note about unrelated deployment setup.",
@@ -356,7 +370,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.4,
-      confidence: 0.6
+      confidence: 0.6,
     });
     store.forgetMemory({ memoryId: second.id, reason: "superseded" });
 
@@ -374,7 +388,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.9,
-      confidence: 0.9
+      confidence: 0.9,
     });
     const tagged = store.createMemory({
       content: "Shared search phrase.",
@@ -383,13 +397,13 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.1,
-      confidence: 0.9
+      confidence: 0.9,
     });
 
     const results = store.searchMemory({
       query: "shared search phrase",
       tags: ["target"],
-      limit: 1
+      limit: 1,
     });
 
     expect(results.map((result) => result.memory.id)).toEqual([tagged.id]);
@@ -401,7 +415,7 @@ describe("MemoryStore", () => {
       layer: "core",
       tags: ["scope"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const sameProject = store.createMemory({
       content: "Shared scoped lookup policy for project alpha.",
@@ -409,7 +423,7 @@ describe("MemoryStore", () => {
       tags: ["scope"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "alpha"
+      projectScope: "alpha",
     });
     store.createMemory({
       content: "Shared scoped lookup policy for project beta.",
@@ -417,13 +431,13 @@ describe("MemoryStore", () => {
       tags: ["scope"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "beta"
+      projectScope: "beta",
     });
 
     const results = store.searchMemory({
       query: "shared scoped lookup policy",
       projectScope: "alpha",
-      limit: 10
+      limit: 10,
     });
 
     expect(results.map((result) => result.memory.id)).toEqual([global.id, sameProject.id]);
@@ -438,7 +452,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       projectScope: "alpha",
-      embedding: [1, 0, 0]
+      embedding: [1, 0, 0],
     });
     store.createMemory({
       content: "Semantic scoped memory for beta.",
@@ -447,14 +461,14 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       projectScope: "beta",
-      embedding: [1, 0, 0]
+      embedding: [1, 0, 0],
     });
 
     const results = store.searchMemory({
       query: "semantic scoped",
       queryEmbedding: [1, 0, 0],
       projectScope: "alpha",
-      limit: 10
+      limit: 10,
     });
 
     expect(results.map((result) => result.memory.id)).toEqual([sameProject.id]);
@@ -467,7 +481,7 @@ describe("MemoryStore", () => {
       tags: ["scope"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "alpha"
+      projectScope: "alpha",
     });
     const beta = store.createMemory({
       content: "Cross project lookup phrase for beta.",
@@ -475,24 +489,29 @@ describe("MemoryStore", () => {
       tags: ["scope"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "beta"
+      projectScope: "beta",
     });
 
     const results = store.searchMemory({
       query: "cross project lookup phrase",
       projectScope: "alpha",
       includeCrossProject: true,
-      limit: 10
+      limit: 10,
     });
-    const retrievedEvents = store.listRecentEvents({ limit: 10 }).filter((event) => event.eventType === "retrieved");
+    const retrievedEvents = store
+      .listRecentEvents({ limit: 10 })
+      .filter((event) => event.eventType === "retrieved");
 
-    expect(results.map((result) => result.memory.id).sort((left, right) => left - right)).toEqual([alpha.id, beta.id]);
+    expect(results.map((result) => result.memory.id).sort((left, right) => left - right)).toEqual([
+      alpha.id,
+      beta.id,
+    ]);
     expect(retrievedEvents[0]?.payload).toMatchObject({
       query: "cross project lookup phrase",
       projectScope: "alpha",
       includeCrossProject: true,
       scopeFilterApplied: false,
-      resultProjectScopes: ["alpha", "beta"]
+      resultProjectScopes: ["alpha", "beta"],
     });
   });
 
@@ -504,7 +523,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.9,
-      confidence: 0.9
+      confidence: 0.9,
     });
     const second = store.createMemory({
       content: "Shared audit lookup phrase with another detail.",
@@ -513,11 +532,13 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.4,
-      confidence: 0.9
+      confidence: 0.9,
     });
 
     const results = store.searchMemory({ query: "shared audit lookup phrase", limit: 2 });
-    const retrievedEvents = store.listRecentEvents({ limit: 10 }).filter((event) => event.eventType === "retrieved");
+    const retrievedEvents = store
+      .listRecentEvents({ limit: 10 })
+      .filter((event) => event.eventType === "retrieved");
 
     expect(results.map((result) => result.memory.id)).toEqual([first.id, second.id]);
     expect(retrievedEvents).toHaveLength(1);
@@ -528,7 +549,7 @@ describe("MemoryStore", () => {
       scopeFilterApplied: false,
       resultCount: 2,
       memoryIds: [first.id, second.id],
-      resultProjectScopes: ["global"]
+      resultProjectScopes: ["global"],
     });
     expect(store.getMemory(first.id)?.lastAccessedAt).toBeInstanceOf(Date);
     expect(store.getMemory(second.id)?.lastAccessedAt).toBeInstanceOf(Date);
@@ -543,7 +564,7 @@ describe("MemoryStore", () => {
       sourceRef: "test",
       importance: 0.7,
       confidence: 0.9,
-      embedding: [1, 0, 0]
+      embedding: [1, 0, 0],
     });
     store.createMemory({
       content: "Prefer compact modules.",
@@ -553,13 +574,13 @@ describe("MemoryStore", () => {
       sourceRef: "test",
       importance: 0.7,
       confidence: 0.9,
-      embedding: [0, 1, 0]
+      embedding: [0, 1, 0],
     });
 
     const results = store.searchMemory({
       query: "semantic lookup",
       queryEmbedding: [0.95, 0.05, 0],
-      limit: 1
+      limit: 1,
     });
 
     expect(results).toHaveLength(1);
@@ -576,7 +597,7 @@ describe("MemoryStore", () => {
       sourceRef: "test",
       importance: 0.7,
       confidence: 0.9,
-      embedding: [1, 0, 0]
+      embedding: [1, 0, 0],
     });
     const second = store.createMemory({
       content: "Use local embeddings for memory recall.",
@@ -586,15 +607,17 @@ describe("MemoryStore", () => {
       sourceRef: "test",
       importance: 0.5,
       confidence: 0.9,
-      embedding: [0.9, 0.1, 0]
+      embedding: [0.9, 0.1, 0],
     });
 
     const results = store.searchMemory({
       query: "semantic lookup",
       queryEmbedding: [0.95, 0.05, 0],
-      limit: 2
+      limit: 2,
     });
-    const retrievedEvents = store.listRecentEvents({ limit: 10 }).filter((event) => event.eventType === "retrieved");
+    const retrievedEvents = store
+      .listRecentEvents({ limit: 10 })
+      .filter((event) => event.eventType === "retrieved");
 
     expect(results.map((result) => result.memory.id)).toEqual([first.id, second.id]);
     expect(retrievedEvents).toHaveLength(1);
@@ -606,7 +629,7 @@ describe("MemoryStore", () => {
       scopeFilterApplied: false,
       resultCount: 2,
       memoryIds: [first.id, second.id],
-      resultProjectScopes: ["global"]
+      resultProjectScopes: ["global"],
     });
     expect(store.getMemory(first.id)?.lastAccessedAt).toBeInstanceOf(Date);
     expect(store.getMemory(second.id)?.lastAccessedAt).toBeInstanceOf(Date);
@@ -621,7 +644,7 @@ describe("MemoryStore", () => {
       sourceRef: "test",
       importance: 0.9,
       confidence: 0.9,
-      embedding: [0, 1, 0]
+      embedding: [0, 1, 0],
     });
     store.createMemory({
       content: "Low importance vector-only note.",
@@ -631,14 +654,14 @@ describe("MemoryStore", () => {
       sourceRef: "test",
       importance: 0.1,
       confidence: 0.9,
-      embedding: [1, 0, 0]
+      embedding: [1, 0, 0],
     });
 
     const results = store.searchMemory({
       query: "semantic lookup",
       queryEmbedding: [1, 0, 0],
       limit: 5,
-      hybridCandidateLimit: 1
+      hybridCandidateLimit: 1,
     });
 
     expect(results.map((result) => result.memory.id)).toEqual([staleCandidate.id]);
@@ -653,7 +676,7 @@ describe("MemoryStore", () => {
       sourceRef: "test",
       importance: 0.9,
       confidence: 0.9,
-      embedding: [0, 1, 0]
+      embedding: [0, 1, 0],
     });
     const keywordCandidate = store.createMemory({
       content: "Hybrid keyword rescue candidate.",
@@ -663,14 +686,14 @@ describe("MemoryStore", () => {
       sourceRef: "test",
       importance: 0.1,
       confidence: 0.9,
-      embedding: [1, 0, 0]
+      embedding: [1, 0, 0],
     });
 
     const results = store.searchMemory({
       query: "hybrid keyword rescue",
       queryEmbedding: [0, 1, 0],
       limit: 5,
-      hybridCandidateLimit: 1
+      hybridCandidateLimit: 1,
     });
 
     expect(results.map((result) => result.memory.id)).toContain(keywordCandidate.id);
@@ -685,8 +708,8 @@ describe("MemoryStore", () => {
         sourceType: "manual",
         sourceRef: "test",
         importance: 0.1,
-        confidence: 0.9
-      })
+        confidence: 0.9,
+      }),
     ).toThrow(/secret/i);
   });
 
@@ -700,7 +723,7 @@ describe("MemoryStore", () => {
       `github token ${githubToken}`,
       `aws key ${awsAccessKey}`,
       bearerToken,
-      `slack token ${slackToken}`
+      `slack token ${slackToken}`,
     ]) {
       expect(() =>
         store.createMemory({
@@ -710,8 +733,8 @@ describe("MemoryStore", () => {
           sourceType: "manual",
           sourceRef: "test",
           importance: 0.1,
-          confidence: 0.9
-        })
+          confidence: 0.9,
+        }),
       ).toThrow(/secret/i);
     }
   });
@@ -724,7 +747,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.6,
-      confidence: 0.9
+      confidence: 0.9,
     });
     const backupPath = path.join(tempDir, "backups", "memory-backup.sqlite");
 
@@ -734,7 +757,9 @@ describe("MemoryStore", () => {
     expect(existsSync(backupPath)).toBe(true);
 
     const backupStore = new MemoryStore(backupPath);
-    expect(backupStore.getMemory(created.id)?.content).toBe("Backups should preserve local memory records.");
+    expect(backupStore.getMemory(created.id)?.content).toBe(
+      "Backups should preserve local memory records.",
+    );
     backupStore.close();
   });
 
@@ -746,7 +771,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.6,
-      confidence: 0.9
+      confidence: 0.9,
     });
 
     const backup = await store.createBackup({});
@@ -764,7 +789,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.6,
-      confidence: 0.9
+      confidence: 0.9,
     });
 
     const first = await store.createBackup({});
@@ -777,9 +802,24 @@ describe("MemoryStore", () => {
 
   test("plans default backup retention without deleting files", () => {
     const backupDir = path.join(tempDir, "backups");
-    const oldest = createBackupFixture(backupDir, "memory-20260514-010000-000.sqlite", "oldest", new Date("2026-05-14T01:00:00Z"));
-    const middle = createBackupFixture(backupDir, "memory-20260514-020000-000.sqlite", "middle", new Date("2026-05-14T02:00:00Z"));
-    const newest = createBackupFixture(backupDir, "memory-20260514-030000-000.sqlite", "newest", new Date("2026-05-14T03:00:00Z"));
+    const oldest = createBackupFixture(
+      backupDir,
+      "memory-20260514-010000-000.sqlite",
+      "oldest",
+      new Date("2026-05-14T01:00:00Z"),
+    );
+    const middle = createBackupFixture(
+      backupDir,
+      "memory-20260514-020000-000.sqlite",
+      "middle",
+      new Date("2026-05-14T02:00:00Z"),
+    );
+    const newest = createBackupFixture(
+      backupDir,
+      "memory-20260514-030000-000.sqlite",
+      "newest",
+      new Date("2026-05-14T03:00:00Z"),
+    );
 
     const plan = store.planBackupRetention({ keepCount: 2 });
 
@@ -801,10 +841,20 @@ describe("MemoryStore", () => {
       backupDir,
       "memory-20260514-010000-000.sqlite",
       "default",
-      new Date("2026-05-14T01:00:00Z")
+      new Date("2026-05-14T01:00:00Z"),
     );
-    createBackupFixture(backupDir, "memory-manual.sqlite", "manual", new Date("2026-05-14T02:00:00Z"));
-    createBackupFixture(backupDir, "not-memory-20260514-030000-000.sqlite", "other", new Date("2026-05-14T03:00:00Z"));
+    createBackupFixture(
+      backupDir,
+      "memory-manual.sqlite",
+      "manual",
+      new Date("2026-05-14T02:00:00Z"),
+    );
+    createBackupFixture(
+      backupDir,
+      "not-memory-20260514-030000-000.sqlite",
+      "other",
+      new Date("2026-05-14T03:00:00Z"),
+    );
 
     const plan = store.planBackupRetention({ keepCount: 0 });
 
@@ -821,7 +871,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.6,
-      confidence: 0.9
+      confidence: 0.9,
     });
     const backup = await store.createBackup({});
 
@@ -846,7 +896,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.6,
-      confidence: 0.9
+      confidence: 0.9,
     });
     const invalidBackupPath = path.join(tempDir, "invalid-backup.sqlite");
     const invalidDb = new Database(invalidBackupPath);
@@ -862,7 +912,9 @@ describe("MemoryStore", () => {
     expect(result.schemaOk).toBe(false);
     expect(result.warnings).toContain("Backup is missing required table: memories");
     expect(result.warnings).toContain("Backup is missing required table: memory_events");
-    expect(store.getMemory(created.id)?.content).toBe("Backup schema verification should be read-only.");
+    expect(store.getMemory(created.id)?.content).toBe(
+      "Backup schema verification should be read-only.",
+    );
   });
 
   test("lists recent audit events across memories", () => {
@@ -873,7 +925,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.5,
-      confidence: 0.8
+      confidence: 0.8,
     });
     const second = store.createMemory({
       content: "Second audited memory.",
@@ -882,7 +934,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.5,
-      confidence: 0.8
+      confidence: 0.8,
     });
     store.forgetMemory({ memoryId: first.id, reason: "audit test" });
 
@@ -903,16 +955,18 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.5,
-      confidence: 0.8
+      confidence: 0.8,
     });
 
     store.updateMemory({
       memoryId: created.id,
       newContent: "Audit payload redaction should protect update notes.",
-      updateNote: "accidentally pasted OPENAI_API_KEY=sk-proj-secret123456"
+      updateNote: "accidentally pasted OPENAI_API_KEY=sk-proj-secret123456",
     });
 
-    const updatedEvent = store.listEvents(created.id).find((event) => event.eventType === "updated");
+    const updatedEvent = store
+      .listEvents(created.id)
+      .find((event) => event.eventType === "updated");
 
     expect(updatedEvent?.payload.updateNote).toBe("[REDACTED_SECRET]");
   });
@@ -925,7 +979,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.5,
-      confidence: 0.8
+      confidence: 0.8,
     });
 
     store.updateMemory({
@@ -934,18 +988,20 @@ describe("MemoryStore", () => {
       updateNote: JSON.stringify({
         accessToken: "short-token",
         nested: {
-          apiKey: "abc123"
-        }
-      })
+          apiKey: "abc123",
+        },
+      }),
     });
 
-    const updatedEvent = store.listEvents(created.id).find((event) => event.eventType === "updated");
+    const updatedEvent = store
+      .listEvents(created.id)
+      .find((event) => event.eventType === "updated");
 
     expect(JSON.parse(updatedEvent?.payload.updateNote as string)).toEqual({
       accessToken: "[REDACTED_SECRET]",
       nested: {
-        apiKey: "[REDACTED_SECRET]"
-      }
+        apiKey: "[REDACTED_SECRET]",
+      },
     });
   });
 
@@ -957,17 +1013,19 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.5,
-      confidence: 0.8
+      confidence: 0.8,
     });
     const longNote = "safe audit detail ".repeat(300);
 
     store.updateMemory({
       memoryId: created.id,
       newContent: "Audit payload truncation should keep logs bounded after update.",
-      updateNote: longNote
+      updateNote: longNote,
     });
 
-    const updatedEvent = store.listEvents(created.id).find((event) => event.eventType === "updated");
+    const updatedEvent = store
+      .listEvents(created.id)
+      .find((event) => event.eventType === "updated");
 
     expect(updatedEvent?.payload.updateNote).toContain("[TRUNCATED");
     expect((updatedEvent?.payload.updateNote as string).length).toBeLessThan(longNote.length);
@@ -981,13 +1039,15 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.5,
-      confidence: 0.8
+      confidence: 0.8,
     });
     const longQuery = `target ${"safe query detail ".repeat(300)}`;
 
     store.searchMemory({ query: longQuery, limit: 1 });
 
-    const retrievedEvent = store.listEvents(created.id).find((event) => event.eventType === "retrieved");
+    const retrievedEvent = store
+      .listEvents(created.id)
+      .find((event) => event.eventType === "retrieved");
 
     expect(retrievedEvent?.payload.query).toContain("[TRUNCATED");
     expect((retrievedEvent?.payload.query as string).length).toBeLessThan(longQuery.length);
@@ -1001,7 +1061,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.5,
-      confidence: 0.8
+      confidence: 0.8,
     });
     const recall = store.createMemory({
       content: "Recall memory for listing.",
@@ -1010,7 +1070,7 @@ describe("MemoryStore", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.5,
-      confidence: 0.8
+      confidence: 0.8,
     });
     store.forgetMemory({ memoryId: recall.id, reason: "filter forgotten" });
 
@@ -1025,7 +1085,7 @@ describe("MemoryStore", () => {
       layer: "core",
       tags: ["list"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const alpha = store.createMemory({
       content: "Alpha scoped listing memory.",
@@ -1033,7 +1093,7 @@ describe("MemoryStore", () => {
       tags: ["list"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "alpha"
+      projectScope: "alpha",
     });
     store.createMemory({
       content: "Beta scoped listing memory.",
@@ -1041,7 +1101,7 @@ describe("MemoryStore", () => {
       tags: ["list"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "beta"
+      projectScope: "beta",
     });
 
     const memories = store.listMemories({ projectScope: "alpha", limit: 10 });
@@ -1056,7 +1116,7 @@ describe("MemoryStore", () => {
       rationale: "Global memory protocol.",
       tags: ["memory-protocol"],
       sourceType: "manual",
-      sourceRef: "AGENTS-memory-protocol.md"
+      sourceRef: "AGENTS-memory-protocol.md",
     });
     const project = store.createDirective({
       content: "For this project, keep README examples in Japanese.",
@@ -1065,7 +1125,7 @@ describe("MemoryStore", () => {
       rationale: "Project documentation policy.",
       tags: ["docs"],
       sourceType: "manual",
-      sourceRef: "README.md"
+      sourceRef: "README.md",
     });
     store.createDirective({
       content: "Other project directive.",
@@ -1073,7 +1133,7 @@ describe("MemoryStore", () => {
       projectScope: "beta",
       rationale: "Should not appear for alpha.",
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const directives = store.listDirectives({ projectScope: "alpha" });
@@ -1083,12 +1143,12 @@ describe("MemoryStore", () => {
       scope: "project",
       projectScope: "alpha",
       status: "active",
-      content: "For this project, keep README examples in Japanese."
+      content: "For this project, keep README examples in Japanese.",
     });
     expect(directives[1]).toMatchObject({
       scope: "global",
       projectScope: "global",
-      status: "active"
+      status: "active",
     });
   });
 
@@ -1098,16 +1158,19 @@ describe("MemoryStore", () => {
       scope: "global",
       rationale: "Disable test.",
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
-    const disabled = store.disableDirective({ directiveId: directive.id, reason: "No longer needed." });
+    const disabled = store.disableDirective({
+      directiveId: directive.id,
+      reason: "No longer needed.",
+    });
 
     expect(disabled.status).toBe("disabled");
     expect(store.listDirectives()).toEqual([]);
     expect(store.listDirectives({ includeDisabled: true })[0]).toMatchObject({
       id: directive.id,
-      status: "disabled"
+      status: "disabled",
     });
   });
 
@@ -1118,13 +1181,18 @@ describe("MemoryStore", () => {
         scope: "global",
         rationale: "Secret guard.",
         sourceType: "manual",
-        sourceRef: "test"
-      })
+        sourceRef: "test",
+      }),
     ).toThrow(/secret/i);
   });
 });
 
-function createBackupFixture(backupDir: string, fileName: string, content: string, mtime: Date): string {
+function createBackupFixture(
+  backupDir: string,
+  fileName: string,
+  content: string,
+  mtime: Date,
+): string {
   mkdirSync(backupDir, { recursive: true });
   const backupPath = path.join(backupDir, fileName);
   writeFileSync(backupPath, content);

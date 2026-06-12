@@ -84,7 +84,8 @@ export function buildMemoryFreshness(input: BuildMemoryFreshnessInput): MemoryFr
       : latestActivity && input.memoryCount === 0
         ? daysBetween(latestActivity, now)
         : 0;
-  const staleByAge = daysSinceLatestMemoryUpdate !== null && daysSinceLatestMemoryUpdate >= staleAfterDays;
+  const staleByAge =
+    daysSinceLatestMemoryUpdate !== null && daysSinceLatestMemoryUpdate >= staleAfterDays;
   const staleByActivity = daysBehindWorkspaceActivity !== null && daysBehindWorkspaceActivity > 0;
   const status =
     input.memoryCount === 0
@@ -94,7 +95,10 @@ export function buildMemoryFreshness(input: BuildMemoryFreshnessInput): MemoryFr
         : staleByAge || staleByActivity
           ? "stale"
           : "fresh";
-  const candidates = status === "stale" || status === "empty" ? buildCandidates(activity, input.maxCandidates ?? 5) : [];
+  const candidates =
+    status === "stale" || status === "empty"
+      ? buildCandidates(activity, input.maxCandidates ?? 5)
+      : [];
 
   return {
     freshness: {
@@ -105,9 +109,9 @@ export function buildMemoryFreshness(input: BuildMemoryFreshnessInput): MemoryFr
       daysBehindWorkspaceActivity,
       candidateCount: candidates.length,
       message: freshnessMessage(status, daysSinceLatestMemoryUpdate, daysBehindWorkspaceActivity),
-      recommendedAction: freshnessAction(status)
+      recommendedAction: freshnessAction(status),
     },
-    candidates
+    candidates,
   };
 }
 
@@ -125,7 +129,7 @@ export function collectWorkspaceActivity(cwd: string, limit = 5): WorkspaceActiv
 
   const activity = {
     ...collectGitActivity(cwd, limit),
-    ...collectGitHubActivity(cwd, limit)
+    ...collectGitHubActivity(cwd, limit),
   };
   activityCache.set(cacheKey, { collectedAt: now, activity });
   return activity;
@@ -136,7 +140,7 @@ function collectGitActivity(cwd: string, limit: number): WorkspaceActivity {
     const output = execFileSync(
       "git",
       ["log", `--max-count=${limit}`, "--format=%H%x1f%cI%x1f%s"],
-      { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2000 }
+      { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2000 },
     );
     const commits = output
       .split(/\r?\n/)
@@ -158,16 +162,29 @@ function collectGitHubActivity(cwd: string, limit: number): WorkspaceActivity {
   const ownerLogin = collectGitHubOwnerLogin(cwd);
   return {
     issues: collectGitHubIssues(cwd, limit, ownerLogin),
-    pullRequests: collectGitHubPullRequests(cwd, limit, ownerLogin)
+    pullRequests: collectGitHubPullRequests(cwd, limit, ownerLogin),
   };
 }
 
-function collectGitHubIssues(cwd: string, limit: number, ownerLogin: string | null): WorkspaceIssueActivity[] {
+function collectGitHubIssues(
+  cwd: string,
+  limit: number,
+  ownerLogin: string | null,
+): WorkspaceIssueActivity[] {
   try {
     const output = execFileSync(
       "gh",
-      ["issue", "list", "--state", "all", "--limit", String(limit), "--json", "number,title,updatedAt,author"],
-      { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2000 }
+      [
+        "issue",
+        "list",
+        "--state",
+        "all",
+        "--limit",
+        String(limit),
+        "--json",
+        "number,title,updatedAt,author",
+      ],
+      { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2000 },
     );
     const issues = JSON.parse(output) as Array<{
       number?: number;
@@ -186,8 +203,8 @@ function collectGitHubIssues(cwd: string, limit: number, ownerLogin: string | nu
           title: issue.title,
           updatedAt: new Date(issue.updatedAt),
           authorLogin,
-          externalAuthor: inferExternalAuthor(authorLogin, ownerLogin)
-        }
+          externalAuthor: inferExternalAuthor(authorLogin, ownerLogin),
+        },
       ];
     });
   } catch {
@@ -195,12 +212,25 @@ function collectGitHubIssues(cwd: string, limit: number, ownerLogin: string | nu
   }
 }
 
-function collectGitHubPullRequests(cwd: string, limit: number, ownerLogin: string | null): WorkspacePullRequestActivity[] {
+function collectGitHubPullRequests(
+  cwd: string,
+  limit: number,
+  ownerLogin: string | null,
+): WorkspacePullRequestActivity[] {
   try {
     const output = execFileSync(
       "gh",
-      ["pr", "list", "--state", "all", "--limit", String(limit), "--json", "number,title,mergedAt,author"],
-      { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2000 }
+      [
+        "pr",
+        "list",
+        "--state",
+        "all",
+        "--limit",
+        String(limit),
+        "--json",
+        "number,title,mergedAt,author",
+      ],
+      { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2000 },
     );
     const pullRequests = JSON.parse(output) as Array<{
       number?: number;
@@ -219,8 +249,8 @@ function collectGitHubPullRequests(cwd: string, limit: number, ownerLogin: strin
           title: pullRequest.title,
           mergedAt: new Date(pullRequest.mergedAt),
           authorLogin,
-          externalAuthor: inferExternalAuthor(authorLogin, ownerLogin)
-        }
+          externalAuthor: inferExternalAuthor(authorLogin, ownerLogin),
+        },
       ];
     });
   } catch {
@@ -230,11 +260,12 @@ function collectGitHubPullRequests(cwd: string, limit: number, ownerLogin: strin
 
 function collectGitHubOwnerLogin(cwd: string): string | null {
   try {
-    const output = execFileSync(
-      "gh",
-      ["repo", "view", "--json", "owner"],
-      { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2000 }
-    );
+    const output = execFileSync("gh", ["repo", "view", "--json", "owner"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 2000,
+    });
     const repo = JSON.parse(output) as { owner?: { login?: string } };
     return normalizeLogin(repo.owner?.login) ?? null;
   } catch {
@@ -247,7 +278,10 @@ function normalizeLogin(login: string | null | undefined): string | undefined {
   return normalized ? normalized : undefined;
 }
 
-function inferExternalAuthor(authorLogin: string | undefined, ownerLogin: string | null): boolean | undefined {
+function inferExternalAuthor(
+  authorLogin: string | undefined,
+  ownerLogin: string | null,
+): boolean | undefined {
   if (!authorLogin) {
     return undefined;
   }
@@ -257,11 +291,13 @@ function inferExternalAuthor(authorLogin: string | undefined, ownerLogin: string
   return authorLogin.toLowerCase() !== ownerLogin.toLowerCase();
 }
 
-function normalizeActivity(activity: WorkspaceActivity | null | undefined): Required<WorkspaceActivity> {
+function normalizeActivity(
+  activity: WorkspaceActivity | null | undefined,
+): Required<WorkspaceActivity> {
   return {
     commits: activity?.commits ?? [],
     issues: activity?.issues ?? [],
-    pullRequests: activity?.pullRequests ?? []
+    pullRequests: activity?.pullRequests ?? [],
   };
 }
 
@@ -269,7 +305,7 @@ function latestActivityDate(activity: Required<WorkspaceActivity>): Date | null 
   const dates = [
     ...activity.commits.map((commit) => commit.committedAt),
     ...activity.issues.map((issue) => issue.updatedAt),
-    ...activity.pullRequests.map((pullRequest) => pullRequest.mergedAt)
+    ...activity.pullRequests.map((pullRequest) => pullRequest.mergedAt),
   ].filter((date) => !Number.isNaN(date.getTime()));
   if (dates.length === 0) {
     return null;
@@ -277,7 +313,10 @@ function latestActivityDate(activity: Required<WorkspaceActivity>): Date | null 
   return new Date(Math.max(...dates.map((date) => date.getTime())));
 }
 
-function buildCandidates(activity: Required<WorkspaceActivity>, maxCandidates: number): MemoryUpdateCandidate[] {
+function buildCandidates(
+  activity: Required<WorkspaceActivity>,
+  maxCandidates: number,
+): MemoryUpdateCandidate[] {
   const candidates: MemoryUpdateCandidate[] = [
     ...activity.issues.map((issue) => ({
       kind: "issue" as const,
@@ -289,7 +328,7 @@ function buildCandidates(activity: Required<WorkspaceActivity>, maxCandidates: n
       authorLogin: issue.authorLogin,
       externalAuthor: issue.externalAuthor,
       reason: "Issueに残した作業背景や判断が通常メモリに未反映の可能性があります。",
-      suggestedTool: "propose_memory_update" as const
+      suggestedTool: "propose_memory_update" as const,
     })),
     ...activity.pullRequests.map((pullRequest) => ({
       kind: "pull_request" as const,
@@ -301,7 +340,7 @@ function buildCandidates(activity: Required<WorkspaceActivity>, maxCandidates: n
       authorLogin: pullRequest.authorLogin,
       externalAuthor: pullRequest.externalAuthor,
       reason: "マージ済みPRの実装結果や運用上の学びが通常メモリに未反映の可能性があります。",
-      suggestedTool: "propose_memory_update" as const
+      suggestedTool: "propose_memory_update" as const,
     })),
     ...activity.commits.map((commit) => ({
       kind: "commit" as const,
@@ -310,9 +349,10 @@ function buildCandidates(activity: Required<WorkspaceActivity>, maxCandidates: n
       sourceType: "git-commit",
       sourceRef: `git:${commit.hash.slice(0, 7)}`,
       occurredAt: commit.committedAt.toISOString(),
-      reason: "最近のcommitが最新メモリ更新より新しく、作業結果が通常メモリに未反映の可能性があります。",
-      suggestedTool: "propose_memory_update" as const
-    }))
+      reason:
+        "最近のcommitが最新メモリ更新より新しく、作業結果が通常メモリに未反映の可能性があります。",
+      suggestedTool: "propose_memory_update" as const,
+    })),
   ];
 
   return candidates
@@ -327,7 +367,7 @@ function daysBetween(older: Date, newer: Date): number {
 function freshnessMessage(
   status: MemoryFreshness["status"],
   daysSinceLatestMemoryUpdate: number | null,
-  daysBehindWorkspaceActivity: number | null
+  daysBehindWorkspaceActivity: number | null,
 ): string {
   if (status === "empty") {
     return "通常メモリがまだありません。重要な作業結果は保存候補を確認してください。";

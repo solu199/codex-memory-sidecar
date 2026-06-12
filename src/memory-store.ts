@@ -36,7 +36,7 @@ import type {
   SearchMemoryInput,
   SearchMemoryResult,
   UpdateMemoryInput,
-  VerifyBackupInput
+  VerifyBackupInput,
 } from "./types.js";
 
 interface MemoryRow {
@@ -153,7 +153,7 @@ export class MemoryStore {
         ) VALUES (
           @layer, @content, @summary, @tags, @projectScope, @sourceType, @sourceRef,
           @importance, @confidence, @embedding, @createdAt, @updatedAt, @expiresAt, 'active'
-        )`
+        )`,
       )
       .run({
         layer: input.layer,
@@ -168,7 +168,7 @@ export class MemoryStore {
         embedding: input.embedding ? JSON.stringify(input.embedding) : null,
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
-        expiresAt: input.expiresAt?.toISOString() ?? null
+        expiresAt: input.expiresAt?.toISOString() ?? null,
       });
 
     const memory = this.getMemory(Number(result.lastInsertRowid));
@@ -182,7 +182,9 @@ export class MemoryStore {
   }
 
   getMemory(memoryId: number): Memory | null {
-    const row = this.db.prepare("SELECT * FROM memories WHERE id = ?").get(memoryId) as MemoryRow | undefined;
+    const row = this.db.prepare("SELECT * FROM memories WHERE id = ?").get(memoryId) as
+      | MemoryRow
+      | undefined;
     return row ? mapMemory(row) : null;
   }
 
@@ -199,7 +201,7 @@ export class MemoryStore {
              tags = @tags,
              embedding = @embedding,
              updated_at = @updatedAt
-         WHERE id = @id`
+         WHERE id = @id`,
       )
       .run({
         id: input.memoryId,
@@ -207,14 +209,14 @@ export class MemoryStore {
         summary: input.summary ?? summarize(input.newContent),
         tags: JSON.stringify(input.tags ?? existing.tags),
         embedding: input.embedding ? JSON.stringify(input.embedding) : null,
-        updatedAt: now.toISOString()
+        updatedAt: now.toISOString(),
       });
 
     const updated = this.requireMemory(input.memoryId);
     this.indexMemory(updated);
     this.recordEvent(updated.id, "updated", {
       updateNote: input.updateNote,
-      previousSummary: existing.summary
+      previousSummary: existing.summary,
     });
     return updated;
   }
@@ -231,7 +233,7 @@ export class MemoryStore {
       this.recordEvent(input.memoryId, "forgotten", {
         reason: input.reason,
         hardDelete: true,
-        previousStatus: existing.status
+        previousStatus: existing.status,
       });
       return { ...existing, status: "forgotten" };
     }
@@ -243,7 +245,7 @@ export class MemoryStore {
     this.recordEvent(input.memoryId, "forgotten", {
       reason: input.reason,
       hardDelete: false,
-      previousStatus: existing.status
+      previousStatus: existing.status,
     });
     return this.requireMemory(input.memoryId);
   }
@@ -265,18 +267,22 @@ export class MemoryStore {
   private keywordCandidateRows(
     input: SearchMemoryInput,
     limit: number,
-    includeKeywordRank: true
+    includeKeywordRank: true,
   ): (MemoryRow & { keyword_rank: number })[];
-  private keywordCandidateRows(input: SearchMemoryInput, limit: number, includeKeywordRank?: false): MemoryRow[];
   private keywordCandidateRows(
     input: SearchMemoryInput,
     limit: number,
-    includeKeywordRank = false
+    includeKeywordRank?: false,
+  ): MemoryRow[];
+  private keywordCandidateRows(
+    input: SearchMemoryInput,
+    limit: number,
+    includeKeywordRank = false,
   ): (MemoryRow & { keyword_rank: number })[] | MemoryRow[] {
     const clauses = ["memories_fts MATCH @query"];
     const params: Record<string, unknown> = {
       query: quoteFtsQuery(input.query),
-      limit
+      limit,
     };
 
     addMemorySearchFilters(clauses, params, input, "m.");
@@ -288,7 +294,7 @@ export class MemoryStore {
          JOIN memories m ON m.id = memories_fts.rowid
          WHERE ${clauses.join(" AND ")}
          ORDER BY keyword_rank ASC, m.importance DESC, m.updated_at DESC
-         LIMIT @limit`
+         LIMIT @limit`,
       )
       .all(params) as (MemoryRow & { keyword_rank: number })[];
 
@@ -296,10 +302,14 @@ export class MemoryStore {
       return includeKeywordRank ? ftsRows : ftsRows.map(stripKeywordRank);
     }
 
-    const fallbackRows = this.likeFallbackRows(input, limit - ftsRows.length, new Set(ftsRows.map((row) => row.id)));
+    const fallbackRows = this.likeFallbackRows(
+      input,
+      limit - ftsRows.length,
+      new Set(ftsRows.map((row) => row.id)),
+    );
     const mergedRows = [
       ...ftsRows,
-      ...fallbackRows.map((row) => ({ ...row, keyword_rank: 0.5 }))
+      ...fallbackRows.map((row) => ({ ...row, keyword_rank: 0.5 })),
     ].slice(0, limit);
 
     return includeKeywordRank ? mergedRows : mergedRows.map(stripKeywordRank);
@@ -357,7 +367,9 @@ export class MemoryStore {
     addProjectScopeFilter(clauses, params, input);
 
     const rows = this.db
-      .prepare(`SELECT * FROM memories WHERE ${clauses.join(" AND ")} ORDER BY updated_at DESC, id DESC LIMIT @limit`)
+      .prepare(
+        `SELECT * FROM memories WHERE ${clauses.join(" AND ")} ORDER BY updated_at DESC, id DESC LIMIT @limit`,
+      )
       .all(params) as MemoryRow[];
     return rows.map(mapMemory);
   }
@@ -369,7 +381,8 @@ export class MemoryStore {
     }
 
     const now = new Date();
-    const projectScope = input.scope === "global" ? GLOBAL_PROJECT_SCOPE : resolveProjectScope(input);
+    const projectScope =
+      input.scope === "global" ? GLOBAL_PROJECT_SCOPE : resolveProjectScope(input);
     const result = this.db
       .prepare(
         `INSERT INTO directives (
@@ -378,7 +391,7 @@ export class MemoryStore {
         ) VALUES (
           @scope, @projectScope, @content, @rationale, @tags, @sourceType, @sourceRef,
           @priority, @createdAt, @updatedAt, 'active'
-        )`
+        )`,
       )
       .run({
         scope: input.scope,
@@ -390,7 +403,7 @@ export class MemoryStore {
         sourceRef: input.sourceRef,
         priority: clampScore(input.priority ?? 0.75),
         createdAt: now.toISOString(),
-        updatedAt: now.toISOString()
+        updatedAt: now.toISOString(),
       });
 
     const directive = this.requireDirective(Number(result.lastInsertRowid));
@@ -398,7 +411,7 @@ export class MemoryStore {
       scope: directive.scope,
       projectScope: directive.projectScope,
       sourceType: directive.sourceType,
-      sourceRef: directive.sourceRef
+      sourceRef: directive.sourceRef,
     });
     return directive;
   }
@@ -436,7 +449,7 @@ export class MemoryStore {
         `SELECT * FROM directives
          WHERE ${clauses.join(" AND ")}
          ORDER BY CASE scope WHEN 'project' THEN 0 ELSE 1 END, priority DESC, updated_at DESC, id DESC
-         LIMIT @limit`
+         LIMIT @limit`,
       )
       .all(params) as DirectiveRow[];
 
@@ -450,7 +463,7 @@ export class MemoryStore {
       .run(new Date().toISOString(), input.directiveId);
     this.recordDirectiveEvent(input.directiveId, "disabled", {
       reason: input.reason,
-      previousStatus: existing.status
+      previousStatus: existing.status,
     });
     return this.requireDirective(input.directiveId);
   }
@@ -458,7 +471,7 @@ export class MemoryStore {
   countRecords(): MemoryStoreCounts {
     return {
       memoryCount: countRows(this.db, "memories"),
-      eventCount: countRows(this.db, "memory_events")
+      eventCount: countRows(this.db, "memory_events"),
     };
   }
 
@@ -467,28 +480,41 @@ export class MemoryStore {
       integrityCheck?: boolean;
       ftsSanityCheck?: boolean;
       walCheckpoint?: boolean;
-    } = {}
+    } = {},
   ): DatabaseHealth {
     const shouldCheckIntegrity = input.integrityCheck ?? true;
     const shouldCheckFts = input.ftsSanityCheck ?? true;
     const shouldCheckpointWal = input.walCheckpoint ?? true;
-    const integrityCheck = shouldCheckIntegrity ? runIntegrityCheck(this.db, "quick_check") : "skipped";
+    const integrityCheck = shouldCheckIntegrity
+      ? runIntegrityCheck(this.db, "quick_check")
+      : "skipped";
     const fts = shouldCheckFts ? this.checkFtsConsistency() : skippedFtsHealth();
-    const walCheckpoint = shouldCheckpointWal ? checkpointWal(this.db) : { busy: 0, log: 0, checkpointed: 0 };
+    const walCheckpoint = shouldCheckpointWal
+      ? checkpointWal(this.db)
+      : { busy: 0, log: 0, checkpointed: 0 };
     const warnings = [
       ...(integrityCheck === "ok" ? [] : [`Database quick_check failed: ${integrityCheck}`]),
-      ...(fts.missingCount > 0 ? [`FTS index is missing ${fts.missingCount} active memory row(s).`] : []),
-      ...(fts.orphanCount > 0 ? [`FTS index contains ${fts.orphanCount} orphan or forgotten row(s).`] : []),
-      ...(walCheckpoint.busy > 0 ? [`WAL checkpoint reported ${walCheckpoint.busy} busy frame(s).`] : [])
+      ...(fts.missingCount > 0
+        ? [`FTS index is missing ${fts.missingCount} active memory row(s).`]
+        : []),
+      ...(fts.orphanCount > 0
+        ? [`FTS index contains ${fts.orphanCount} orphan or forgotten row(s).`]
+        : []),
+      ...(walCheckpoint.busy > 0
+        ? [`WAL checkpoint reported ${walCheckpoint.busy} busy frame(s).`]
+        : []),
     ];
 
     return {
-      ok: (integrityCheck === "ok" || integrityCheck === "skipped") && fts.ok && walCheckpoint.busy === 0,
+      ok:
+        (integrityCheck === "ok" || integrityCheck === "skipped") &&
+        fts.ok &&
+        walCheckpoint.busy === 0,
       integrityCheck,
       fts,
       walCheckpoint,
       warnings,
-      checkedAt: new Date()
+      checkedAt: new Date(),
     };
   }
 
@@ -496,12 +522,12 @@ export class MemoryStore {
     const byStatus: MemoryStats["byStatus"] = {
       active: 0,
       superseded: 0,
-      forgotten: 0
+      forgotten: 0,
     };
     const byLayer: MemoryStats["byLayer"] = {
       core: 0,
       recall: 0,
-      archival: 0
+      archival: 0,
     };
 
     const statusRows = this.db
@@ -526,7 +552,7 @@ export class MemoryStore {
                 MAX(updated_at) AS latest_updated_at
          FROM memories
          GROUP BY project_scope
-         ORDER BY active DESC, total DESC, latest_updated_at DESC, project_scope ASC`
+         ORDER BY active DESC, total DESC, latest_updated_at DESC, project_scope ASC`,
       )
       .all() as ProjectScopeStatsRow[];
 
@@ -542,12 +568,12 @@ export class MemoryStore {
         projectScope: row.project_scope,
         total: row.total,
         active: row.active,
-        latestUpdatedAt: row.latest_updated_at ? new Date(row.latest_updated_at) : null
+        latestUpdatedAt: row.latest_updated_at ? new Date(row.latest_updated_at) : null,
       })),
       updatedAtRange: {
         oldest: updatedAtRange.oldest ? new Date(updatedAtRange.oldest) : null,
-        newest: updatedAtRange.newest ? new Date(updatedAtRange.newest) : null
-      }
+        newest: updatedAtRange.newest ? new Date(updatedAtRange.newest) : null,
+      },
     };
   }
 
@@ -557,13 +583,16 @@ export class MemoryStore {
     await this.db.backup(backupPath);
     return {
       backupPath,
-      createdAt: new Date()
+      createdAt: new Date(),
     };
   }
 
   planBackupRetention(input: BackupRetentionPlanInput = {}): BackupRetentionPlan {
     const backupDir = this.defaultBackupDir();
-    const keepCount = Math.max(0, Math.floor(input.keepCount ?? DEFAULT_BACKUP_RETENTION_KEEP_COUNT));
+    const keepCount = Math.max(
+      0,
+      Math.floor(input.keepCount ?? DEFAULT_BACKUP_RETENTION_KEEP_COUNT),
+    );
     const backups = existsSync(backupDir)
       ? readdirSync(backupDir, { withFileTypes: true })
           .filter((entry) => entry.isFile() && DEFAULT_BACKUP_FILE_PATTERN.test(entry.name))
@@ -573,12 +602,14 @@ export class MemoryStore {
             return {
               backupPath,
               sizeBytes: stat.size,
-              mtime: stat.mtime
+              mtime: stat.mtime,
             };
           })
           .sort((left, right) => {
             const byMtime = right.mtime.getTime() - left.mtime.getTime();
-            return byMtime === 0 ? path.basename(right.backupPath).localeCompare(path.basename(left.backupPath)) : byMtime;
+            return byMtime === 0
+              ? path.basename(right.backupPath).localeCompare(path.basename(left.backupPath))
+              : byMtime;
           })
       : [];
 
@@ -588,7 +619,7 @@ export class MemoryStore {
       backups,
       kept: backups.slice(0, keepCount),
       prunable: backups.slice(keepCount),
-      plannedAt: new Date()
+      plannedAt: new Date(),
     };
   }
 
@@ -605,7 +636,9 @@ export class MemoryStore {
       const warnings = missingTables.map((table) => `Backup is missing required table: ${table}`);
       const schemaOk = missingTables.length === 0;
       const memoryCount = tableExists(backupDb, "memories") ? countRows(backupDb, "memories") : 0;
-      const eventCount = tableExists(backupDb, "memory_events") ? countRows(backupDb, "memory_events") : 0;
+      const eventCount = tableExists(backupDb, "memory_events")
+        ? countRows(backupDb, "memory_events")
+        : 0;
       return {
         backupPath: input.backupPath,
         ok: integrityCheck === "ok" && schemaOk,
@@ -614,7 +647,7 @@ export class MemoryStore {
         integrityCheck,
         schemaOk,
         warnings,
-        checkedAt: new Date()
+        checkedAt: new Date(),
       };
     } finally {
       backupDb.close();
@@ -662,7 +695,7 @@ export class MemoryStore {
            FROM memories
            WHERE ${clauses.join(" AND ")}
            ORDER BY updated_at DESC, id DESC
-           LIMIT @limit`
+           LIMIT @limit`,
         )
         .all(params) as BackupMemorySummaryRow[];
 
@@ -675,7 +708,7 @@ export class MemoryStore {
         schemaOk: true,
         warnings: [],
         checkedAt: new Date(),
-        memories: rows.map(mapBackupMemorySummary)
+        memories: rows.map(mapBackupMemorySummary),
       };
     } finally {
       backupDb.close();
@@ -685,7 +718,9 @@ export class MemoryStore {
   async repairMemoryIndex(input: RepairMemoryIndexInput = {}): Promise<MemoryIndexRepair> {
     const before = this.checkDatabaseHealth();
     const shouldCreateBackup = input.createBackup ?? true;
-    const backup = shouldCreateBackup ? await this.createBackup({ backupPath: input.backupPath }) : null;
+    const backup = shouldCreateBackup
+      ? await this.createBackup({ backupPath: input.backupPath })
+      : null;
     const backupVerification = backup ? this.verifyBackup({ backupPath: backup.backupPath }) : null;
 
     if (backupVerification && !backupVerification.ok) {
@@ -696,7 +731,7 @@ export class MemoryStore {
         before,
         after: before,
         warnings: ["Backup verification failed; FTS index was not rebuilt."],
-        repairedAt: new Date()
+        repairedAt: new Date(),
       };
     }
 
@@ -709,8 +744,10 @@ export class MemoryStore {
       backupVerification,
       before,
       after,
-      warnings: after.ok ? [] : ["FTS index rebuild completed, but database health is still not OK.", ...after.warnings],
-      repairedAt: new Date()
+      warnings: after.ok
+        ? []
+        : ["FTS index rebuild completed, but database health is still not OK.", ...after.warnings],
+      repairedAt: new Date(),
     };
   }
 
@@ -722,7 +759,7 @@ export class MemoryStore {
         `SELECT COUNT(*) AS count
          FROM memories m
          LEFT JOIN memories_fts f ON f.rowid = m.id
-         WHERE m.status != 'forgotten' AND f.rowid IS NULL`
+         WHERE m.status != 'forgotten' AND f.rowid IS NULL`,
       )
       .get() as { count: number };
     const orphan = this.db
@@ -730,7 +767,7 @@ export class MemoryStore {
         `SELECT COUNT(*) AS count
          FROM memories_fts f
          LEFT JOIN memories m ON m.id = f.rowid
-         WHERE m.id IS NULL OR m.status = 'forgotten'`
+         WHERE m.id IS NULL OR m.status = 'forgotten'`,
       )
       .get() as { count: number };
 
@@ -739,7 +776,7 @@ export class MemoryStore {
       expectedCount,
       indexedCount,
       missingCount: missing.count,
-      orphanCount: orphan.count
+      orphanCount: orphan.count,
     };
   }
 
@@ -752,7 +789,7 @@ export class MemoryStore {
            SELECT id, content, summary, tags
            FROM memories
            WHERE status != 'forgotten'
-           ORDER BY id ASC`
+           ORDER BY id ASC`,
         )
         .run();
     });
@@ -906,13 +943,21 @@ export class MemoryStore {
     const limit = Math.max(1, Math.min(input.limit ?? 8, 50));
     const candidateLimit = Math.max(
       1,
-      Math.min(input.hybridCandidateLimit ?? DEFAULT_HYBRID_CANDIDATE_LIMIT, MAX_HYBRID_CANDIDATE_LIMIT)
+      Math.min(
+        input.hybridCandidateLimit ?? DEFAULT_HYBRID_CANDIDATE_LIMIT,
+        MAX_HYBRID_CANDIDATE_LIMIT,
+      ),
     );
-    const vectorClauses = [input.includeSuperseded ? "status != 'forgotten'" : "status = 'active'", "embedding IS NOT NULL"];
+    const vectorClauses = [
+      input.includeSuperseded ? "status != 'forgotten'" : "status = 'active'",
+      "embedding IS NOT NULL",
+    ];
     const vectorParams: Record<string, unknown> = { candidateLimit };
 
     if (input.layers?.length) {
-      vectorClauses.push(`layer IN (${input.layers.map((_, index) => `@layer${index}`).join(", ")})`);
+      vectorClauses.push(
+        `layer IN (${input.layers.map((_, index) => `@layer${index}`).join(", ")})`,
+      );
       input.layers.forEach((layer, index) => {
         vectorParams[`layer${index}`] = layer;
       });
@@ -932,7 +977,7 @@ export class MemoryStore {
         `SELECT * FROM memories
          WHERE ${vectorClauses.join(" AND ")}
          ORDER BY importance DESC, updated_at DESC, id DESC
-         LIMIT @candidateLimit`
+         LIMIT @candidateLimit`,
       )
       .all(vectorParams) as MemoryRow[];
 
@@ -953,11 +998,18 @@ export class MemoryStore {
     return results;
   }
 
-  private hybridKeywordCandidateRows(input: SearchMemoryInput, candidateLimit: number): MemoryRow[] {
+  private hybridKeywordCandidateRows(
+    input: SearchMemoryInput,
+    candidateLimit: number,
+  ): MemoryRow[] {
     return this.keywordCandidateRows(input, candidateLimit);
   }
 
-  private likeFallbackRows(input: SearchMemoryInput, limit: number, excludedIds: Set<number>): MemoryRow[] {
+  private likeFallbackRows(
+    input: SearchMemoryInput,
+    limit: number,
+    excludedIds: Set<number>,
+  ): MemoryRow[] {
     if (limit <= 0) {
       return [];
     }
@@ -967,7 +1019,9 @@ export class MemoryStore {
     addMemorySearchFilters(clauses, params, input);
 
     if (excludedIds.size) {
-      clauses.push(`id NOT IN (${[...excludedIds].map((_, index) => `@excluded${index}`).join(", ")})`);
+      clauses.push(
+        `id NOT IN (${[...excludedIds].map((_, index) => `@excluded${index}`).join(", ")})`,
+      );
       [...excludedIds].forEach((id, index) => {
         params[`excluded${index}`] = id;
       });
@@ -978,7 +1032,7 @@ export class MemoryStore {
       const paramName = `like${index}`;
       params[paramName] = `%${escapeLikePattern(term)}%`;
       likeClauses.push(
-        `(content LIKE @${paramName} ESCAPE '\\' OR summary LIKE @${paramName} ESCAPE '\\' OR tags LIKE @${paramName} ESCAPE '\\')`
+        `(content LIKE @${paramName} ESCAPE '\\' OR summary LIKE @${paramName} ESCAPE '\\' OR tags LIKE @${paramName} ESCAPE '\\')`,
       );
     });
     if (!likeClauses.length) {
@@ -992,7 +1046,7 @@ export class MemoryStore {
          FROM memories
          WHERE ${clauses.join(" AND ")}
          ORDER BY importance DESC, updated_at DESC, id DESC
-         LIMIT @limit`
+         LIMIT @limit`,
       )
       .all(params) as MemoryRow[];
   }
@@ -1000,7 +1054,7 @@ export class MemoryStore {
   private recordSearchRetrieval(
     input: SearchMemoryInput,
     results: SearchMemoryResult[],
-    payload: Record<string, unknown> = {}
+    payload: Record<string, unknown> = {},
   ): void {
     const now = new Date().toISOString();
     const markRetrieved = this.db.prepare("UPDATE memories SET last_accessed_at = ? WHERE id = ?");
@@ -1022,7 +1076,7 @@ export class MemoryStore {
       ...payload,
       resultCount: results.length,
       memoryIds: results.map((result) => result.memory.id),
-      resultProjectScopes: uniqueProjectScopes(results)
+      resultProjectScopes: uniqueProjectScopes(results),
     });
   }
 
@@ -1042,7 +1096,9 @@ export class MemoryStore {
   }
 
   private requireDirective(directiveId: number): Directive {
-    const row = this.db.prepare("SELECT * FROM directives WHERE id = ?").get(directiveId) as DirectiveRow | undefined;
+    const row = this.db.prepare("SELECT * FROM directives WHERE id = ?").get(directiveId) as
+      | DirectiveRow
+      | undefined;
     if (!row) {
       throw new Error(`Directive ${directiveId} was not found.`);
     }
@@ -1069,22 +1125,40 @@ export class MemoryStore {
     this.db.prepare("DELETE FROM memories_fts WHERE rowid = ?").run(memoryId);
   }
 
-  private recordEvent(memoryId: number, eventType: MemoryEventType, payload: Record<string, unknown>): void {
+  private recordEvent(
+    memoryId: number,
+    eventType: MemoryEventType,
+    payload: Record<string, unknown>,
+  ): void {
     this.db
       .prepare(
         `INSERT INTO memory_events (memory_id, event_type, payload_json, created_at)
-         VALUES (?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?)`,
       )
-      .run(memoryId, eventType, JSON.stringify(redactEventPayload(payload)), new Date().toISOString());
+      .run(
+        memoryId,
+        eventType,
+        JSON.stringify(redactEventPayload(payload)),
+        new Date().toISOString(),
+      );
   }
 
-  private recordDirectiveEvent(directiveId: number, eventType: DirectiveEventType, payload: Record<string, unknown>): void {
+  private recordDirectiveEvent(
+    directiveId: number,
+    eventType: DirectiveEventType,
+    payload: Record<string, unknown>,
+  ): void {
     this.db
       .prepare(
         `INSERT INTO directive_events (directive_id, event_type, payload_json, created_at)
-         VALUES (?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?)`,
       )
-      .run(directiveId, eventType, JSON.stringify(redactEventPayload(payload)), new Date().toISOString());
+      .run(
+        directiveId,
+        eventType,
+        JSON.stringify(redactEventPayload(payload)),
+        new Date().toISOString(),
+      );
   }
 }
 
@@ -1105,7 +1179,7 @@ function mapMemory(row: MemoryRow): Memory {
     updatedAt: new Date(row.updated_at),
     lastAccessedAt: row.last_accessed_at ? new Date(row.last_accessed_at) : null,
     expiresAt: row.expires_at ? new Date(row.expires_at) : null,
-    status: row.status
+    status: row.status,
   };
 }
 
@@ -1115,7 +1189,7 @@ function mapEvent(row: EventRow): MemoryEvent {
     memoryId: row.memory_id,
     eventType: row.event_type,
     payload: JSON.parse(row.payload_json) as Record<string, unknown>,
-    createdAt: new Date(row.created_at)
+    createdAt: new Date(row.created_at),
   };
 }
 
@@ -1132,7 +1206,7 @@ function mapDirective(row: DirectiveRow): Directive {
     priority: row.priority,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
-    status: row.status
+    status: row.status,
   };
 }
 
@@ -1151,13 +1225,15 @@ function mapBackupMemorySummary(row: BackupMemorySummaryRow): BackupMemorySummar
     updatedAt: new Date(row.updated_at),
     lastAccessedAt: row.last_accessed_at ? new Date(row.last_accessed_at) : null,
     expiresAt: row.expires_at ? new Date(row.expires_at) : null,
-    status: row.status
+    status: row.status,
   };
 }
 
 function safeParseTags(tags: string): string[] {
   const parsed = JSON.parse(tags) as unknown;
-  return Array.isArray(parsed) ? parsed.filter((tag): tag is string => typeof tag === "string") : [];
+  return Array.isArray(parsed)
+    ? parsed.filter((tag): tag is string => typeof tag === "string")
+    : [];
 }
 
 function summarize(content: string): string {
@@ -1175,13 +1251,17 @@ function countRows(db: Database.Database, table: string): number {
 }
 
 function countRowsWhere(db: Database.Database, table: string, where: string): number {
-  const row = db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${where}`).get() as { count: number };
+  const row = db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${where}`).get() as {
+    count: number;
+  };
   return row.count;
 }
 
 function tableExists(db: Database.Database, table: string): boolean {
   const row = db
-    .prepare("SELECT 1 AS found FROM sqlite_master WHERE type IN ('table', 'virtual table') AND name = ?")
+    .prepare(
+      "SELECT 1 AS found FROM sqlite_master WHERE type IN ('table', 'virtual table') AND name = ?",
+    )
     .get(table) as { found: number } | undefined;
   return row?.found === 1;
 }
@@ -1191,7 +1271,10 @@ function columnExists(db: Database.Database, table: string, column: string): boo
   return columns.some((item) => item.name === column);
 }
 
-function runIntegrityCheck(db: Database.Database, pragma: "quick_check" | "integrity_check"): string {
+function runIntegrityCheck(
+  db: Database.Database,
+  pragma: "quick_check" | "integrity_check",
+): string {
   const rows = db.prepare(`PRAGMA ${pragma}`).all() as Record<string, string>[];
   const values = rows.flatMap((row) => Object.values(row));
   return values.length === 1 && values[0] === "ok" ? "ok" : values.join("; ");
@@ -1206,7 +1289,7 @@ function checkpointWal(db: Database.Database): DatabaseHealth["walCheckpoint"] {
   return {
     busy: row.busy,
     log: row.log,
-    checkpointed: row.checkpointed
+    checkpointed: row.checkpointed,
   };
 }
 
@@ -1216,7 +1299,7 @@ function skippedFtsHealth(): DatabaseHealth["fts"] {
     expectedCount: 0,
     indexedCount: 0,
     missingCount: 0,
-    orphanCount: 0
+    orphanCount: 0,
   };
 }
 
@@ -1248,7 +1331,7 @@ function addMemorySearchFilters(
   clauses: string[],
   params: Record<string, unknown>,
   input: SearchMemoryInput,
-  alias = ""
+  alias = "",
 ): void {
   if (!input.includeSuperseded) {
     clauses.push(`${alias}status = 'active'`);
@@ -1257,7 +1340,9 @@ function addMemorySearchFilters(
   }
 
   if (input.layers?.length) {
-    clauses.push(`${alias}layer IN (${input.layers.map((_, index) => `@layer${index}`).join(", ")})`);
+    clauses.push(
+      `${alias}layer IN (${input.layers.map((_, index) => `@layer${index}`).join(", ")})`,
+    );
     input.layers.forEach((layer, index) => {
       params[`layer${index}`] = layer;
     });
@@ -1277,7 +1362,7 @@ function addProjectScopeFilter(
   clauses: string[],
   params: Record<string, unknown>,
   input: Pick<SearchMemoryInput, "projectScope" | "projectPath" | "includeCrossProject">,
-  alias = ""
+  alias = "",
 ): void {
   if (input.includeCrossProject) {
     return;
@@ -1288,7 +1373,9 @@ function addProjectScopeFilter(
     return;
   }
 
-  clauses.push(`(${alias}project_scope = @projectScope OR ${alias}project_scope = @globalProjectScope)`);
+  clauses.push(
+    `(${alias}project_scope = @projectScope OR ${alias}project_scope = @globalProjectScope)`,
+  );
   params.projectScope = projectScope;
   params.globalProjectScope = GLOBAL_PROJECT_SCOPE;
 }
@@ -1327,40 +1414,54 @@ function scoreKeywordRow(row: MemoryRow & { keyword_rank: number }): SearchMemor
       vector: 0,
       keyword: keywordScore,
       importance: row.importance,
-      freshness: freshnessScore
+      freshness: freshnessScore,
     }),
     scoreBreakdown: {
       vector: 0,
       keyword: Number(keywordScore.toFixed(4)),
       importance: row.importance,
-      freshness: Number(freshnessScore.toFixed(4))
-    }
+      freshness: Number(freshnessScore.toFixed(4)),
+    },
   };
 }
 
-function scoreHybridRow(row: MemoryRow, query: string, queryEmbedding: number[]): SearchMemoryResult {
+function scoreHybridRow(
+  row: MemoryRow,
+  query: string,
+  queryEmbedding: number[],
+): SearchMemoryResult {
   const memory = mapMemory(row);
-  const vectorScore = memory.embedding ? Math.max(0, cosineSimilarity(queryEmbedding, memory.embedding)) : 0;
-  const keywordScore = lexicalScore(query, [memory.content, memory.summary, memory.tags.join(" ")].join(" "));
+  const vectorScore = memory.embedding
+    ? Math.max(0, cosineSimilarity(queryEmbedding, memory.embedding))
+    : 0;
+  const keywordScore = lexicalScore(
+    query,
+    [memory.content, memory.summary, memory.tags.join(" ")].join(" "),
+  );
   const freshnessScore = freshness(row.updated_at);
 
   const scoreBreakdown = {
     vector: Number(vectorScore.toFixed(4)),
     keyword: Number(keywordScore.toFixed(4)),
     importance: row.importance,
-    freshness: Number(freshnessScore.toFixed(4))
+    freshness: Number(freshnessScore.toFixed(4)),
   };
 
   return {
     memory,
     score: weightedScore(scoreBreakdown),
-    scoreBreakdown
+    scoreBreakdown,
   };
 }
 
 function weightedScore(parts: SearchMemoryResult["scoreBreakdown"]): number {
   return Number(
-    (parts.vector * 0.45 + parts.keyword * 0.3 + parts.importance * 0.15 + parts.freshness * 0.1).toFixed(4)
+    (
+      parts.vector * 0.45 +
+      parts.keyword * 0.3 +
+      parts.importance * 0.15 +
+      parts.freshness * 0.1
+    ).toFixed(4),
   );
 }
 
@@ -1378,7 +1479,7 @@ function redactedInput(input: CreateMemoryInput): Record<string, unknown> {
     sourceType: input.sourceType,
     sourceRef: input.sourceRef,
     importance: input.importance,
-    confidence: input.confidence
+    confidence: input.confidence,
   };
   if (input.autoCuration) {
     payload.autoCuration = input.autoCuration;
@@ -1424,8 +1525,8 @@ function redactEventPayload(value: unknown): unknown {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([key, item]) => [
         key,
-        isLikelySecretKey(key) ? "[REDACTED_SECRET]" : redactEventPayload(item)
-      ])
+        isLikelySecretKey(key) ? "[REDACTED_SECRET]" : redactEventPayload(item),
+      ]),
     );
   }
 
@@ -1448,7 +1549,9 @@ function parseJsonObjectOrArray(value: string): unknown[] | Record<string, unkno
 
   try {
     const parsed = JSON.parse(trimmed) as unknown;
-    return parsed && typeof parsed === "object" ? (parsed as unknown[] | Record<string, unknown>) : null;
+    return parsed && typeof parsed === "object"
+      ? (parsed as unknown[] | Record<string, unknown>)
+      : null;
   } catch {
     return null;
   }

@@ -14,7 +14,7 @@ for (const warning of startup.warnings) {
 }
 const dashboard = await startDashboardCompanion({
   store: runtime.store,
-  config
+  config,
 });
 for (const warning of dashboard.warnings) {
   console.error(`codex-memory-sidecar startup warning: ${warning}`);

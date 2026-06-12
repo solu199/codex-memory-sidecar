@@ -23,7 +23,7 @@ describe("runPracticalSmoke", () => {
       inspectBackupScoped: true,
       repairMemoryIndex: true,
       auditRecorded: true,
-      dashboardShowsProjectScopes: true
+      dashboardShowsProjectScopes: true,
     });
     expect(result.memoryCount).toBe(5);
     expect(result.eventCount).toBeGreaterThan(0);

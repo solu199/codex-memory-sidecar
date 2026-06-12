@@ -42,6 +42,7 @@ npm run dashboard
 - Codex / AGENTS.md 用の短い導入文: [AGENTS-memory-protocol.md](AGENTS-memory-protocol.md)
 - Skill と詳細運用: [skills/codex-memory-sidecar/SKILL.md](skills/codex-memory-sidecar/SKILL.md)
 - 公開前監査: [docs/public-readiness-audit.md](docs/public-readiness-audit.md)
+- 技術的な中期改善: [docs/technical-roadmap.md](docs/technical-roadmap.md)
 - セキュリティ方針: [SECURITY.md](SECURITY.md)
 - 貢献方針: [CONTRIBUTING.md](CONTRIBUTING.md)
 - 変更履歴: [CHANGELOG.md](CHANGELOG.md)

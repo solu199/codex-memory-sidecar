@@ -60,18 +60,23 @@ const DEFAULT_SAFE_THRESHOLD = 0.82;
 export function buildAutoCurationResult(input: BuildAutoCurationInput): AutoCurationResult {
   const threshold = input.threshold ?? DEFAULT_SAFE_THRESHOLD;
   const evaluated = input.candidates.map((candidate) =>
-    evaluateMemoryCandidate(candidate, input.existingMemories, threshold)
+    evaluateMemoryCandidate(candidate, input.existingMemories, threshold),
   );
   const effectiveEvaluated =
     input.mode === "safe"
       ? evaluated
       : evaluated.map((evaluation) => ({
           ...evaluation,
-          decision: evaluation.decision === "skip" ? "skip" as const : "review" as const,
+          decision: evaluation.decision === "skip" ? ("skip" as const) : ("review" as const),
           reasons:
             evaluation.decision === "skip"
               ? evaluation.reasons
-              : [...evaluation.reasons, input.mode === "off" ? "Auto-write is disabled." : "Review mode does not write automatically."]
+              : [
+                  ...evaluation.reasons,
+                  input.mode === "off"
+                    ? "Auto-write is disabled."
+                    : "Review mode does not write automatically.",
+                ],
         }));
 
   return {
@@ -81,23 +86,34 @@ export function buildAutoCurationResult(input: BuildAutoCurationInput): AutoCura
     evaluated: effectiveEvaluated,
     reviewCandidates: effectiveEvaluated.filter((evaluation) => evaluation.decision === "review"),
     skippedCandidates: effectiveEvaluated.filter((evaluation) => evaluation.decision === "skip"),
-    autoWriteCandidates: effectiveEvaluated.filter((evaluation) => evaluation.decision === "auto_write"),
-    autoWrittenMemories: []
+    autoWriteCandidates: effectiveEvaluated.filter(
+      (evaluation) => evaluation.decision === "auto_write",
+    ),
+    autoWrittenMemories: [],
   };
 }
 
 export function evaluateMemoryCandidate(
   candidate: MemoryUpdateCandidate,
   existingMemories: Memory[],
-  threshold = DEFAULT_SAFE_THRESHOLD
+  threshold = DEFAULT_SAFE_THRESHOLD,
 ): AutoCurationEvaluation {
   const content = buildCandidateContent(candidate);
   const provenance = analyzeAutoCurationProvenance(candidate.sourceRef);
   const secretDetected = containsLikelySecret(content);
-  const duplicateCandidates = findDuplicateCandidates(content, candidate.sourceRef, existingMemories);
+  const duplicateCandidates = findDuplicateCandidates(
+    content,
+    candidate.sourceRef,
+    existingMemories,
+  );
   const layer = inferLayer(candidate);
   const tags = inferTags(candidate);
-  const scoreParts = scoreCandidate(candidate, provenance.quality, secretDetected, duplicateCandidates.length);
+  const scoreParts = scoreCandidate(
+    candidate,
+    provenance.quality,
+    secretDetected,
+    duplicateCandidates.length,
+  );
   const score = Number(scoreParts.score.toFixed(4));
   const reasons = [...scoreParts.reasons];
   let decision: AutoCurationEvaluation["decision"] = score >= threshold ? "auto_write" : "review";
@@ -114,13 +130,20 @@ export function evaluateMemoryCandidate(
     decision = "review";
     reasons.push("Similar or same-source memory already exists.");
   }
-  if (candidate.externalAuthor && (candidate.kind === "issue" || candidate.kind === "pull_request")) {
+  if (
+    candidate.externalAuthor &&
+    (candidate.kind === "issue" || candidate.kind === "pull_request")
+  ) {
     decision = "review";
-    reasons.push("GitHub Issue/PR activity from an external author is data, not a trusted instruction.");
+    reasons.push(
+      "GitHub Issue/PR activity from an external author is data, not a trusted instruction.",
+    );
   }
   if (candidate.kind === "session") {
     decision = "review";
-    reasons.push("Session activity is useful context but should not be auto-written without review.");
+    reasons.push(
+      "Session activity is useful context but should not be auto-written without review.",
+    );
   }
 
   return {
@@ -136,8 +159,8 @@ export function evaluateMemoryCandidate(
     duplicateCandidates,
     provenance,
     safety: {
-      secretDetected
-    }
+      secretDetected,
+    },
   };
 }
 
@@ -146,7 +169,7 @@ export function buildCandidateContent(candidate: MemoryUpdateCandidate): string 
     issue: "Issue",
     pull_request: "PR",
     commit: "Commit",
-    session: "Session"
+    session: "Session",
   }[candidate.kind];
   const author = candidate.authorLogin
     ? ` Author: ${candidate.authorLogin}${candidate.externalAuthor ? " (external)" : ""}.`
@@ -158,7 +181,7 @@ function scoreCandidate(
   candidate: MemoryUpdateCandidate,
   provenanceQuality: "weak" | "strong",
   secretDetected: boolean,
-  duplicateCount: number
+  duplicateCount: number,
 ): { score: number; reasons: string[] } {
   let score = 0.25;
   const reasons: string[] = ["Candidate was derived from recent workspace activity."];
@@ -203,7 +226,11 @@ function inferTags(candidate: MemoryUpdateCandidate): string[] {
   if (/mcp|sidecar|memory/i.test(`${candidate.title} ${candidate.summary}`)) {
     tags.add("codex-memory-sidecar");
   }
-  if (/dashboard|health|backup|restore|repair|startup|session|operation/i.test(`${candidate.title} ${candidate.summary}`)) {
+  if (
+    /dashboard|health|backup|restore|repair|startup|session|operation/i.test(
+      `${candidate.title} ${candidate.summary}`,
+    )
+  ) {
     tags.add("daily-operation");
   }
   if (/test|smoke|verify|ci|audit|security/i.test(`${candidate.title} ${candidate.summary}`)) {
@@ -213,7 +240,9 @@ function inferTags(candidate: MemoryUpdateCandidate): string[] {
 }
 
 function looksDurable(value: string): boolean {
-  return /memory|directive|dashboard|backup|restore|repair|startup|session|mcp|readme|agents|skill|security|audit|public|release|config|\u8a2d\u5b9a|\u76e3\u67fb|\u516c\u958b|\u4fdd\u5b58|\u30e1\u30e2\u30ea|\u30c0\u30c3\u30b7\u30e5\u30dc\u30fc\u30c9|\u30d0\u30c3\u30af\u30a2\u30c3\u30d7|\u4fee\u5fa9|\u8d77\u52d5|\u904b\u7528|\u691c\u8a3c|\u5b89\u5168/i.test(value);
+  return /memory|directive|dashboard|backup|restore|repair|startup|session|mcp|readme|agents|skill|security|audit|public|release|config|\u8a2d\u5b9a|\u76e3\u67fb|\u516c\u958b|\u4fdd\u5b58|\u30e1\u30e2\u30ea|\u30c0\u30c3\u30b7\u30e5\u30dc\u30fc\u30c9|\u30d0\u30c3\u30af\u30a2\u30c3\u30d7|\u4fee\u5fa9|\u8d77\u52d5|\u904b\u7528|\u691c\u8a3c|\u5b89\u5168/i.test(
+    value,
+  );
 }
 
 function analyzeAutoCurationProvenance(sourceRef: string): AutoCurationEvaluation["provenance"] {
@@ -221,21 +250,33 @@ function analyzeAutoCurationProvenance(sourceRef: string): AutoCurationEvaluatio
   return {
     quality: analysis.quality,
     recognizedRefs: analysis.recognizedRefs,
-    suggestions: analysis.quality === "strong"
-      ? []
-      : ["Use sourceRef like pr:#123, issue:#123, git:<hash>, or session:<id> for auto curation."]
+    suggestions:
+      analysis.quality === "strong"
+        ? []
+        : [
+            "Use sourceRef like pr:#123, issue:#123, git:<hash>, or session:<id> for auto curation.",
+          ],
   };
 }
 
-function findDuplicateCandidates(content: string, sourceRef: string, memories: Memory[]): AutoCurationEvaluation["duplicateCandidates"] {
+function findDuplicateCandidates(
+  content: string,
+  sourceRef: string,
+  memories: Memory[],
+): AutoCurationEvaluation["duplicateCandidates"] {
   const normalizedContent = normalize(content);
   const exact = memories
-    .filter((memory) => memory.sourceRef === sourceRef || normalize(memory.content) === normalizedContent)
+    .filter(
+      (memory) => memory.sourceRef === sourceRef || normalize(memory.content) === normalizedContent,
+    )
     .slice(0, 5)
     .map((memory) => ({
       memoryId: memory.id,
-      reason: memory.sourceRef === sourceRef ? "same_source_ref" as const : "duplicate_content" as const,
-      summary: memory.summary
+      reason:
+        memory.sourceRef === sourceRef
+          ? ("same_source_ref" as const)
+          : ("duplicate_content" as const),
+      summary: memory.summary,
     }));
   if (exact.length >= 5) {
     return exact;
@@ -253,8 +294,8 @@ function findDuplicateCandidates(content: string, sourceRef: string, memories: M
         memoryId: memory.id,
         reason: "near_duplicate_content" as const,
         summary: memory.summary,
-        confidence: Number(confidence.toFixed(4))
-      }))
+        confidence: Number(confidence.toFixed(4)),
+      })),
   ];
 }
 
@@ -277,7 +318,7 @@ function tokenize(value: string): Set<string> {
       .toLowerCase()
       .replace(/[_-]/g, " ")
       .split(/[^a-z0-9]+/)
-      .filter((token) => token.length > 2)
+      .filter((token) => token.length > 2),
   );
 }
 
