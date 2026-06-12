@@ -51,6 +51,7 @@ describe("documentation", () => {
     expect(metadata).toContain("gh repo edit");
     expect(metadata).toContain("ユーザー承認後");
     expect(readme).toContain("docs/technical-roadmap.md");
+    expect(readme).toContain("docs/memory-evaluation.md");
     expect(roadmap).toContain("SessionStart hook");
     expect(roadmap).toContain("porter + trigram");
     expect(roadmap).toContain("node:sqlite");
@@ -70,6 +71,20 @@ describe("documentation", () => {
     expect(investigation).toContain("WAL checkpoint");
     expect(investigation).toContain("backup(db, backupPath)");
     expect(investigation).toContain("SqliteDatabaseAdapter");
+  });
+
+  test("memory evaluation benchmark is documented", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const evaluation = readFileSync("docs/memory-evaluation.md", "utf8");
+
+    expect(readme).toContain("npm run bench:recall");
+    expect(evaluation).toContain("Issue: #100");
+    expect(evaluation).toContain("recallAt3");
+    expect(evaluation).toContain("precisionAt3");
+    expect(evaluation).toContain("sourceRefQuality");
+    expect(evaluation).toContain("duplicateSuppression");
+    expect(evaluation).toContain("Ollamaなし相当");
+    expect(evaluation).toContain("CI");
   });
 
   test("README and AGENTS memory protocol include custom instruction bootstrap guidance", () => {

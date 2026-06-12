@@ -41,3 +41,6 @@ jobs:
 
       - name: Practical smoke
         run: npm run smoke:practical
+
+      - name: Recall benchmark
+        run: npm run bench:recall
