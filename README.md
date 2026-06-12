@@ -42,6 +42,7 @@ npm run dashboard
 - Codex / AGENTS.md 用の短い導入文: [AGENTS-memory-protocol.md](AGENTS-memory-protocol.md)
 - Skill と詳細運用: [skills/codex-memory-sidecar/SKILL.md](skills/codex-memory-sidecar/SKILL.md)
 - 公開前監査: [docs/public-readiness-audit.md](docs/public-readiness-audit.md)
+- メモリ評価ベンチ: [docs/memory-evaluation.md](docs/memory-evaluation.md)
 - 技術的な中期改善: [docs/technical-roadmap.md](docs/technical-roadmap.md)
 - セキュリティ方針: [SECURITY.md](SECURITY.md)
 - 貢献方針: [CONTRIBUTING.md](CONTRIBUTING.md)
@@ -110,10 +111,12 @@ node "<node-install-dir>\node_modules\npm\bin\npm-cli.js" test
 ```powershell
 npm run smoke:mcp
 npm run smoke:practical
+npm run bench:recall
 ```
 
 - `smoke:mcp`: MCP server 登録、`health_check`、`start_memory_session` を確認します。
 - `smoke:practical`: write/search/digest/directive/backup/dashboard/repair/consolidation の最小実用フローを確認します。
+- `bench:recall`: 小さな固定fixtureで recall / precision / sourceRef品質 / duplicate抑制を確認します。CI向けに Ollama 実体へは接続しません。
 
 任意で Ollama を使う場合:
 
