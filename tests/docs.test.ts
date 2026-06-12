@@ -27,6 +27,7 @@ describe("documentation", () => {
     expect(readme).toContain("docs/assets/dashboard-overview.png");
     expect(readme).toContain("3分セットアップ");
     expect(readme).toContain("docs/daily-operations.md");
+    expect(readme).toContain("docs/session-start-hook.md");
     expect(readme).toContain("CHANGELOG.md");
     expect(readme).not.toContain("C:\\Users\\hare1");
     expect(readme).not.toContain("個人利用を前提");
@@ -87,6 +88,20 @@ describe("documentation", () => {
     expect(evaluation).toContain("Ollamaなし相当");
     expect(evaluation).toContain("SQLite FTS trigram / porter");
     expect(evaluation).toContain("CI");
+  });
+
+  test("SessionStart hook adapter is documented", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const hook = readFileSync("docs/session-start-hook.md", "utf8");
+
+    expect(readme).toContain("npm run smoke:hook");
+    expect(readme).toContain("docs/session-start-hook.md");
+    expect(hook).toContain("Issue: #97");
+    expect(hook).toContain("SessionStart");
+    expect(hook).toContain("additionalContext");
+    expect(hook).toContain("auto-write を発火させません");
+    expect(hook).toContain("exit 0");
+    expect(hook).toContain("hooks.json");
   });
 
   test("README and AGENTS memory protocol include custom instruction bootstrap guidance", () => {

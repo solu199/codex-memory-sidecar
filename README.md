@@ -41,6 +41,7 @@ npm run dashboard
 - 日常運用: [docs/daily-operations.md](docs/daily-operations.md)
 - Codex / AGENTS.md 用の短い導入文: [AGENTS-memory-protocol.md](AGENTS-memory-protocol.md)
 - Skill と詳細運用: [skills/codex-memory-sidecar/SKILL.md](skills/codex-memory-sidecar/SKILL.md)
+- Codex SessionStart hook: [docs/session-start-hook.md](docs/session-start-hook.md)
 - 公開前監査: [docs/public-readiness-audit.md](docs/public-readiness-audit.md)
 - メモリ評価ベンチ: [docs/memory-evaluation.md](docs/memory-evaluation.md)
 - 技術的な中期改善: [docs/technical-roadmap.md](docs/technical-roadmap.md)
@@ -111,11 +112,13 @@ node "<node-install-dir>\node_modules\npm\bin\npm-cli.js" test
 ```powershell
 npm run smoke:mcp
 npm run smoke:practical
+npm run smoke:hook
 npm run bench:recall
 ```
 
 - `smoke:mcp`: MCP server 登録、`health_check`、`start_memory_session` を確認します。
 - `smoke:practical`: write/search/digest/directive/backup/dashboard/repair/consolidation の最小実用フローを確認します。
+- `smoke:hook`: Codex `SessionStart` hook adapter が短い `additionalContext` を返し、auto-write を発火させないことを確認します。
 - `bench:recall`: 小さな固定fixtureで recall / precision / sourceRef品質 / duplicate抑制を確認します。CI向けに Ollama 実体へは接続せず、keyword と semantic 経路を分けて確認します。
 
 任意で Ollama を使う場合:

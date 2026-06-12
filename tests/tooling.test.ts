@@ -29,9 +29,11 @@ describe("tooling configuration", () => {
 
     expect(ci).toContain("npm run format:check");
     expect(ci).toContain("npm run lint");
+    expect(ci).toContain("npm run smoke:hook");
     expect(ci).toContain("npm run bench:recall");
     expect(ci.indexOf("npm run format:check")).toBeLessThan(ci.indexOf("npm run build"));
     expect(ci.indexOf("npm run lint")).toBeLessThan(ci.indexOf("npm run build"));
-    expect(ci.indexOf("npm run smoke:practical")).toBeLessThan(ci.indexOf("npm run bench:recall"));
+    expect(ci.indexOf("npm run smoke:practical")).toBeLessThan(ci.indexOf("npm run smoke:hook"));
+    expect(ci.indexOf("npm run smoke:hook")).toBeLessThan(ci.indexOf("npm run bench:recall"));
   });
 });
