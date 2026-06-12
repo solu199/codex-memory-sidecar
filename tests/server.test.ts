@@ -32,7 +32,7 @@ describe("createMemoryServer", () => {
       startupIntegrityCheck: true,
       startupFtsSanityCheck: true,
       startupWalCheckpoint: true,
-      autoBackupOnStartup: false
+      autoBackupOnStartup: false,
     });
 
     expect(runtime.server.isConnected()).toBe(false);
@@ -54,11 +54,11 @@ describe("createMemoryServer", () => {
       startupIntegrityCheck: true,
       startupFtsSanityCheck: true,
       startupWalCheckpoint: true,
-      autoBackupOnStartup: false
+      autoBackupOnStartup: false,
     });
     const client = new Client({
       name: "codex-memory-sidecar-test",
-      version: "0.1.0"
+      version: "0.1.0",
     });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -89,7 +89,7 @@ describe("createMemoryServer", () => {
         "update_memory",
         "verify_backup",
         "write_directive",
-        "write_memory"
+        "write_memory",
       ]);
     } finally {
       await client.close();
@@ -111,11 +111,11 @@ describe("createMemoryServer", () => {
       startupIntegrityCheck: true,
       startupFtsSanityCheck: true,
       startupWalCheckpoint: true,
-      autoBackupOnStartup: false
+      autoBackupOnStartup: false,
     });
     const client = new Client({
       name: "codex-memory-sidecar-test",
-      version: "0.1.0"
+      version: "0.1.0",
     });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -123,21 +123,21 @@ describe("createMemoryServer", () => {
       await Promise.all([runtime.server.connect(serverTransport), client.connect(clientTransport)]);
       const health = await client.callTool({
         name: "health_check",
-        arguments: {}
+        arguments: {},
       });
 
       expect(health.structuredContent).toMatchObject({
         ok: true,
         database: {
-          ok: true
+          ok: true,
         },
         embedding: {
           ok: true,
           required: false,
           dimensions: 0,
-          error: null
+          error: null,
         },
-        warnings: []
+        warnings: [],
       });
     } finally {
       await client.close();

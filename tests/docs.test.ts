@@ -37,6 +37,7 @@ describe("documentation", () => {
     const changelog = readFileSync("CHANGELOG.md", "utf8");
     const releaseDraft = readFileSync(".github/releases/v0.1.0.md", "utf8");
     const metadata = readFileSync("docs/github-repository-metadata.md", "utf8");
+    const roadmap = readFileSync("docs/technical-roadmap.md", "utf8");
 
     expect(existsSync("docs/assets/dashboard-overview.png")).toBe(true);
     expect(readme).toContain("Codex Memory Sidecar Dashboard");
@@ -49,6 +50,13 @@ describe("documentation", () => {
     expect(metadata).toContain("AIエージェント向けのローカルMCPメモリ基盤");
     expect(metadata).toContain("gh repo edit");
     expect(metadata).toContain("ユーザー承認後");
+    expect(readme).toContain("docs/technical-roadmap.md");
+    expect(roadmap).toContain("SessionStart hook");
+    expect(roadmap).toContain("porter + trigram");
+    expect(roadmap).toContain("node:sqlite");
+    expect(roadmap).toContain("bi-temporal");
+    expect(roadmap).toContain("#95");
+    expect(roadmap).toContain("#100");
   });
 
   test("README and AGENTS memory protocol include custom instruction bootstrap guidance", () => {

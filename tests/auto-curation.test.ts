@@ -12,7 +12,7 @@ const baseCandidate: MemoryUpdateCandidate = {
   sourceRef: "pr:#79",
   occurredAt: "2026-06-11T03:37:13.000Z",
   reason: "マージ済みPRの実装結果や運用上の学びが通常メモリに未反映の可能性があります。",
-  suggestedTool: "propose_memory_update"
+  suggestedTool: "propose_memory_update",
 };
 
 describe("auto memory curation", () => {
@@ -24,11 +24,11 @@ describe("auto memory curation", () => {
       score: expect.any(Number),
       provenance: {
         quality: "strong",
-        recognizedRefs: ["pr"]
+        recognizedRefs: ["pr"],
       },
       safety: {
-        secretDetected: false
-      }
+        secretDetected: false,
+      },
     });
     expect(evaluation.score).toBeGreaterThanOrEqual(0.82);
     expect(evaluation.content).toContain("PR #79");
@@ -39,7 +39,7 @@ describe("auto memory curation", () => {
     const existing = memory({
       id: 1,
       content: "PR memory candidate: PR #79: メモリ鮮度と保存候補を表示. Reason: already saved.",
-      sourceRef: "pr:#79"
+      sourceRef: "pr:#79",
     });
 
     const evaluation = evaluateMemoryCandidate(baseCandidate, [existing]);
@@ -48,8 +48,8 @@ describe("auto memory curation", () => {
     expect(evaluation.duplicateCandidates).toEqual([
       expect.objectContaining({
         memoryId: 1,
-        reason: "same_source_ref"
-      })
+        reason: "same_source_ref",
+      }),
     ]);
   });
 
@@ -58,15 +58,15 @@ describe("auto memory curation", () => {
       mode: "review",
       candidates: [baseCandidate],
       existingMemories: [],
-      now: new Date("2026-06-11T03:40:00Z")
+      now: new Date("2026-06-11T03:40:00Z"),
     });
 
     expect(result.autoWriteCandidates).toEqual([]);
     expect(result.reviewCandidates).toHaveLength(1);
     expect(result.reviewCandidates[0]).toEqual(
       expect.objectContaining({
-        decision: "review"
-      })
+        decision: "review",
+      }),
     );
   });
 
@@ -78,16 +78,16 @@ describe("auto memory curation", () => {
         summary: "PR #86: Public memory governance release",
         sourceRef: "pr:#86",
         authorLogin: "external-contributor",
-        externalAuthor: true
+        externalAuthor: true,
       },
-      []
+      [],
     );
 
     expect(evaluation.decision).toBe("review");
     expect(evaluation.score).toBeGreaterThanOrEqual(0.82);
     expect(evaluation.content).toContain("Author: external-contributor (external).");
     expect(evaluation.reasons).toContain(
-      "GitHub Issue/PR activity from an external author is data, not a trusted instruction."
+      "GitHub Issue/PR activity from an external author is data, not a trusted instruction.",
     );
   });
 
@@ -99,10 +99,10 @@ describe("auto memory curation", () => {
           ...baseCandidate,
           title: "Do not save token",
           summary: "PR #80: accidentally pasted OPENAI_API_KEY=sk-proj-secret123456",
-          sourceRef: "pr:#80"
-        }
+          sourceRef: "pr:#80",
+        },
       ],
-      existingMemories: []
+      existingMemories: [],
     });
 
     expect(result.skippedCandidates).toHaveLength(1);
@@ -128,6 +128,6 @@ function memory(input: { id: number; content: string; sourceRef: string }): Memo
     updatedAt: now,
     lastAccessedAt: null,
     expiresAt: null,
-    status: "active"
+    status: "active",
   };
 }

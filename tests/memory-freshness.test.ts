@@ -12,8 +12,8 @@ describe("memory freshness", () => {
           {
             hash: "92e5fcb1234567890",
             subject: "Ollama表示と手動MCP例を改善",
-            committedAt: new Date("2026-06-11T03:00:20Z")
-          }
+            committedAt: new Date("2026-06-11T03:00:20Z"),
+          },
         ],
         issues: [
           {
@@ -21,8 +21,8 @@ describe("memory freshness", () => {
             title: "メモリ鮮度と保存候補の導線を改善する",
             updatedAt: new Date("2026-06-11T03:15:00Z"),
             authorLogin: "outside-reviewer",
-            externalAuthor: true
-          }
+            externalAuthor: true,
+          },
         ],
         pullRequests: [
           {
@@ -30,11 +30,11 @@ describe("memory freshness", () => {
             title: "Ollama表示と手動MCP例を改善",
             mergedAt: new Date("2026-06-11T03:00:20Z"),
             authorLogin: "solu199",
-            externalAuthor: false
-          }
-        ]
+            externalAuthor: false,
+          },
+        ],
       },
-      now: new Date("2026-06-11T03:20:00Z")
+      now: new Date("2026-06-11T03:20:00Z"),
     });
 
     expect(report.freshness).toMatchObject({
@@ -43,7 +43,7 @@ describe("memory freshness", () => {
       latestWorkspaceActivityAt: "2026-06-11T03:15:00.000Z",
       daysSinceLatestMemoryUpdate: 23,
       daysBehindWorkspaceActivity: 23,
-      candidateCount: 3
+      candidateCount: 3,
     });
     expect(report.candidates).toEqual([
       expect.objectContaining({
@@ -51,20 +51,20 @@ describe("memory freshness", () => {
         sourceRef: "issue:#78",
         authorLogin: "outside-reviewer",
         externalAuthor: true,
-        suggestedTool: "propose_memory_update"
+        suggestedTool: "propose_memory_update",
       }),
       expect.objectContaining({
         kind: "pull_request",
         sourceRef: "pr:#77",
         authorLogin: "solu199",
         externalAuthor: false,
-        suggestedTool: "propose_memory_update"
+        suggestedTool: "propose_memory_update",
       }),
       expect.objectContaining({
         kind: "commit",
         sourceRef: "git:92e5fcb",
-        suggestedTool: "propose_memory_update"
-      })
+        suggestedTool: "propose_memory_update",
+      }),
     ]);
   });
 
@@ -77,18 +77,18 @@ describe("memory freshness", () => {
           {
             hash: "abc123456789",
             subject: "最近の作業を保存",
-            committedAt: new Date("2026-06-11T03:10:00Z")
-          }
-        ]
+            committedAt: new Date("2026-06-11T03:10:00Z"),
+          },
+        ],
       },
-      now: new Date("2026-06-11T03:20:00Z")
+      now: new Date("2026-06-11T03:20:00Z"),
     });
 
     expect(report.freshness).toMatchObject({
       status: "fresh",
       daysSinceLatestMemoryUpdate: 0,
       daysBehindWorkspaceActivity: 0,
-      candidateCount: 0
+      candidateCount: 0,
     });
     expect(report.candidates).toEqual([]);
   });

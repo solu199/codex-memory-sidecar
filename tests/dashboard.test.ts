@@ -12,7 +12,7 @@ import {
   isAllowedDashboardHostHeader,
   openDashboardUrl,
   probeOllamaStatus,
-  shouldOpenDashboardBrowser
+  shouldOpenDashboardBrowser,
 } from "../src/dashboard.js";
 import { MemoryStore } from "../src/memory-store.js";
 
@@ -38,19 +38,19 @@ describe("dashboard", () => {
       tags: ["dashboard"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "alpha"
+      projectScope: "alpha",
     });
     const forgotten = store.createMemory({
       content: "Dashboard must not expose memory contents.",
       layer: "core",
       tags: ["dashboard-hidden"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     store.forgetMemory({ memoryId: forgotten.id, reason: "hide payload details" });
 
     const status = await buildDashboardStatus(store, {
-      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) }
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) },
     });
 
     expect(status.ok).toBe(true);
@@ -60,32 +60,32 @@ describe("dashboard", () => {
     expect(status.database.fts).toMatchObject({
       ok: true,
       expectedCount: 1,
-      indexedCount: 1
+      indexedCount: 1,
     });
     expect(status.database.walCheckpoint.busy).toBe(0);
     expect(status.memoryStats).toMatchObject({
       byStatus: {
         active: 1,
         superseded: 0,
-        forgotten: 1
+        forgotten: 1,
       },
       byLayer: {
         core: 2,
         recall: 0,
-        archival: 0
+        archival: 0,
       },
       byProjectScope: [
         expect.objectContaining({
           projectScope: "alpha",
           active: 1,
-          total: 1
+          total: 1,
         }),
         expect.objectContaining({
           projectScope: "global",
           active: 0,
-          total: 1
-        })
-      ]
+          total: 1,
+        }),
+      ],
     });
     expect(status.embedding.dimensions).toBe(2);
     expect(status.recentMemories).toEqual([
@@ -97,12 +97,12 @@ describe("dashboard", () => {
         tags: ["dashboard"],
         projectScope: "alpha",
         sourceType: "manual",
-        sourceRef: "test"
-      })
+        sourceRef: "test",
+      }),
     ]);
     expect(status.recentEvents[0]).toMatchObject({
       memoryId: forgotten.id,
-      eventType: "forgotten"
+      eventType: "forgotten",
     });
     expect(JSON.stringify(status)).not.toContain("Dashboard must not expose memory contents.");
     expect(JSON.stringify(status)).not.toContain("Visible memory body should stay hidden.");
@@ -115,7 +115,7 @@ describe("dashboard", () => {
       layer: "recall",
       tags: ["dashboard", "repair"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     await store.createBackup({});
     const dbPath = path.join(tempDir, "memory.sqlite");
@@ -128,7 +128,7 @@ describe("dashboard", () => {
     }
 
     const status = await buildDashboardStatus(store, {
-      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) }
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) },
     });
 
     expect(status.ok).toBe(false);
@@ -140,8 +140,8 @@ describe("dashboard", () => {
         severity: "warning",
         title: "検索インデックスの修復が必要です",
         action: "MCP tool の repair_memory_index を実行してください。",
-        tools: ["backup_memory", "repair_memory_index", "health_check"]
-      })
+        tools: ["backup_memory", "repair_memory_index", "health_check"],
+      }),
     ]);
   });
 
@@ -152,7 +152,7 @@ describe("dashboard", () => {
       rationale: "User needs to audit strong memory.",
       tags: ["dashboard"],
       sourceType: "manual",
-      sourceRef: "AGENTS-memory-protocol.md"
+      sourceRef: "AGENTS-memory-protocol.md",
     });
     const disabled = store.createDirective({
       content: "Disabled directive memory should stay inspectable.",
@@ -161,12 +161,15 @@ describe("dashboard", () => {
       rationale: "User should be able to confirm disabled directives.",
       tags: ["dashboard"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
-    store.disableDirective({ directiveId: disabled.id, reason: "Dashboard disabled visibility test." });
+    store.disableDirective({
+      directiveId: disabled.id,
+      reason: "Dashboard disabled visibility test.",
+    });
 
     const status = await buildDashboardStatus(store, {
-      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) }
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) },
     });
 
     expect(status.directives).toEqual([
@@ -175,8 +178,8 @@ describe("dashboard", () => {
         projectScope: "global",
         content: "Directive memory should be visible on the dashboard.",
         rationale: "User needs to audit strong memory.",
-        status: "active"
-      })
+        status: "active",
+      }),
     ]);
     expect(status.disabledDirectives).toEqual([
       expect.objectContaining({
@@ -184,8 +187,8 @@ describe("dashboard", () => {
         scope: "project",
         projectScope: "alpha",
         content: "Disabled directive memory should stay inspectable.",
-        status: "disabled"
-      })
+        status: "disabled",
+      }),
     ]);
   });
 
@@ -195,12 +198,15 @@ describe("dashboard", () => {
     const oldestBackup = path.join(backupDir, "memory-20260514-010000-000.sqlite");
 
     for (let index = 0; index < 11; index += 1) {
-      const backupPath = path.join(backupDir, `memory-20260514-${String(index + 1).padStart(2, "0")}0000-000.sqlite`);
+      const backupPath = path.join(
+        backupDir,
+        `memory-20260514-${String(index + 1).padStart(2, "0")}0000-000.sqlite`,
+      );
       writeFileSync(backupPath, `backup-${index}`);
     }
 
     const status = await buildDashboardStatus(store, {
-      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) }
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) },
     });
 
     expect(status.maintenance.backupRetention).toMatchObject({
@@ -209,14 +215,16 @@ describe("dashboard", () => {
       backupCount: 11,
       keptCount: 10,
       prunableCount: 1,
-      prunableSizeBytes: 8
+      prunableSizeBytes: 8,
     });
-    expect(status.maintenance.backupRetention.latestBackup?.backupPath).toContain("memory-20260514-110000-000.sqlite");
+    expect(status.maintenance.backupRetention.latestBackup?.backupPath).toContain(
+      "memory-20260514-110000-000.sqlite",
+    );
     expect(status.maintenance.backupRetention.prunable).toEqual([
       expect.objectContaining({
         backupPath: oldestBackup,
-        sizeBytes: 8
-      })
+        sizeBytes: 8,
+      }),
     ]);
   });
 
@@ -228,7 +236,7 @@ describe("dashboard", () => {
       tags: ["freshness"],
       sourceType: "manual",
       sourceRef: "memory:freshness",
-      projectScope: "alpha"
+      projectScope: "alpha",
     });
 
     const status = await buildDashboardStatus(store, {
@@ -239,37 +247,37 @@ describe("dashboard", () => {
           {
             hash: "92e5fcb1234567890",
             subject: "Ollama表示と手動MCP例を改善",
-            committedAt: new Date("2026-06-20T03:00:20Z")
-          }
-        ]
-      }
+            committedAt: new Date("2026-06-20T03:00:20Z"),
+          },
+        ],
+      },
     });
 
     expect(status.memoryFreshness).toMatchObject({
       status: "stale",
       latestMemoryUpdatedAt: expect.any(String),
       latestWorkspaceActivityAt: "2026-06-20T03:00:20.000Z",
-      candidateCount: 1
+      candidateCount: 1,
     });
     expect(status.memoryUpdateCandidates).toEqual([
       expect.objectContaining({
         kind: "commit",
         sourceRef: "git:92e5fcb",
-        suggestedTool: "propose_memory_update"
-      })
+        suggestedTool: "propose_memory_update",
+      }),
     ]);
     expect(status.autoMemoryCuration).toMatchObject({
       mode: "safe",
       evaluatedCount: 1,
       reviewCount: 1,
       autoWriteEligibleCount: 0,
-      skippedCount: 0
+      skippedCount: 0,
     });
     expect(status.warningActions).toContainEqual(
       expect.objectContaining({
         title: "メモリ更新が古い可能性があります",
-        tools: ["propose_memory_update", "write_memory"]
-      })
+        tools: ["propose_memory_update", "write_memory"],
+      }),
     );
   });
 
@@ -281,7 +289,7 @@ describe("dashboard", () => {
       tags: ["freshness"],
       sourceType: "manual",
       sourceRef: "memory:freshness",
-      projectScope: "alpha"
+      projectScope: "alpha",
     });
 
     const status = await buildDashboardStatus(store, {
@@ -293,24 +301,24 @@ describe("dashboard", () => {
           {
             number: 79,
             title: "メモリ鮮度と保存候補を表示",
-            mergedAt: new Date("2026-06-20T03:00:20Z")
-          }
-        ]
-      }
+            mergedAt: new Date("2026-06-20T03:00:20Z"),
+          },
+        ],
+      },
     });
 
     expect(status.autoMemoryCuration).toMatchObject({
       mode: "safe",
       evaluatedCount: 1,
       autoWriteEligibleCount: 1,
-      note: expect.stringContaining("start_memory_session")
+      note: expect.stringContaining("start_memory_session"),
     });
     expect(status.database.memoryCount).toBe(1);
   });
 
   test("serves HTML and JSON status over HTTP", async () => {
     const server = createDashboardServer(store, {
-      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) }
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) },
     });
 
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -343,21 +351,21 @@ describe("dashboard", () => {
       await expect(response.json()).resolves.toMatchObject({
         ok: true,
         dashboard: {
-          schemaVersion: expect.any(String)
+          schemaVersion: expect.any(String),
         },
         database: {
-          ok: true
+          ok: true,
         },
         memoryStats: {
           byStatus: {
-            active: 0
+            active: 0,
           },
-          byProjectScope: []
+          byProjectScope: [],
         },
         recentMemories: [],
         autoMemoryCuration: {
-          mode: "safe"
-        }
+          mode: "safe",
+        },
       });
     } finally {
       await new Promise<void>((resolve, reject) => {
@@ -385,31 +393,33 @@ describe("dashboard", () => {
       if (!address || typeof address === "string") {
         throw new Error("Expected TCP server address.");
       }
-      const response = await new Promise<{ statusCode: number; body: string }>((resolve, reject) => {
-        const request = http.request(
-          {
-            host: "127.0.0.1",
-            port: address.port,
-            path: "/api/status",
-            method: "GET",
-            headers: {
-              Host: "example.com"
-            }
-          },
-          (incoming) => {
-            let body = "";
-            incoming.setEncoding("utf8");
-            incoming.on("data", (chunk) => {
-              body += chunk;
-            });
-            incoming.on("end", () => {
-              resolve({ statusCode: incoming.statusCode ?? 0, body });
-            });
-          }
-        );
-        request.on("error", reject);
-        request.end();
-      });
+      const response = await new Promise<{ statusCode: number; body: string }>(
+        (resolve, reject) => {
+          const request = http.request(
+            {
+              host: "127.0.0.1",
+              port: address.port,
+              path: "/api/status",
+              method: "GET",
+              headers: {
+                Host: "example.com",
+              },
+            },
+            (incoming) => {
+              let body = "";
+              incoming.setEncoding("utf8");
+              incoming.on("data", (chunk) => {
+                body += chunk;
+              });
+              incoming.on("end", () => {
+                resolve({ statusCode: incoming.statusCode ?? 0, body });
+              });
+            },
+          );
+          request.on("error", reject);
+          request.end();
+        },
+      );
 
       expect(response.statusCode).toBe(403);
       expect(response.body).toBe("Forbidden");
@@ -428,7 +438,7 @@ describe("dashboard", () => {
       tags: ["dashboard", "dom"],
       sourceType: "manual",
       sourceRef: "dom-test",
-      projectScope: "alpha"
+      projectScope: "alpha",
     });
     store.createDirective({
       content: "DOM rendered directive content",
@@ -436,7 +446,7 @@ describe("dashboard", () => {
       rationale: "DOM rendering should expose directive memory for inspection.",
       tags: ["dashboard", "dom"],
       sourceType: "manual",
-      sourceRef: "dom-test"
+      sourceRef: "dom-test",
     });
 
     const server = createDashboardServer(store, {
@@ -445,13 +455,19 @@ describe("dashboard", () => {
         baseUrl: "http://localhost:11434",
         embeddingModel: "embeddinggemma",
         maintenanceModel: "qwen3",
-        fetch: vi.fn(async () =>
-          new Response(JSON.stringify({ models: [{ name: "embeddinggemma:latest" }, { name: "qwen3:latest" }] }), {
-            status: 200,
-            headers: { "content-type": "application/json" }
-          })
-        )
-      }
+        fetch: vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({
+                models: [{ name: "embeddinggemma:latest" }, { name: "qwen3:latest" }],
+              }),
+              {
+                status: 200,
+                headers: { "content-type": "application/json" },
+              },
+            ),
+        ),
+      },
     });
 
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -467,7 +483,10 @@ describe("dashboard", () => {
       if (!script) {
         throw new Error("Dashboard script was not found.");
       }
-      const elements = new Map<string, { textContent: string; innerHTML: string; className: string; listeners: string[] }>();
+      const elements = new Map<
+        string,
+        { textContent: string; innerHTML: string; className: string; listeners: string[] }
+      >();
       const elementFor = (id: string) => {
         const existing = elements.get(id);
         if (existing) {
@@ -480,18 +499,18 @@ describe("dashboard", () => {
           listeners: [] as string[],
           addEventListener(eventName: string) {
             this.listeners.push(eventName);
-          }
+          },
         };
         elements.set(id, created);
         return created;
       };
       const context = {
         fetch: vi.fn(async () => ({
-          json: async () => status
+          json: async () => status,
         })),
         document: {
-          getElementById: elementFor
-        }
+          getElementById: elementFor,
+        },
       };
 
       vm.runInNewContext(script, context);
@@ -501,14 +520,14 @@ describe("dashboard", () => {
 
       expect(elementFor("status")).toMatchObject({
         textContent: "正常",
-        className: "value status-ok"
+        className: "value status-ok",
       });
       expect(context.fetch).toHaveBeenCalledWith("/api/status");
       expect(elementFor("memories").textContent).toBe("1");
       expect(elementFor("embedding").textContent).toBe("3");
       expect(elementFor("repair")).toMatchObject({
         textContent: "不要",
-        className: "value status-ok"
+        className: "value status-ok",
       });
       expect(elementFor("warnings").innerHTML).toContain("現在");
       expect(elementFor("warnings").innerHTML).toContain("なし");
@@ -516,13 +535,15 @@ describe("dashboard", () => {
       expect(elementFor("memory-candidates").innerHTML).toContain("保存候補");
       expect(elementFor("ollama-status")).toMatchObject({
         textContent: "正常",
-        className: "value status-ok"
+        className: "value status-ok",
       });
       expect(elementFor("ollama-configured").innerHTML).toContain("必須");
       expect(elementFor("ollama-models").innerHTML).toContain("embeddinggemma:latest");
       expect(elementFor("directives").innerHTML).toContain("DOM rendered directive content");
       expect(elementFor("recent-memories").innerHTML).toContain("DOM rendered memory summary");
-      expect(elementFor("recent-memories").innerHTML).not.toContain("Dashboard DOM test memory body");
+      expect(elementFor("recent-memories").innerHTML).not.toContain(
+        "Dashboard DOM test memory body",
+      );
       expect(elementFor("refresh").listeners).toEqual(["click"]);
     } finally {
       await new Promise<void>((resolve, reject) => {
@@ -562,7 +583,7 @@ describe("dashboard", () => {
     expect(calls[0]?.options).toMatchObject({
       detached: true,
       stdio: "ignore",
-      windowsHide: true
+      windowsHide: true,
     });
     expect(on).toHaveBeenCalledWith("error", expect.any(Function));
     expect(unref).toHaveBeenCalledOnce();
@@ -584,27 +605,28 @@ describe("dashboard", () => {
   });
 
   test("probeOllamaStatus reports configured model availability from Ollama tags", async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          models: [
-            { name: "embeddinggemma:latest" },
-            { name: "qwen3:latest" },
-            { name: "llama3.2:latest" }
-          ]
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        }
-      )
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            models: [
+              { name: "embeddinggemma:latest" },
+              { name: "qwen3:latest" },
+              { name: "llama3.2:latest" },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
     );
 
     const status = await probeOllamaStatus({
       baseUrl: "http://localhost:11434",
       embeddingModel: "embeddinggemma",
       maintenanceModel: "qwen3",
-      fetch: fetchImpl
+      fetch: fetchImpl,
     });
 
     expect(fetchImpl).toHaveBeenCalledWith("http://localhost:11434/api/tags");
@@ -616,7 +638,7 @@ describe("dashboard", () => {
       embeddingModelAvailable: true,
       maintenanceModelAvailable: true,
       modelNames: ["embeddinggemma:latest", "qwen3:latest", "llama3.2:latest"],
-      error: null
+      error: null,
     });
   });
 
@@ -627,13 +649,14 @@ describe("dashboard", () => {
         baseUrl: "http://localhost:11434",
         embeddingModel: "embeddinggemma",
         maintenanceModel: "qwen3",
-        fetch: vi.fn(async () =>
-          new Response(JSON.stringify({ models: [{ name: "embeddinggemma:latest" }] }), {
-            status: 200,
-            headers: { "content-type": "application/json" }
-          })
-        )
-      }
+        fetch: vi.fn(
+          async () =>
+            new Response(JSON.stringify({ models: [{ name: "embeddinggemma:latest" }] }), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            }),
+        ),
+      },
     });
 
     expect(status.ok).toBe(false);
@@ -642,15 +665,15 @@ describe("dashboard", () => {
       required: true,
       embeddingModelAvailable: true,
       maintenanceModelAvailable: false,
-      modelNames: ["embeddinggemma:latest"]
+      modelNames: ["embeddinggemma:latest"],
     });
     expect(status.warnings).toContain("Ollama model is not available: qwen3");
     expect(status.warningActions).toContainEqual(
       expect.objectContaining({
         severity: "warning",
         title: "Ollama モデルが見つかりません",
-        action: "Ollama に不足モデルを追加してください: ollama pull qwen3"
-      })
+        action: "Ollama に不足モデルを追加してください: ollama pull qwen3",
+      }),
     );
   });
 
@@ -664,22 +687,22 @@ describe("dashboard", () => {
         maintenanceModel: "qwen3",
         fetch: vi.fn(async () => {
           throw new Error("Ollama offline");
-        })
+        }),
       },
       ollamaRequired: false,
-      workspaceActivity: { commits: [] }
+      workspaceActivity: { commits: [] },
     });
 
     expect(status.ok).toBe(true);
     expect(status.embedding).toMatchObject({
       ok: false,
       required: false,
-      error: "Ollama offline"
+      error: "Ollama offline",
     });
     expect(status.ollama).toMatchObject({
       ok: false,
       required: false,
-      error: "Ollama offline"
+      error: "Ollama offline",
     });
     expect(status.warnings).toEqual([]);
     expect(status.warningActions).toEqual([]);
@@ -695,9 +718,9 @@ describe("dashboard", () => {
         maintenanceModel: "qwen3",
         fetch: vi.fn(async () => {
           throw new Error("Ollama offline");
-        })
+        }),
       },
-      ollamaRequired: false
+      ollamaRequired: false,
     });
 
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -713,7 +736,10 @@ describe("dashboard", () => {
       if (!script) {
         throw new Error("Dashboard script was not found.");
       }
-      const elements = new Map<string, { textContent: string; innerHTML: string; className: string; listeners: string[] }>();
+      const elements = new Map<
+        string,
+        { textContent: string; innerHTML: string; className: string; listeners: string[] }
+      >();
       const elementFor = (id: string) => {
         const existing = elements.get(id);
         if (existing) {
@@ -726,18 +752,18 @@ describe("dashboard", () => {
           listeners: [] as string[],
           addEventListener(eventName: string) {
             this.listeners.push(eventName);
-          }
+          },
         };
         elements.set(id, created);
         return created;
       };
       const context = {
         fetch: vi.fn(async () => ({
-          json: async () => status
+          json: async () => status,
         })),
         document: {
-          getElementById: elementFor
-        }
+          getElementById: elementFor,
+        },
       };
 
       vm.runInNewContext(script, context);
@@ -749,7 +775,7 @@ describe("dashboard", () => {
       expect(status.ollama.required).toBe(false);
       expect(elementFor("ollama-status")).toMatchObject({
         textContent: "任意",
-        className: "value status-ok"
+        className: "value status-ok",
       });
       expect(elementFor("ollama-configured").innerHTML).toContain("任意");
       expect(elementFor("warnings").innerHTML).toContain("なし");

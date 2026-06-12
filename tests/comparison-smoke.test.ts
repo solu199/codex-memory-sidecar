@@ -16,12 +16,12 @@ describe("runComparisonSmoke", () => {
     expect(result.evaluationMatrix).toEqual([
       expect.objectContaining({ condition: "mcp_off" }),
       expect.objectContaining({ condition: "start_session_only" }),
-      expect.objectContaining({ condition: "full_mcp_operation" })
+      expect.objectContaining({ condition: "full_mcp_operation" }),
     ]);
     expect(result.recommendations).toEqual(
       expect.arrayContaining([
-        "Use MCP as supporting context, not as a replacement for README/docs/git/current files."
-      ])
+        "Use MCP as supporting context, not as a replacement for README/docs/git/current files.",
+      ]),
     );
   });
 });

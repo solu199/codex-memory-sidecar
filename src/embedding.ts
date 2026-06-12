@@ -25,8 +25,8 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         model: this.model,
-        input
-      })
+        input,
+      }),
     });
 
     if (!response.ok) {
@@ -89,5 +89,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isNumberArray(value: unknown): value is number[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "number" && Number.isFinite(item));
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === "number" && Number.isFinite(item))
+  );
 }

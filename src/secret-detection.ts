@@ -7,10 +7,11 @@ const SECRET_PATTERNS = [
   /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/,
   /\bAuthorization\s*:\s*Bearer\s+[A-Za-z0-9._~+/=-]{16,}/i,
   /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
-  /-----BEGIN (RSA |EC |OPENSSH |)PRIVATE KEY-----/
+  /-----BEGIN (RSA |EC |OPENSSH |)PRIVATE KEY-----/,
 ];
 
-const SECRET_KEY_PATTERN = /(?:api[_-]?key|access[_-]?token|auth[_-]?token|secret|password|private[_-]?key|credential|bearer|authorization)/i;
+const SECRET_KEY_PATTERN =
+  /(?:api[_-]?key|access[_-]?token|auth[_-]?token|secret|password|private[_-]?key|credential|bearer|authorization)/i;
 
 export function containsLikelySecret(content: string): boolean {
   return SECRET_PATTERNS.some((pattern) => pattern.test(content));

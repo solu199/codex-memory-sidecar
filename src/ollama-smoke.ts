@@ -30,19 +30,19 @@ export async function runOllamaSmoke(options: OllamaSmokeOptions): Promise<Ollam
       layer: "recall",
       tags: ["smoke", "ollama"],
       sourceType: "smoke",
-      sourceRef: "npm run smoke:ollama"
+      sourceRef: "npm run smoke:ollama",
     });
     await tools.writeMemory({
       content: "Unrelated memory about manual backup verification.",
       layer: "recall",
       tags: ["smoke"],
       sourceType: "smoke",
-      sourceRef: "npm run smoke:ollama"
+      sourceRef: "npm run smoke:ollama",
     });
 
     const result = await tools.searchMemory({
       query: "Ollama smoke local embeddings",
-      limit: 1
+      limit: 1,
     });
 
     const warnings = [...created.structuredContent.warnings, ...result.structuredContent.warnings];
@@ -55,7 +55,7 @@ export async function runOllamaSmoke(options: OllamaSmokeOptions): Promise<Ollam
         result.structuredContent.memories[0]?.id === created.structuredContent.memory.id,
       embeddingDimensions: storedCreated?.embedding?.length ?? 0,
       topMemorySummary: result.structuredContent.memories[0]?.summary ?? "",
-      warnings
+      warnings,
     };
   } finally {
     store.close();
@@ -69,8 +69,8 @@ async function main(): Promise<void> {
       databasePath,
       embeddingProvider: new OllamaEmbeddingProvider({
         baseUrl: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434",
-        model: process.env.CODEX_MEMORY_EMBEDDING_MODEL ?? "embeddinggemma"
-      })
+        model: process.env.CODEX_MEMORY_EMBEDDING_MODEL ?? "embeddinggemma",
+      }),
     });
 
     if (!result.ok) {

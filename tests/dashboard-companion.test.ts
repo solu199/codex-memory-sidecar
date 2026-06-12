@@ -5,7 +5,10 @@ import http from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { startDashboardCompanion, shouldStartDashboardWithMcp } from "../src/dashboard-companion.js";
+import {
+  startDashboardCompanion,
+  shouldStartDashboardWithMcp,
+} from "../src/dashboard-companion.js";
 import { MemoryStore } from "../src/memory-store.js";
 import type { MemorySidecarConfig } from "../src/config.js";
 
@@ -29,7 +32,7 @@ describe("dashboard companion", () => {
       startupIntegrityCheck: true,
       startupFtsSanityCheck: true,
       startupWalCheckpoint: true,
-      autoBackupOnStartup: false
+      autoBackupOnStartup: false,
     };
   });
 
@@ -56,10 +59,14 @@ describe("dashboard companion", () => {
       opener,
       fetch: vi.fn(async (url) => {
         if (String(url).endsWith("/api/tags")) {
-          return new Response(JSON.stringify({ models: [{ name: "embeddinggemma:latest" }, { name: "qwen3:latest" }] }));
+          return new Response(
+            JSON.stringify({
+              models: [{ name: "embeddinggemma:latest" }, { name: "qwen3:latest" }],
+            }),
+          );
         }
         return new Response(JSON.stringify({ embeddings: [[0.1, 0.2]] }));
-      })
+      }),
     });
 
     expect(result.started).toBe(true);
@@ -73,8 +80,8 @@ describe("dashboard companion", () => {
         ollama: {
           ok: true,
           embeddingModelAvailable: true,
-          maintenanceModelAvailable: true
-        }
+          maintenanceModelAvailable: true,
+        },
       });
     } finally {
       await result.close();
@@ -85,7 +92,7 @@ describe("dashboard companion", () => {
     const result = await startDashboardCompanion({
       store,
       config,
-      env: { CODEX_MEMORY_DASHBOARD_ON_MCP_START: "false" }
+      env: { CODEX_MEMORY_DASHBOARD_ON_MCP_START: "false" },
     });
 
     expect(result.started).toBe(false);
@@ -102,10 +109,14 @@ describe("dashboard companion", () => {
       opener: vi.fn(() => ({ on: vi.fn(), unref: vi.fn() })),
       fetch: vi.fn(async (url) => {
         if (String(url).endsWith("/api/tags")) {
-          return new Response(JSON.stringify({ models: [{ name: "embeddinggemma:latest" }, { name: "qwen3:latest" }] }));
+          return new Response(
+            JSON.stringify({
+              models: [{ name: "embeddinggemma:latest" }, { name: "qwen3:latest" }],
+            }),
+          );
         }
         return new Response(JSON.stringify({ embeddings: [[0.1, 0.2]] }));
-      })
+      }),
     });
     if (!existing.url) {
       throw new Error("Expected existing dashboard URL.");
@@ -118,13 +129,13 @@ describe("dashboard companion", () => {
         store,
         config,
         port,
-        opener
+        opener,
       });
 
       expect(result.started).toBe(false);
       expect(result.url).toBe(existing.url);
       expect(result.warnings).toEqual([
-        `Dashboard companion reused existing sidecar dashboard: ${existing.url}`
+        `Dashboard companion reused existing sidecar dashboard: ${existing.url}`,
       ]);
       expect(opener).not.toHaveBeenCalled();
       await result.close();
@@ -141,10 +152,14 @@ describe("dashboard companion", () => {
       opener: vi.fn(() => ({ on: vi.fn(), unref: vi.fn() })),
       fetch: vi.fn(async (url) => {
         if (String(url).endsWith("/api/tags")) {
-          return new Response(JSON.stringify({ models: [{ name: "embeddinggemma:latest" }, { name: "qwen3:latest" }] }));
+          return new Response(
+            JSON.stringify({
+              models: [{ name: "embeddinggemma:latest" }, { name: "qwen3:latest" }],
+            }),
+          );
         }
         return new Response(JSON.stringify({ embeddings: [[0.1, 0.2]] }));
-      })
+      }),
     });
     if (!existing.url) {
       throw new Error("Expected existing dashboard URL.");
@@ -158,7 +173,7 @@ describe("dashboard companion", () => {
         config,
         port,
         opener,
-        env: { CODEX_MEMORY_DASHBOARD_OPEN: "always" }
+        env: { CODEX_MEMORY_DASHBOARD_OPEN: "always" },
       });
 
       expect(result.started).toBe(false);
@@ -177,8 +192,8 @@ describe("dashboard companion", () => {
         JSON.stringify({
           ok: true,
           database: { ok: true },
-          embedding: { ok: true }
-        })
+          embedding: { ok: true },
+        }),
       );
     });
     await new Promise<void>((resolve) => staleServer.listen(0, "127.0.0.1", resolve));
@@ -194,7 +209,7 @@ describe("dashboard companion", () => {
         store,
         config,
         port,
-        opener
+        opener,
       });
 
       expect(result.started).toBe(false);

@@ -33,7 +33,7 @@ describe("MCP tool handlers", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.8,
-      confidence: 0.9
+      confidence: 0.9,
     });
 
     expect(result.structuredContent.memory.status).toBe("active");
@@ -50,7 +50,7 @@ describe("MCP tool handlers", () => {
       layer: "core",
       tags: ["safety"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const result = await tools.writeMemory({
@@ -58,7 +58,7 @@ describe("MCP tool handlers", () => {
       layer: "core",
       tags: ["safety"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     expect(result.structuredContent.memory.id).not.toBe(existing.structuredContent.memory.id);
@@ -66,8 +66,8 @@ describe("MCP tool handlers", () => {
       {
         memoryId: existing.structuredContent.memory.id,
         reason: "duplicate_content",
-        summary: "Prefer logical delete before hard delete."
-      }
+        summary: "Prefer logical delete before hard delete.",
+      },
     ]);
     expect(store.getMemory(result.structuredContent.memory.id)?.status).toBe("active");
   });
@@ -80,12 +80,14 @@ describe("MCP tool handlers", () => {
       taskContext: "daily operation rule",
       projectPath: tempDir,
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     expect(result.structuredContent.recommendation).toBe("create");
     expect(result.structuredContent.proposed.layer).toBe("core");
-    expect(result.structuredContent.proposed.tags).toEqual(expect.arrayContaining(["daily-operation"]));
+    expect(result.structuredContent.proposed.tags).toEqual(
+      expect.arrayContaining(["daily-operation"]),
+    );
     expect(result.structuredContent.duplicateCandidates).toEqual([]);
     expect(result.structuredContent.wouldWrite).toBe(false);
     expect(store.countRecords().memoryCount).toBe(0);
@@ -95,11 +97,12 @@ describe("MCP tool handlers", () => {
     const tools = createToolHandlers(store);
 
     const result = await tools.proposeMemoryUpdate({
-      content: "Always treat MCP memory as supporting context; prefer README, current files, and git history when they disagree.",
+      content:
+        "Always treat MCP memory as supporting context; prefer README, current files, and git history when they disagree.",
       taskContext: "global memory protocol rule",
       projectPath: tempDir,
       sourceType: "codex-chat",
-      sourceRef: "docs/daily-operations.md#memory-priority"
+      sourceRef: "docs/daily-operations.md#memory-priority",
     });
 
     expect(result.structuredContent.proposed.layer).toBe("core");
@@ -107,7 +110,7 @@ describe("MCP tool handlers", () => {
       recommendedLayer: "core",
       durability: "durable",
       shouldPromoteToCore: true,
-      rationale: expect.arrayContaining(["Content looks like a durable rule or preference."])
+      rationale: expect.arrayContaining(["Content looks like a durable rule or preference."]),
     });
   });
 
@@ -115,11 +118,12 @@ describe("MCP tool handlers", () => {
     const tools = createToolHandlers(store);
 
     const result = await tools.proposeMemoryUpdate({
-      content: "The comparison evaluation found sourceRef quality should improve before adding more search features.",
+      content:
+        "The comparison evaluation found sourceRef quality should improve before adding more search features.",
       taskContext: "implementation priority",
       projectPath: tempDir,
       sourceType: "codex-chat",
-      sourceRef: "PR #44 / commit ba91c1f / docs/memory-digest-protocol.md"
+      sourceRef: "PR #44 / commit ba91c1f / docs/memory-digest-protocol.md",
     });
 
     expect(result.structuredContent.provenance).toEqual({
@@ -127,7 +131,7 @@ describe("MCP tool handlers", () => {
       sourceRef: "PR #44 / commit ba91c1f / docs/memory-digest-protocol.md",
       quality: "strong",
       recognizedRefs: ["pr", "commit", "doc_path"],
-      suggestions: []
+      suggestions: [],
     });
   });
 
@@ -135,11 +139,12 @@ describe("MCP tool handlers", () => {
     const tools = createToolHandlers(store);
 
     const result = await tools.proposeMemoryUpdate({
-      content: "The restore workflow should stay dry-run until the user explicitly approves replacement.",
+      content:
+        "The restore workflow should stay dry-run until the user explicitly approves replacement.",
       taskContext: "issue follow-up",
       projectPath: tempDir,
       sourceType: "github",
-      sourceRef: "issue #12"
+      sourceRef: "issue #12",
     });
 
     expect(result.structuredContent.provenance).toEqual({
@@ -147,7 +152,7 @@ describe("MCP tool handlers", () => {
       sourceRef: "issue #12",
       quality: "strong",
       recognizedRefs: ["issue"],
-      suggestions: []
+      suggestions: [],
     });
   });
 
@@ -159,37 +164,37 @@ describe("MCP tool handlers", () => {
       taskContext: "issue follow-up",
       projectPath: tempDir,
       sourceType: "github-pr",
-      sourceRef: "pr:#82"
+      sourceRef: "pr:#82",
     });
     const issueResult = await tools.proposeMemoryUpdate({
       content: "SourceRef provenance should match auto curation formats.",
       taskContext: "issue follow-up",
       projectPath: tempDir,
       sourceType: "github-issue",
-      sourceRef: "issue:#83"
+      sourceRef: "issue:#83",
     });
     const sessionResult = await tools.proposeMemoryUpdate({
       content: "Session candidates are review-only but still traceable.",
       taskContext: "session follow-up",
       projectPath: tempDir,
       sourceType: "mcp-session",
-      sourceRef: "session:2026-06-11T16:31:39.408Z"
+      sourceRef: "session:2026-06-11T16:31:39.408Z",
     });
 
     expect(prResult.structuredContent.provenance).toMatchObject({
       quality: "strong",
       recognizedRefs: ["pr"],
-      suggestions: []
+      suggestions: [],
     });
     expect(issueResult.structuredContent.provenance).toMatchObject({
       quality: "strong",
       recognizedRefs: ["issue"],
-      suggestions: []
+      suggestions: [],
     });
     expect(sessionResult.structuredContent.provenance).toMatchObject({
       quality: "strong",
       recognizedRefs: ["session"],
-      suggestions: []
+      suggestions: [],
     });
   });
 
@@ -201,15 +206,15 @@ describe("MCP tool handlers", () => {
       taskContext: "implementation priority",
       projectPath: tempDir,
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     expect(result.structuredContent.provenance.quality).toBe("weak");
     expect(result.structuredContent.provenance.recognizedRefs).toEqual([]);
     expect(result.structuredContent.provenance.suggestions).toEqual(
       expect.arrayContaining([
-        "Use a sourceRef like pr:#123, issue:#123, git:<hash>, session:<id>, a doc path, or a named chat/evaluation id."
-      ])
+        "Use a sourceRef like pr:#123, issue:#123, git:<hash>, session:<id>, a doc path, or a named chat/evaluation id.",
+      ]),
     );
   });
 
@@ -221,7 +226,7 @@ describe("MCP tool handlers", () => {
       tags: ["daily-operation"],
       sourceType: "manual",
       sourceRef: "test",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
 
     const result = await tools.proposeMemoryUpdate({
@@ -229,15 +234,15 @@ describe("MCP tool handlers", () => {
       taskContext: "daily operation rule",
       projectPath: tempDir,
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     expect(result.structuredContent.recommendation).toBe("update");
     expect(result.structuredContent.duplicateCandidates).toEqual([
       expect.objectContaining({
         memoryId: existing.structuredContent.memory.id,
-        reason: "duplicate_content"
-      })
+        reason: "duplicate_content",
+      }),
     ]);
     expect(store.countRecords().memoryCount).toBe(1);
   });
@@ -250,7 +255,7 @@ describe("MCP tool handlers", () => {
       tags: ["daily-operation"],
       sourceType: "manual",
       sourceRef: "test",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
 
     const result = await tools.proposeMemoryUpdate({
@@ -258,7 +263,7 @@ describe("MCP tool handlers", () => {
       taskContext: "daily operation rule",
       projectPath: tempDir,
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     expect(result.structuredContent.recommendation).toBe("update");
@@ -266,8 +271,8 @@ describe("MCP tool handlers", () => {
       expect.objectContaining({
         memoryId: existing.structuredContent.memory.id,
         reason: "near_duplicate_content",
-        confidence: expect.any(Number)
-      })
+        confidence: expect.any(Number),
+      }),
     ]);
     expect(store.countRecords().memoryCount).toBe(1);
   });
@@ -279,7 +284,7 @@ describe("MCP tool handlers", () => {
       content: "OPENAI_API_KEY=sk-proj-this-should-not-be-stored",
       taskContext: "secret test",
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     expect(result.structuredContent.recommendation).toBe("skip");
@@ -296,7 +301,7 @@ describe("MCP tool handlers", () => {
       content: `A review pasted GitHub token ${githubToken} by mistake.`,
       taskContext: "secret test",
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     expect(result.structuredContent.recommendation).toBe("skip");
@@ -313,20 +318,23 @@ describe("MCP tool handlers", () => {
       taskContext: "project directive update",
       projectPath: tempDir,
       sourceType: "codex-chat",
-      sourceRef: "chat:directive-memory-design"
+      sourceRef: "chat:directive-memory-design",
     });
 
     expect(result.structuredContent.recommendation).toBe("ask_user");
     expect(result.structuredContent.wouldWrite).toBe(false);
     expect(result.structuredContent.scopeGuidance.requiresUserChoice).toBe(true);
-    expect(result.structuredContent.scopeGuidance.options.map((option) => option.scope)).toEqual(["project", "global"]);
+    expect(result.structuredContent.scopeGuidance.options.map((option) => option.scope)).toEqual([
+      "project",
+      "global",
+    ]);
     expect(result.structuredContent.priorityOrder).toEqual([
       "system/developer",
       "latest_user_instruction",
       "AGENTS.md",
       "directive_memory",
       "normal_memory",
-      "inference"
+      "inference",
     ]);
     expect(store.listDirectives()).toEqual([]);
   });
@@ -340,11 +348,13 @@ describe("MCP tool handlers", () => {
       taskContext: "global meta-rule for repeated user corrections",
       preferredScope: "global",
       sourceType: "codex-chat",
-      sourceRef: "chat:repeated-pattern-rule"
+      sourceRef: "chat:repeated-pattern-rule",
     });
 
     expect(result.structuredContent.recommendation).toBe("create");
-    expect(result.structuredContent.reasons).not.toContain("Content looks temporary and is too strong for directive memory.");
+    expect(result.structuredContent.reasons).not.toContain(
+      "Content looks temporary and is too strong for directive memory.",
+    );
     expect(result.structuredContent.warnings).toEqual([]);
   });
 
@@ -356,11 +366,13 @@ describe("MCP tool handlers", () => {
       taskContext: "temporary debugging note",
       preferredScope: "global",
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     expect(result.structuredContent.recommendation).toBe("skip");
-    expect(result.structuredContent.reasons).toContain("Content looks temporary and is too strong for directive memory.");
+    expect(result.structuredContent.reasons).toContain(
+      "Content looks temporary and is too strong for directive memory.",
+    );
   });
 
   test("write_directive and list_directives expose active directive contents", async () => {
@@ -371,7 +383,7 @@ describe("MCP tool handlers", () => {
       rationale: "Memory protocol priority.",
       tags: ["memory-protocol"],
       sourceType: "manual",
-      sourceRef: "AGENTS-memory-protocol.md"
+      sourceRef: "AGENTS-memory-protocol.md",
     });
 
     const listed = await tools.listDirectives({ projectPath: tempDir });
@@ -381,7 +393,7 @@ describe("MCP tool handlers", () => {
       scope: "global",
       projectScope: "global",
       content: "Read directive memory before normal memory.",
-      status: "active"
+      status: "active",
     });
     expect(listed.structuredContent.directives).toEqual([written.structuredContent.directive]);
   });
@@ -393,17 +405,20 @@ describe("MCP tool handlers", () => {
       scope: "global",
       rationale: "Disable flow.",
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const disabled = await tools.disableDirective({
       directiveId: written.structuredContent.directive.id,
-      reason: "test complete"
+      reason: "test complete",
     });
 
     expect(disabled.structuredContent.directive.status).toBe("disabled");
     expect((await tools.listDirectives({})).structuredContent.directives).toEqual([]);
-    expect((await tools.listDirectives({ includeDisabled: true })).structuredContent.directives[0]?.status).toBe("disabled");
+    expect(
+      (await tools.listDirectives({ includeDisabled: true })).structuredContent.directives[0]
+        ?.status,
+    ).toBe("disabled");
   });
 
   test("write_memory duplicate candidates stay within project scope plus global memories", async () => {
@@ -414,7 +429,7 @@ describe("MCP tool handlers", () => {
       tags: ["scope"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "alpha"
+      projectScope: "alpha",
     });
 
     const beta = await tools.writeMemory({
@@ -423,7 +438,7 @@ describe("MCP tool handlers", () => {
       tags: ["scope"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "beta"
+      projectScope: "beta",
     });
 
     expect(beta.structuredContent.duplicateCandidates).toEqual([]);
@@ -438,13 +453,13 @@ describe("MCP tool handlers", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.6,
-      confidence: 0.8
+      confidence: 0.8,
     });
 
     const result = await tools.searchMemory({
       query: "FTS",
       layers: ["recall"],
-      limit: 3
+      limit: 3,
     });
 
     expect(result.structuredContent.memories).toHaveLength(1);
@@ -459,7 +474,7 @@ describe("MCP tool handlers", () => {
       tags: ["scope"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "alpha"
+      projectScope: "alpha",
     });
     await tools.writeMemory({
       content: "Scoped MCP lookup phrase for beta.",
@@ -467,13 +482,13 @@ describe("MCP tool handlers", () => {
       tags: ["scope"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "beta"
+      projectScope: "beta",
     });
 
     const result = await tools.searchMemory({
       query: "scoped MCP lookup phrase",
       projectScope: "alpha",
-      limit: 10
+      limit: 10,
     });
 
     expect(result.structuredContent.memories).toHaveLength(1);
@@ -487,7 +502,7 @@ describe("MCP tool handlers", () => {
         .fn()
         .mockResolvedValueOnce([1, 0])
         .mockResolvedValueOnce([0, 1])
-        .mockResolvedValueOnce([0.95, 0.05])
+        .mockResolvedValueOnce([0.95, 0.05]),
     };
     const tools = createToolHandlers(store, { embeddingProvider: embedder });
 
@@ -496,19 +511,19 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["ollama"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     await tools.writeMemory({
       content: "Keep modules compact.",
       layer: "core",
       tags: ["style"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const result = await tools.searchMemory({
       query: "meaning lookup",
-      limit: 1
+      limit: 1,
     });
 
     expect(result.structuredContent.memories[0]?.summary).toContain("semantic retrieval");
@@ -518,7 +533,7 @@ describe("MCP tool handlers", () => {
 
   test("search_memory can include embeddings explicitly", async () => {
     const embedder = {
-      embed: vi.fn().mockResolvedValueOnce([1, 0]).mockResolvedValueOnce([1, 0])
+      embed: vi.fn().mockResolvedValueOnce([1, 0]).mockResolvedValueOnce([1, 0]),
     };
     const tools = createToolHandlers(store, { embeddingProvider: embedder });
     await tools.writeMemory({
@@ -526,13 +541,13 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["embedding"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const result = await tools.searchMemory({
       query: "embedding opt in",
       includeEmbedding: true,
-      limit: 1
+      limit: 1,
     });
 
     expect(result.structuredContent.memories[0]?.embedding).toEqual([1, 0]);
@@ -545,15 +560,17 @@ describe("MCP tool handlers", () => {
       layer: "core",
       tags: ["read"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const result = await tools.readMemory({
-      memoryId: created.structuredContent.memory.id
+      memoryId: created.structuredContent.memory.id,
     });
 
     expect(result.structuredContent.memory.id).toBe(created.structuredContent.memory.id);
-    expect(result.structuredContent.memory.content).toBe("Read memory should return the exact record by id.");
+    expect(result.structuredContent.memory.content).toBe(
+      "Read memory should return the exact record by id.",
+    );
     expect(result.structuredContent.memory.embedding).toBeNull();
   });
 
@@ -565,12 +582,12 @@ describe("MCP tool handlers", () => {
       tags: ["read"],
       sourceType: "manual",
       sourceRef: "test",
-      embedding: [0.3, 0.7]
+      embedding: [0.3, 0.7],
     });
 
     const result = await tools.readMemory({
       memoryId: created.id,
-      includeEmbedding: true
+      includeEmbedding: true,
     });
 
     expect(result.structuredContent.memory.embedding).toEqual([0.3, 0.7]);
@@ -583,22 +600,22 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["read"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     await tools.forgetMemory({
       memoryId: created.structuredContent.memory.id,
-      reason: "read guard test"
+      reason: "read guard test",
     });
 
     await expect(
       tools.readMemory({
-        memoryId: created.structuredContent.memory.id
-      })
+        memoryId: created.structuredContent.memory.id,
+      }),
     ).rejects.toThrow(/forgotten/i);
 
     const result = await tools.readMemory({
       memoryId: created.structuredContent.memory.id,
-      includeForgotten: true
+      includeForgotten: true,
     });
 
     expect(result.structuredContent.memory.status).toBe("forgotten");
@@ -611,12 +628,12 @@ describe("MCP tool handlers", () => {
       layer: "core",
       tags: ["summary"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const result = await tools.listMemorySummaries({
       layers: ["core"],
-      limit: 10
+      limit: 10,
     });
 
     expect(result.structuredContent.memories).toHaveLength(1);
@@ -624,9 +641,9 @@ describe("MCP tool handlers", () => {
       layer: "core",
       summary: "Full content should stay out of summary listings.",
       tags: ["summary"],
-      status: "active"
+      status: "active",
     });
-    expect(JSON.stringify(result.structuredContent.memories[0])).not.toContain("\"content\"");
+    expect(JSON.stringify(result.structuredContent.memories[0])).not.toContain('"content"');
   });
 
   test("list_memory_summaries excludes forgotten records by default", async () => {
@@ -636,18 +653,18 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["summary"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     await tools.forgetMemory({
       memoryId: created.structuredContent.memory.id,
-      reason: "summary filter test"
+      reason: "summary filter test",
     });
 
     expect((await tools.listMemorySummaries({ limit: 10 })).structuredContent.memories).toEqual([]);
 
     const result = await tools.listMemorySummaries({
       includeForgotten: true,
-      limit: 10
+      limit: 10,
     });
 
     expect(result.structuredContent.memories[0]?.status).toBe("forgotten");
@@ -661,7 +678,7 @@ describe("MCP tool handlers", () => {
       tags: ["summary"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "alpha"
+      projectScope: "alpha",
     });
     await tools.writeMemory({
       content: "Beta summary should stay hidden.",
@@ -669,12 +686,12 @@ describe("MCP tool handlers", () => {
       tags: ["summary"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "beta"
+      projectScope: "beta",
     });
 
     const result = await tools.listMemorySummaries({
       projectScope: "alpha",
-      limit: 10
+      limit: 10,
     });
 
     expect(result.structuredContent.memories).toHaveLength(1);
@@ -689,39 +706,45 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["summary"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const superseded = await tools.writeMemory({
       content: "Superseded summaries need their own opt-in.",
       layer: "recall",
       tags: ["summary"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     await tools.forgetMemory({
       memoryId: forgotten.structuredContent.memory.id,
-      reason: "summary filter test"
+      reason: "summary filter test",
     });
     const db = new Database(path.join(tempDir, "memory.sqlite"));
-    db.prepare("UPDATE memories SET status = 'superseded' WHERE id = ?").run(superseded.structuredContent.memory.id);
+    db.prepare("UPDATE memories SET status = 'superseded' WHERE id = ?").run(
+      superseded.structuredContent.memory.id,
+    );
     db.close();
 
     const forgottenOnly = await tools.listMemorySummaries({
       includeForgotten: true,
-      limit: 10
+      limit: 10,
     });
     const supersededOnly = await tools.listMemorySummaries({
       includeSuperseded: true,
-      limit: 10
+      limit: 10,
     });
 
-    expect(forgottenOnly.structuredContent.memories.map((memory) => memory.status)).toEqual(["forgotten"]);
-    expect(supersededOnly.structuredContent.memories.map((memory) => memory.status)).toEqual(["superseded"]);
+    expect(forgottenOnly.structuredContent.memories.map((memory) => memory.status)).toEqual([
+      "forgotten",
+    ]);
+    expect(supersededOnly.structuredContent.memories.map((memory) => memory.status)).toEqual([
+      "superseded",
+    ]);
   });
 
   test("write_memory falls back when embedding generation fails", async () => {
     const tools = createToolHandlers(store, {
-      embeddingProvider: { embed: vi.fn(async () => Promise.reject(new Error("Ollama offline"))) }
+      embeddingProvider: { embed: vi.fn(async () => Promise.reject(new Error("Ollama offline"))) },
     });
 
     const result = await tools.writeMemory({
@@ -729,7 +752,7 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["fallback"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     expect(result.structuredContent.memory.embedding).toBeNull();
@@ -739,7 +762,7 @@ describe("MCP tool handlers", () => {
   test("write_memory and search_memory use FTS quietly when optional embeddings fail", async () => {
     const tools = createToolHandlers(store, {
       embeddingProvider: { embed: vi.fn(async () => Promise.reject(new Error("Ollama offline"))) },
-      embeddingRequired: false
+      embeddingRequired: false,
     });
 
     const written = await tools.writeMemory({
@@ -747,11 +770,11 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["fallback"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const searched = await tools.searchMemory({
       query: "Keyword fallback",
-      limit: 5
+      limit: 5,
     });
 
     expect(written.structuredContent.memory.embedding).toBeNull();
@@ -762,7 +785,7 @@ describe("MCP tool handlers", () => {
 
   test("update_memory recalculates embedding from new content", async () => {
     const embedder = {
-      embed: vi.fn().mockResolvedValueOnce([1, 0]).mockResolvedValueOnce([0, 1])
+      embed: vi.fn().mockResolvedValueOnce([1, 0]).mockResolvedValueOnce([0, 1]),
     };
     const tools = createToolHandlers(store, { embeddingProvider: embedder });
     const created = await tools.writeMemory({
@@ -770,13 +793,13 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["embedding"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const updated = await tools.updateMemory({
       memoryId: created.structuredContent.memory.id,
       newContent: "New semantic meaning.",
-      updateNote: "semantic update"
+      updateNote: "semantic update",
     });
 
     expect(embedder.embed).toHaveBeenLastCalledWith("New semantic meaning.");
@@ -786,14 +809,14 @@ describe("MCP tool handlers", () => {
 
   test("health_check reports database and embedding readiness", async () => {
     const tools = createToolHandlers(store, {
-      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2, 0.3]) }
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2, 0.3]) },
     });
     await tools.writeMemory({
       content: "Health check should count existing memories.",
       layer: "recall",
       tags: ["health"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const result = await tools.healthCheck({});
@@ -805,7 +828,7 @@ describe("MCP tool handlers", () => {
     expect(result.structuredContent.database.fts).toMatchObject({
       ok: true,
       expectedCount: 1,
-      indexedCount: 1
+      indexedCount: 1,
     });
     expect(result.structuredContent.database.walCheckpoint.busy).toBe(0);
     expect(result.structuredContent.embedding.ok).toBe(true);
@@ -815,7 +838,7 @@ describe("MCP tool handlers", () => {
 
   test("health_check reports embedding warnings without throwing", async () => {
     const tools = createToolHandlers(store, {
-      embeddingProvider: { embed: vi.fn(async () => Promise.reject(new Error("Ollama offline"))) }
+      embeddingProvider: { embed: vi.fn(async () => Promise.reject(new Error("Ollama offline"))) },
     });
 
     const result = await tools.healthCheck({});
@@ -830,7 +853,7 @@ describe("MCP tool handlers", () => {
   test("health_check treats unavailable optional embeddings as non-blocking", async () => {
     const tools = createToolHandlers(store, {
       embeddingProvider: { embed: vi.fn(async () => Promise.reject(new Error("Ollama offline"))) },
-      embeddingRequired: false
+      embeddingRequired: false,
     });
 
     const result = await tools.healthCheck({});
@@ -856,7 +879,7 @@ describe("MCP tool handlers", () => {
 
   test("health_check reports uncapped database counts", async () => {
     const tools = createToolHandlers(store, {
-      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2, 0.3]) }
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2, 0.3]) },
     });
 
     for (let index = 0; index < 101; index += 1) {
@@ -865,7 +888,7 @@ describe("MCP tool handlers", () => {
         layer: "recall",
         tags: ["health"],
         sourceType: "manual",
-        sourceRef: "test"
+        sourceRef: "test",
       });
     }
 
@@ -882,18 +905,18 @@ describe("MCP tool handlers", () => {
       layer: "core",
       tags: ["stats"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const forgotten = await tools.writeMemory({
       content: "Stats should not include this forgotten content.",
       layer: "recall",
       tags: ["stats"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     await tools.forgetMemory({
       memoryId: forgotten.structuredContent.memory.id,
-      reason: "stats status test"
+      reason: "stats status test",
     });
 
     const result = await tools.memoryStats({});
@@ -904,17 +927,21 @@ describe("MCP tool handlers", () => {
       byStatus: {
         active: 1,
         superseded: 0,
-        forgotten: 1
+        forgotten: 1,
       },
       byLayer: {
         core: 1,
         recall: 1,
-        archival: 0
-      }
+        archival: 0,
+      },
     });
     expect(result.structuredContent.updatedAtRange.newest).toEqual(expect.any(String));
-    expect(JSON.stringify(result.structuredContent)).not.toContain("Stats should not include this core content.");
-    expect(JSON.stringify(result.structuredContent)).not.toContain("Stats should not include this forgotten content.");
+    expect(JSON.stringify(result.structuredContent)).not.toContain(
+      "Stats should not include this core content.",
+    );
+    expect(JSON.stringify(result.structuredContent)).not.toContain(
+      "Stats should not include this forgotten content.",
+    );
   });
 
   test("start_memory_session returns health stats and digest without full memory content", async () => {
@@ -926,13 +953,13 @@ describe("MCP tool handlers", () => {
       tags: ["daily"],
       sourceType: "manual",
       sourceRef: "test",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
 
     const result = await tools.startMemorySession({
       taskDescription: "daily startup digest",
       projectPath: tempDir,
-      maxTokens: 200
+      maxTokens: 200,
     });
 
     expect(result.structuredContent.ready).toBe(true);
@@ -943,8 +970,8 @@ describe("MCP tool handlers", () => {
       expect.objectContaining({
         layer: "core",
         summary: "Use daily startup digest before multi-file work.",
-        tags: ["daily"]
-      })
+        tags: ["daily"],
+      }),
     ]);
     expect(JSON.stringify(result.structuredContent)).not.toContain("Daily startup private body");
   });
@@ -958,17 +985,17 @@ describe("MCP tool handlers", () => {
           {
             hash: "92e5fcb1234567890",
             subject: "Ollama表示と手動MCP例を改善",
-            committedAt: new Date("2026-06-20T03:00:20Z")
-          }
+            committedAt: new Date("2026-06-20T03:00:20Z"),
+          },
         ],
         pullRequests: [
           {
             number: 77,
             title: "Ollama表示と手動MCP例を改善",
-            mergedAt: new Date("2026-06-20T03:00:20Z")
-          }
-        ]
-      }
+            mergedAt: new Date("2026-06-20T03:00:20Z"),
+          },
+        ],
+      },
     });
     store.createMemory({
       content: "Older memory before recent work.",
@@ -977,35 +1004,35 @@ describe("MCP tool handlers", () => {
       tags: ["freshness"],
       sourceType: "manual",
       sourceRef: "test",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
 
     const result = await tools.startMemorySession({
       taskDescription: "check memory freshness",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
 
     expect(result.structuredContent.memoryFreshness).toMatchObject({
       status: "stale",
       latestWorkspaceActivityAt: "2026-06-20T03:00:20.000Z",
-      candidateCount: 2
+      candidateCount: 2,
     });
     expect(result.structuredContent.memoryUpdateCandidates).toEqual([
       expect.objectContaining({
         kind: "pull_request",
         sourceRef: "pr:#77",
-        suggestedTool: "propose_memory_update"
+        suggestedTool: "propose_memory_update",
       }),
       expect.objectContaining({
         kind: "commit",
         sourceRef: "git:92e5fcb",
-        suggestedTool: "propose_memory_update"
+        suggestedTool: "propose_memory_update",
       }),
       expect.objectContaining({
         kind: "session",
         sourceRef: "session:2026-06-20T03:20:00.000Z",
-        suggestedTool: "propose_memory_update"
-      })
+        suggestedTool: "propose_memory_update",
+      }),
     ]);
   });
 
@@ -1018,10 +1045,10 @@ describe("MCP tool handlers", () => {
           {
             number: 79,
             title: "メモリ鮮度と保存候補を表示",
-            mergedAt: new Date("2026-06-20T03:00:20Z")
-          }
-        ]
-      }
+            mergedAt: new Date("2026-06-20T03:00:20Z"),
+          },
+        ],
+      },
     });
     store.createMemory({
       content: "Older memory before recent work.",
@@ -1030,23 +1057,23 @@ describe("MCP tool handlers", () => {
       tags: ["freshness"],
       sourceType: "manual",
       sourceRef: "test",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
 
     const result = await tools.startMemorySession({
       taskDescription: "check auto memory curation",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
 
     expect(result.structuredContent.autoMemoryCuration.mode).toBe("safe");
     expect(result.structuredContent.autoMemoryCuration.autoWrittenMemories).toEqual([
       expect.objectContaining({
         sourceRef: "pr:#79",
-        score: expect.any(Number)
-      })
+        score: expect.any(Number),
+      }),
     ]);
     expect(result.structuredContent.memoryUpdateCandidates).toEqual([
-      expect.objectContaining({ kind: "session" })
+      expect.objectContaining({ kind: "session" }),
     ]);
 
     const audit = await tools.auditMemory({ limit: 10 });
@@ -1063,10 +1090,10 @@ describe("MCP tool handlers", () => {
           {
             number: 79,
             title: "メモリ鮮度と保存候補を表示",
-            mergedAt: new Date("2026-06-20T03:00:20Z")
-          }
-        ]
-      }
+            mergedAt: new Date("2026-06-20T03:00:20Z"),
+          },
+        ],
+      },
     });
     store.createMemory({
       content: "PR memory candidate: PR #79: メモリ鮮度と保存候補を表示. Reason: already saved.",
@@ -1075,18 +1102,18 @@ describe("MCP tool handlers", () => {
       tags: ["auto-curated"],
       sourceType: "github-pr",
       sourceRef: "pr:#79",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
 
     const result = await tools.startMemorySession({
       taskDescription: "check auto memory curation duplicates",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
 
     expect(result.structuredContent.autoMemoryCuration.autoWrittenMemories).toEqual([]);
     expect(result.structuredContent.memoryUpdateCandidates).toEqual([
       expect.objectContaining({ sourceRef: "pr:#79" }),
-      expect.objectContaining({ kind: "session" })
+      expect.objectContaining({ kind: "session" }),
     ]);
   });
 
@@ -1101,10 +1128,10 @@ describe("MCP tool handlers", () => {
             title: "Memory governance dashboard release",
             mergedAt: new Date("2026-06-20T03:00:20Z"),
             authorLogin: "outside-reviewer",
-            externalAuthor: true
-          }
-        ]
-      }
+            externalAuthor: true,
+          },
+        ],
+      },
     });
     store.createMemory({
       content: "Older memory before recent work.",
@@ -1113,12 +1140,12 @@ describe("MCP tool handlers", () => {
       tags: ["freshness"],
       sourceType: "manual",
       sourceRef: "test",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
 
     const result = await tools.startMemorySession({
       taskDescription: "check external author auto memory curation",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
 
     expect(result.structuredContent.autoMemoryCuration.autoWrittenMemories).toEqual([]);
@@ -1126,12 +1153,12 @@ describe("MCP tool handlers", () => {
       expect.objectContaining({
         sourceRef: "pr:#86",
         authorLogin: "outside-reviewer",
-        externalAuthor: true
+        externalAuthor: true,
       }),
-      expect.objectContaining({ kind: "session" })
+      expect.objectContaining({ kind: "session" }),
     ]);
     expect(JSON.stringify(result.structuredContent.autoMemoryCuration.reviewCandidates)).toContain(
-      "external author is data"
+      "external author is data",
     );
   });
 
@@ -1142,7 +1169,7 @@ describe("MCP tool handlers", () => {
       scope: "global",
       rationale: "Memory protocol.",
       sourceType: "manual",
-      sourceRef: "AGENTS-memory-protocol.md"
+      sourceRef: "AGENTS-memory-protocol.md",
     });
     await tools.writeDirective({
       content: "Project directive: keep this repository README in Japanese.",
@@ -1150,17 +1177,17 @@ describe("MCP tool handlers", () => {
       projectPath: tempDir,
       rationale: "Project documentation preference.",
       sourceType: "manual",
-      sourceRef: "README.md"
+      sourceRef: "README.md",
     });
 
     const result = await tools.startMemorySession({
       taskDescription: "update README",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
 
     expect(result.structuredContent.directives.map((directive) => directive.content)).toEqual([
       "Project directive: keep this repository README in Japanese.",
-      "Global directive: read directive memory before normal memory."
+      "Global directive: read directive memory before normal memory.",
     ]);
     expect(result.structuredContent.sessionGuidance.priorityOrder).toEqual([
       "system/developer",
@@ -1168,7 +1195,7 @@ describe("MCP tool handlers", () => {
       "AGENTS.md",
       "directive_memory",
       "normal_memory",
-      "inference"
+      "inference",
     ]);
   });
 
@@ -1181,28 +1208,32 @@ describe("MCP tool handlers", () => {
       tags: ["provenance"],
       sourceType: "manual",
       sourceRef: "docs/daily-operations.md",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
 
     const result = await tools.startMemorySession({
       taskDescription: "decide next implementation priority from memory and docs",
       projectPath: tempDir,
-      maxTokens: 200
+      maxTokens: 200,
     });
 
     expect(result.structuredContent.sessionGuidance).toEqual({
       memoryUse: "supporting_context",
       canAnswer: expect.arrayContaining([
-        "Relevant saved memory summaries and their sourceRefs can inform this task."
+        "Relevant saved memory summaries and their sourceRefs can inform this task.",
       ]),
       mustVerify: expect.arrayContaining([
-        "Validate memory-derived claims against the user's latest instruction, README/docs, actual files, or git history before treating them as facts."
+        "Validate memory-derived claims against the user's latest instruction, README/docs, actual files, or git history before treating them as facts.",
       ]),
       limitations: expect.arrayContaining([
-        "The digest may omit relevant memories when the query is too narrow or the database has not captured the decision yet."
+        "The digest may omit relevant memories when the query is too narrow or the database has not captured the decision yet.",
       ]),
       priorityOrder: expect.arrayContaining(["directive_memory", "normal_memory"]),
-      suggestedNextTools: expect.arrayContaining(["list_directives", "read_memory", "audit_memory"])
+      suggestedNextTools: expect.arrayContaining([
+        "list_directives",
+        "read_memory",
+        "audit_memory",
+      ]),
     });
   });
 
@@ -1213,14 +1244,14 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["daily", "backup"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const first = await tools.backupMemory({});
     const second = await tools.backupMemory({});
 
     const result = await tools.startMemorySession({
       taskDescription: "daily backup status",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
 
     expect(result.structuredContent.backupRetention).toMatchObject({
@@ -1234,8 +1265,8 @@ describe("MCP tool handlers", () => {
       latestBackup: expect.objectContaining({
         backupPath: second.structuredContent.backupPath,
         sizeBytes: expect.any(Number),
-        mtime: expect.any(String)
-      })
+        mtime: expect.any(String),
+      }),
     });
     expect(existsSync(first.structuredContent.backupPath)).toBe(true);
     expect(existsSync(second.structuredContent.backupPath)).toBe(true);
@@ -1248,25 +1279,29 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["daily"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const db = new Database(path.join(tempDir, "memory.sqlite"));
     try {
-      db.prepare("DELETE FROM memories_fts WHERE rowid = ?").run(created.structuredContent.memory.id);
+      db.prepare("DELETE FROM memories_fts WHERE rowid = ?").run(
+        created.structuredContent.memory.id,
+      );
     } finally {
       db.close();
     }
 
     const result = await tools.startMemorySession({
       taskDescription: "broken FTS startup",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
 
     expect(result.structuredContent.ready).toBe(false);
     expect(result.structuredContent.repairRecommended).toBe(true);
     expect(result.structuredContent.digest).toBe("");
     expect(result.structuredContent.memories).toEqual([]);
-    expect(result.structuredContent.warnings).toContain("FTS index is missing 1 active memory row(s).");
+    expect(result.structuredContent.warnings).toContain(
+      "FTS index is missing 1 active memory row(s).",
+    );
   });
 
   test("forget_memory refuses hard delete without explicit confirmation", async () => {
@@ -1276,15 +1311,15 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["safety"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     await expect(
       tools.forgetMemory({
         memoryId: created.structuredContent.memory.id,
         reason: "testing MCP hard delete guard",
-        hardDelete: true
-      })
+        hardDelete: true,
+      }),
     ).rejects.toThrow(/confirm/i);
 
     expect(store.getMemory(created.structuredContent.memory.id)?.status).toBe("active");
@@ -1297,7 +1332,7 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["backup"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const backupPath = path.join(tempDir, "backups", "mcp-backup.sqlite");
 
@@ -1315,7 +1350,7 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["backup"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const result = await tools.backupMemory({});
@@ -1331,7 +1366,7 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["backup"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const first = await tools.backupMemory({});
     const second = await tools.backupMemory({});
@@ -1345,15 +1380,15 @@ describe("MCP tool handlers", () => {
       expect.objectContaining({
         backupPath: second.structuredContent.backupPath,
         sizeBytes: expect.any(Number),
-        mtime: expect.any(String)
-      })
+        mtime: expect.any(String),
+      }),
     ]);
     expect(result.structuredContent.prunable).toEqual([
       expect.objectContaining({
         backupPath: first.structuredContent.backupPath,
         sizeBytes: expect.any(Number),
-        mtime: expect.any(String)
-      })
+        mtime: expect.any(String),
+      }),
     ]);
     expect(result.structuredContent.wouldDelete).toBe(false);
     expect(result.structuredContent.plannedAt).toEqual(expect.any(String));
@@ -1368,12 +1403,12 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["backup"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const backup = await tools.backupMemory({});
 
     const result = await tools.verifyBackup({
-      backupPath: backup.structuredContent.backupPath
+      backupPath: backup.structuredContent.backupPath,
     });
 
     expect(result.structuredContent.ok).toBe(true);
@@ -1389,7 +1424,7 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["backup"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const backup = await tools.backupMemory({});
     await tools.writeMemory({
@@ -1397,11 +1432,11 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["backup"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const result = await tools.planBackupRestore({
-      backupPath: backup.structuredContent.backupPath
+      backupPath: backup.structuredContent.backupPath,
     });
 
     expect(result.structuredContent).toMatchObject({
@@ -1412,21 +1447,21 @@ describe("MCP tool handlers", () => {
       current: {
         databaseOk: true,
         memoryCount: 2,
-        eventCount: 2
+        eventCount: 2,
       },
       backup: {
         ok: true,
         memoryCount: 1,
-        eventCount: 1
+        eventCount: 1,
       },
-      warnings: []
+      warnings: [],
     });
     expect(result.structuredContent.steps).toEqual([
       expect.stringContaining("Stop"),
       expect.stringContaining("Create"),
       expect.stringContaining("Replace"),
       expect.stringContaining("Restart"),
-      expect.stringContaining("health_check")
+      expect.stringContaining("health_check"),
     ]);
     expect(store.countRecords().memoryCount).toBe(2);
   });
@@ -1438,11 +1473,13 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["repair"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const db = new Database(path.join(tempDir, "memory.sqlite"));
     try {
-      db.prepare("DELETE FROM memories_fts WHERE rowid = ?").run(created.structuredContent.memory.id);
+      db.prepare("DELETE FROM memories_fts WHERE rowid = ?").run(
+        created.structuredContent.memory.id,
+      );
     } finally {
       db.close();
     }
@@ -1465,24 +1502,24 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["backup"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const forgotten = await tools.writeMemory({
       content: "Forgotten backup content should require opt-in.",
       layer: "recall",
       tags: ["backup-hidden"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     await tools.forgetMemory({
       memoryId: forgotten.structuredContent.memory.id,
-      reason: "backup inspect filter test"
+      reason: "backup inspect filter test",
     });
     const backup = await tools.backupMemory({});
 
     const result = await tools.inspectBackup({
       backupPath: backup.structuredContent.backupPath,
-      limit: 10
+      limit: 10,
     });
 
     expect(result.structuredContent.ok).toBe(true);
@@ -1494,18 +1531,23 @@ describe("MCP tool handlers", () => {
         summary: expect.stringContaining("Backup inspection should show only a generated summary"),
         status: "active",
         tags: ["backup"],
-        projectScope: "global"
-      })
+        projectScope: "global",
+      }),
     ]);
     expect(JSON.stringify(result.structuredContent)).not.toContain(longVisibleContent);
-    expect(JSON.stringify(result.structuredContent)).not.toContain("Forgotten backup content should require opt-in.");
+    expect(JSON.stringify(result.structuredContent)).not.toContain(
+      "Forgotten backup content should require opt-in.",
+    );
 
     const withForgotten = await tools.inspectBackup({
       backupPath: backup.structuredContent.backupPath,
       includeForgotten: true,
-      limit: 10
+      limit: 10,
     });
-    expect(withForgotten.structuredContent.memories.map((memory) => memory.status)).toEqual(["forgotten", "active"]);
+    expect(withForgotten.structuredContent.memories.map((memory) => memory.status)).toEqual([
+      "forgotten",
+      "active",
+    ]);
   });
 
   test("inspect_backup can scope backup summaries", async () => {
@@ -1516,7 +1558,7 @@ describe("MCP tool handlers", () => {
       tags: ["backup"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "alpha"
+      projectScope: "alpha",
     });
     await tools.writeMemory({
       content: "Beta backup scope summary.",
@@ -1524,22 +1566,22 @@ describe("MCP tool handlers", () => {
       tags: ["backup"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "beta"
+      projectScope: "beta",
     });
     const backup = await tools.backupMemory({});
 
     const result = await tools.inspectBackup({
       backupPath: backup.structuredContent.backupPath,
       projectScope: "alpha",
-      limit: 10
+      limit: 10,
     });
 
     expect(result.structuredContent.memories).toEqual([
       expect.objectContaining({
         id: alpha.structuredContent.memory.id,
         projectScope: "alpha",
-        summary: "Alpha backup scope summary."
-      })
+        summary: "Alpha backup scope summary.",
+      }),
     ]);
   });
 
@@ -1550,29 +1592,34 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["audit"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     await tools.writeMemory({
       content: "Second MCP audit record.",
       layer: "recall",
       tags: ["audit"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     await tools.forgetMemory({
       memoryId: first.structuredContent.memory.id,
-      reason: "audit filter test"
+      reason: "audit filter test",
     });
 
     const result = await tools.auditMemory({
       memoryId: first.structuredContent.memory.id,
-      limit: 5
+      limit: 5,
     });
 
-    expect(result.structuredContent.events.map((event) => event.eventType)).toEqual(["forgotten", "created"]);
-    expect(result.structuredContent.events.every((event) => event.memoryId === first.structuredContent.memory.id)).toBe(
-      true
-    );
+    expect(result.structuredContent.events.map((event) => event.eventType)).toEqual([
+      "forgotten",
+      "created",
+    ]);
+    expect(
+      result.structuredContent.events.every(
+        (event) => event.memoryId === first.structuredContent.memory.id,
+      ),
+    ).toBe(true);
   });
 
   test("consolidate_memory proposes duplicate records without applying changes", async () => {
@@ -1582,20 +1629,20 @@ describe("MCP tool handlers", () => {
       layer: "core",
       tags: ["safety"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const second = await tools.writeMemory({
       content: " use logical delete before hard delete. ",
       layer: "core",
       tags: ["safety"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const result = await tools.consolidateMemory({
       layers: ["core"],
       dryRun: true,
-      maxCandidates: 10
+      maxCandidates: 10,
     });
 
     expect(result.structuredContent.dryRun).toBe(true);
@@ -1603,8 +1650,8 @@ describe("MCP tool handlers", () => {
       {
         memoryIds: [first.structuredContent.memory.id, second.structuredContent.memory.id],
         reason: "duplicate_content",
-        summary: "Use logical delete before hard delete."
-      }
+        summary: "Use logical delete before hard delete.",
+      },
     ]);
     expect(store.getMemory(second.structuredContent.memory.id)?.status).toBe("active");
   });
@@ -1616,20 +1663,20 @@ describe("MCP tool handlers", () => {
       layer: "core",
       tags: ["daily-operation", "memory"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const second = await tools.writeMemory({
       content: "Before multi file implementation work, call start memory session.",
       layer: "core",
       tags: ["daily-operation", "memory"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const result = await tools.consolidateMemory({
       layers: ["core"],
       dryRun: true,
-      maxCandidates: 10
+      maxCandidates: 10,
     });
 
     expect(result.structuredContent.proposedMerges).toEqual([
@@ -1637,8 +1684,8 @@ describe("MCP tool handlers", () => {
         memoryIds: [first.structuredContent.memory.id, second.structuredContent.memory.id],
         reason: "near_duplicate_content",
         summary: "Call start_memory_session before multi-file implementation work.",
-        confidence: expect.any(Number)
-      }
+        confidence: expect.any(Number),
+      },
     ]);
     expect(store.getMemory(second.structuredContent.memory.id)?.status).toBe("active");
   });
@@ -1650,27 +1697,27 @@ describe("MCP tool handlers", () => {
       layer: "core",
       tags: ["daily-operation", "memory"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     const second = await tools.writeMemory({
       content: "複数 file 実装の前は start memory session を呼ぶ。",
       layer: "core",
       tags: ["daily-operation", "memory"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const result = await tools.consolidateMemory({
       layers: ["core"],
       dryRun: true,
-      maxCandidates: 10
+      maxCandidates: 10,
     });
 
     expect(result.structuredContent.proposedMerges).toEqual([
       expect.objectContaining({
         memoryIds: [first.structuredContent.memory.id, second.structuredContent.memory.id],
-        reason: "near_duplicate_content"
-      })
+        reason: "near_duplicate_content",
+      }),
     ]);
   });
 
@@ -1682,7 +1729,7 @@ describe("MCP tool handlers", () => {
       tags: ["safety"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "alpha"
+      projectScope: "alpha",
     });
     await tools.writeMemory({
       content: "scoped consolidation candidate",
@@ -1690,13 +1737,13 @@ describe("MCP tool handlers", () => {
       tags: ["safety"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "beta"
+      projectScope: "beta",
     });
 
     const result = await tools.consolidateMemory({
       projectScope: "alpha",
       dryRun: true,
-      maxCandidates: 10
+      maxCandidates: 10,
     });
 
     expect(result.structuredContent.proposedMerges).toEqual([]);
@@ -1709,20 +1756,20 @@ describe("MCP tool handlers", () => {
       layer: "recall",
       tags: ["maintenance"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
     await tools.writeMemory({
       content: "do not include older duplicates when since is in the future",
       layer: "recall",
       tags: ["maintenance"],
       sourceType: "manual",
-      sourceRef: "test"
+      sourceRef: "test",
     });
 
     const result = await tools.consolidateMemory({
       since: new Date(Date.now() + 60_000).toISOString(),
       dryRun: true,
-      maxCandidates: 10
+      maxCandidates: 10,
     });
 
     expect(result.structuredContent.proposedMerges).toEqual([]);
@@ -1737,13 +1784,13 @@ describe("MCP tool handlers", () => {
       sourceType: "manual",
       sourceRef: "test",
       importance: 0.9,
-      confidence: 0.9
+      confidence: 0.9,
     });
 
     const result = await tools.memoryDigest({
       taskDescription: "Check privacy design",
       projectPath: tempDir,
-      maxTokens: 200
+      maxTokens: 200,
     });
 
     expect(result.structuredContent.digest).toContain("local-first");
@@ -1758,7 +1805,7 @@ describe("MCP tool handlers", () => {
       tags: ["digest"],
       sourceType: "manual",
       sourceRef: "test",
-      projectPath: tempDir
+      projectPath: tempDir,
     });
     await tools.writeMemory({
       content: "Digest scoped memory for another project.",
@@ -1766,13 +1813,13 @@ describe("MCP tool handlers", () => {
       tags: ["digest"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "other-project"
+      projectScope: "other-project",
     });
 
     const result = await tools.memoryDigest({
       taskDescription: "Digest scoped memory",
       projectPath: tempDir,
-      maxTokens: 200
+      maxTokens: 200,
     });
 
     expect(result.structuredContent.digest).toContain("this project");
@@ -1789,7 +1836,7 @@ describe("MCP tool handlers", () => {
       tags: ["digest"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "alpha"
+      projectScope: "alpha",
     });
     await tools.writeMemory({
       content: "Other scope digest memory.",
@@ -1797,16 +1844,18 @@ describe("MCP tool handlers", () => {
       tags: ["digest"],
       sourceType: "manual",
       sourceRef: "test",
-      projectScope: "beta"
+      projectScope: "beta",
     });
 
     const result = await tools.memoryDigest({
       taskDescription: "Project scope digest",
       projectScope: "alpha",
       projectPath: tempDir,
-      maxTokens: 200
+      maxTokens: 200,
     });
-    const retrievedEvents = store.listRecentEvents({ limit: 10 }).filter((event) => event.eventType === "retrieved");
+    const retrievedEvents = store
+      .listRecentEvents({ limit: 10 })
+      .filter((event) => event.eventType === "retrieved");
 
     expect(embedder.embed).toHaveBeenLastCalledWith("Project scope digest");
     expect(result.structuredContent.digest).toContain("Project scope");

@@ -50,8 +50,8 @@ describe("loadConfig", () => {
         "startup_integrity_check = false",
         "startup_fts_sanity_check = false",
         "startup_wal_checkpoint = false",
-        "auto_backup_on_startup = true"
-      ].join("\n")
+        "auto_backup_on_startup = true",
+      ].join("\n"),
     );
 
     const config = loadConfig({ cwd: tempDir, env: {} });
@@ -72,7 +72,10 @@ describe("loadConfig", () => {
 
   test("lets environment variables override file settings", () => {
     mkdirSync(path.join(tempDir, "config"));
-    writeFileSync(path.join(tempDir, "config", "memory-sidecar.toml"), 'database_path = "file.sqlite"');
+    writeFileSync(
+      path.join(tempDir, "config", "memory-sidecar.toml"),
+      'database_path = "file.sqlite"',
+    );
 
     const config = loadConfig({
       cwd: tempDir,
@@ -85,8 +88,8 @@ describe("loadConfig", () => {
         CODEX_MEMORY_STARTUP_INTEGRITY_CHECK: "false",
         CODEX_MEMORY_STARTUP_FTS_SANITY_CHECK: "false",
         CODEX_MEMORY_STARTUP_WAL_CHECKPOINT: "false",
-        CODEX_MEMORY_AUTO_BACKUP_ON_STARTUP: "true"
-      }
+        CODEX_MEMORY_AUTO_BACKUP_ON_STARTUP: "true",
+      },
     });
 
     expect(config.databasePath).toBe(path.join(tempDir, "env.sqlite"));

@@ -31,26 +31,31 @@ export function shouldStartDashboardWithMcp(value: string | undefined): boolean 
   return !["false", "0", "off", "no"].includes(normalized);
 }
 
-export async function startDashboardCompanion(options: DashboardCompanionOptions): Promise<DashboardCompanionResult> {
+export async function startDashboardCompanion(
+  options: DashboardCompanionOptions,
+): Promise<DashboardCompanionResult> {
   const env = options.env ?? process.env;
   if (!shouldStartDashboardWithMcp(env.CODEX_MEMORY_DASHBOARD_ON_MCP_START)) {
     return {
       started: false,
       url: null,
       warnings: [],
-      close: async () => undefined
+      close: async () => undefined,
     };
   }
 
   const port = options.port ?? Number(env.CODEX_MEMORY_DASHBOARD_PORT ?? 3737);
-  const openMarkerPath = path.join(path.dirname(options.config.databasePath), ".dashboard-opened.json");
+  const openMarkerPath = path.join(
+    path.dirname(options.config.databasePath),
+    ".dashboard-opened.json",
+  );
   const embeddingProvider =
     options.config.embeddingMode === "off"
       ? undefined
       : new OllamaEmbeddingProvider({
           baseUrl: options.config.ollamaBaseUrl,
           model: options.config.embeddingModel,
-          fetch: options.fetch
+          fetch: options.fetch,
         });
   const server = createDashboardServer(options.store, {
     embeddingProvider,
@@ -63,12 +68,19 @@ export async function startDashboardCompanion(options: DashboardCompanionOptions
             baseUrl: options.config.ollamaBaseUrl,
             embeddingModel: options.config.embeddingModel,
             maintenanceModel: options.config.maintenanceModel,
-            fetch: options.fetch
+            fetch: options.fetch,
           },
-    ollamaRequired: options.config.embeddingMode === "ollama"
+    ollamaRequired: options.config.embeddingMode === "ollama",
   });
 
-  return await listenDashboardServer(server, port, env, openMarkerPath, options.opener, options.fetch);
+  return await listenDashboardServer(
+    server,
+    port,
+    env,
+    openMarkerPath,
+    options.opener,
+    options.fetch,
+  );
 }
 
 async function listenDashboardServer(
@@ -77,7 +89,7 @@ async function listenDashboardServer(
   env: Record<string, string | undefined>,
   openMarkerPath: string,
   opener: Parameters<typeof openDashboardUrl>[1],
-  fetchImpl: typeof globalThis.fetch = globalThis.fetch
+  fetchImpl: typeof globalThis.fetch = globalThis.fetch,
 ): Promise<DashboardCompanionResult> {
   return await new Promise((resolve) => {
     const close = async () => {
@@ -94,26 +106,36 @@ async function listenDashboardServer(
     };
     const onError = (error: NodeJS.ErrnoException) => {
       void (async () => {
-        const existing = error.code === "EADDRINUSE" ? await findExistingSidecarDashboard(port, fetchImpl) : null;
+        const existing =
+          error.code === "EADDRINUSE" ? await findExistingSidecarDashboard(port, fetchImpl) : null;
         if (existing?.reusable) {
-          console.error(`codex-memory-sidecar dashboard companion reused existing dashboard: ${existing.url}`);
-          openDashboardForMcp(existing.url, env.CODEX_MEMORY_DASHBOARD_OPEN, openMarkerPath, opener);
+          console.error(
+            `codex-memory-sidecar dashboard companion reused existing dashboard: ${existing.url}`,
+          );
+          openDashboardForMcp(
+            existing.url,
+            env.CODEX_MEMORY_DASHBOARD_OPEN,
+            openMarkerPath,
+            opener,
+          );
           finish({
             started: false,
             url: existing.url,
             warnings: [`Dashboard companion reused existing sidecar dashboard: ${existing.url}`],
-            close
+            close,
           });
           return;
         }
 
         if (existing?.warning) {
-          console.error(`codex-memory-sidecar dashboard companion stale dashboard warning: ${existing.warning}`);
+          console.error(
+            `codex-memory-sidecar dashboard companion stale dashboard warning: ${existing.warning}`,
+          );
           finish({
             started: false,
             url: null,
             warnings: [existing.warning],
-            close
+            close,
           });
           return;
         }
@@ -122,7 +144,7 @@ async function listenDashboardServer(
           started: false,
           url: null,
           warnings: [`Dashboard companion did not start: ${error.message}`],
-          close
+          close,
         });
       })();
     };
@@ -138,7 +160,7 @@ async function listenDashboardServer(
         started: true,
         url,
         warnings: [],
-        close
+        close,
       });
     });
   });
@@ -148,7 +170,7 @@ function openDashboardForMcp(
   url: string,
   value: string | undefined,
   markerPath: string,
-  opener: Parameters<typeof openDashboardUrl>[1]
+  opener: Parameters<typeof openDashboardUrl>[1],
 ): boolean {
   const mode = resolveDashboardOpenMode(value);
   if (mode === "never") {
@@ -181,7 +203,9 @@ function resolveDashboardOpenMode(value: string | undefined): "once" | "always" 
 function wasDashboardAlreadyOpened(markerPath: string, url: string): boolean {
   try {
     const marker = JSON.parse(readFileSync(markerPath, "utf8")) as unknown;
-    return isRecord(marker) && marker.url === url && marker.schemaVersion === DASHBOARD_SCHEMA_VERSION;
+    return (
+      isRecord(marker) && marker.url === url && marker.schemaVersion === DASHBOARD_SCHEMA_VERSION
+    );
   } catch {
     return false;
   }
@@ -196,11 +220,11 @@ function rememberDashboardOpened(markerPath: string, url: string): void {
         {
           url,
           schemaVersion: DASHBOARD_SCHEMA_VERSION,
-          openedAt: new Date().toISOString()
+          openedAt: new Date().toISOString(),
         },
         null,
-        2
-      )
+        2,
+      ),
     );
   } catch {
     // Browser auto-open is a convenience; marker write failures should not affect MCP startup.
@@ -209,8 +233,10 @@ function rememberDashboardOpened(markerPath: string, url: string): void {
 
 async function findExistingSidecarDashboard(
   port: number,
-  fetchImpl: typeof globalThis.fetch
-): Promise<{ reusable: true; url: string } | { reusable: false; url: string; warning: string } | null> {
+  fetchImpl: typeof globalThis.fetch,
+): Promise<
+  { reusable: true; url: string } | { reusable: false; url: string; warning: string } | null
+> {
   const url = `http://127.0.0.1:${port}`;
   try {
     const response = await fetchImpl(`${url}/api/status`);
@@ -226,7 +252,7 @@ async function findExistingSidecarDashboard(
       return {
         reusable: false,
         url,
-        warning: `既存の Dashboard (${url}) は stale、または別ビルドの可能性があります。古い Dashboard プロセスを停止してから MCP server を再起動してください。`
+        warning: `既存の Dashboard (${url}) は stale、または別ビルドの可能性があります。古い Dashboard プロセスを停止してから MCP server を再起動してください。`,
       };
     }
     return { reusable: true, url };

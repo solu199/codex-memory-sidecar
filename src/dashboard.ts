@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import http, { type IncomingMessage, type ServerResponse } from "node:http";
+import http, { type ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
   buildAutoCurationResult,
   type AutoMemoryWriteMode,
-  type AutoCurationEvaluation
+  type AutoCurationEvaluation,
 } from "./auto-curation.js";
 import { loadConfig } from "./config.js";
 import type { EmbeddingProvider } from "./embedding.js";
@@ -17,7 +17,7 @@ import {
   collectWorkspaceActivity,
   type MemoryFreshness,
   type MemoryUpdateCandidate,
-  type WorkspaceActivity
+  type WorkspaceActivity,
 } from "./memory-freshness.js";
 import { MemoryStore } from "./memory-store.js";
 import { runStartupMaintenance } from "./startup-maintenance.js";
@@ -53,7 +53,7 @@ type DashboardBrowserOpener = (
     detached: boolean;
     stdio: "ignore";
     windowsHide: boolean;
-  }
+  },
 ) => DashboardBrowserProcess;
 
 export interface DashboardStatus {
@@ -213,7 +213,10 @@ export interface DashboardStatus {
   }>;
 }
 
-export async function buildDashboardStatus(store: MemoryStore, options: DashboardOptions = {}): Promise<DashboardStatus> {
+export async function buildDashboardStatus(
+  store: MemoryStore,
+  options: DashboardOptions = {},
+): Promise<DashboardStatus> {
   const embeddingRequired = options.embeddingRequired ?? true;
   const ollamaRequired = options.ollamaRequired ?? true;
   const counts = store.countRecords();
@@ -223,13 +226,13 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
     latestMemoryUpdatedAt: memoryStats.updatedAtRange.newest,
     memoryCount: counts.memoryCount,
     activity: options.workspaceActivity ?? collectWorkspaceActivity(process.cwd()),
-    now: options.now
+    now: options.now,
   });
   const autoMemoryCuration = buildAutoCurationResult({
     mode: options.autoMemoryWrite ?? "safe",
     candidates: memoryFreshnessReport.candidates,
     existingMemories: store.listMemories({ limit: 500 }),
-    now: options.now
+    now: options.now,
   });
   const backupRetention = store.planBackupRetention();
   const latestBackup = backupRetention.backups[0] ?? null;
@@ -239,27 +242,35 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
         ok: !embeddingRequired,
         dimensions: 0,
         error: embeddingRequired ? "Embedding provider is not configured." : null,
-        required: embeddingRequired
+        required: embeddingRequired,
       };
-  const ollama = options.ollama ? { ...(await probeOllamaStatus(options.ollama)), required: ollamaRequired } : null;
+  const ollama = options.ollama
+    ? { ...(await probeOllamaStatus(options.ollama)), required: ollamaRequired }
+    : null;
   const warnings = [
     ...databaseHealth.warnings,
-    ...(embedding.ok || !embeddingRequired ? [] : [embedding.error ?? "Embedding provider is unavailable."]),
-    ...ollamaWarnings(ollama, ollamaRequired)
+    ...(embedding.ok || !embeddingRequired
+      ? []
+      : [embedding.error ?? "Embedding provider is unavailable."]),
+    ...ollamaWarnings(ollama, ollamaRequired),
   ];
   const warningActions = buildWarningActions({
     warnings,
-    repairRecommended: !databaseHealth.ok && (databaseHealth.integrityCheck !== "ok" || !databaseHealth.fts.ok),
+    repairRecommended:
+      !databaseHealth.ok && (databaseHealth.integrityCheck !== "ok" || !databaseHealth.fts.ok),
     ollama,
     ollamaRequired,
-    memoryFreshness: memoryFreshnessReport.freshness
+    memoryFreshness: memoryFreshnessReport.freshness,
   });
 
   return {
-    ok: databaseHealth.ok && (embedding.ok || !embeddingRequired) && (!ollama || ollama.ok || !ollamaRequired),
+    ok:
+      databaseHealth.ok &&
+      (embedding.ok || !embeddingRequired) &&
+      (!ollama || ollama.ok || !ollamaRequired),
     checkedAt: new Date().toISOString(),
     dashboard: {
-      schemaVersion: DASHBOARD_SCHEMA_VERSION
+      schemaVersion: DASHBOARD_SCHEMA_VERSION,
     },
     database: {
       ok: databaseHealth.ok,
@@ -267,7 +278,7 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
       eventCount: counts.eventCount,
       integrityCheck: databaseHealth.integrityCheck,
       fts: databaseHealth.fts,
-      walCheckpoint: databaseHealth.walCheckpoint
+      walCheckpoint: databaseHealth.walCheckpoint,
     },
     memoryStats: {
       byStatus: memoryStats.byStatus,
@@ -276,15 +287,16 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
         projectScope: scope.projectScope,
         total: scope.total,
         active: scope.active,
-        latestUpdatedAt: scope.latestUpdatedAt?.toISOString() ?? null
+        latestUpdatedAt: scope.latestUpdatedAt?.toISOString() ?? null,
       })),
       updatedAtRange: {
         oldest: memoryStats.updatedAtRange.oldest?.toISOString() ?? null,
-        newest: memoryStats.updatedAtRange.newest?.toISOString() ?? null
-      }
+        newest: memoryStats.updatedAtRange.newest?.toISOString() ?? null,
+      },
     },
     maintenance: {
-      repairRecommended: !databaseHealth.ok && (databaseHealth.integrityCheck !== "ok" || !databaseHealth.fts.ok),
+      repairRecommended:
+        !databaseHealth.ok && (databaseHealth.integrityCheck !== "ok" || !databaseHealth.fts.ok),
       latestBackup: latestBackup ? serializeDashboardBackup(latestBackup) : null,
       backupRetention: {
         backupDir: backupRetention.backupDir,
@@ -292,22 +304,35 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
         backupCount: backupRetention.backups.length,
         keptCount: backupRetention.kept.length,
         prunableCount: backupRetention.prunable.length,
-        prunableSizeBytes: backupRetention.prunable.reduce((total, backup) => total + backup.sizeBytes, 0),
+        prunableSizeBytes: backupRetention.prunable.reduce(
+          (total, backup) => total + backup.sizeBytes,
+          0,
+        ),
         latestBackup: latestBackup ? serializeDashboardBackup(latestBackup) : null,
-        prunable: backupRetention.prunable.map(serializeDashboardBackup)
-      }
+        prunable: backupRetention.prunable.map(serializeDashboardBackup),
+      },
     },
     embedding,
     ollama,
     directives: serializeDashboardDirectives([
       ...store.listDirectives({ includeGlobal: false, includeProject: true, limit: 50 }),
-      ...store.listDirectives({ includeGlobal: true, includeProject: false, limit: 50 })
+      ...store.listDirectives({ includeGlobal: true, includeProject: false, limit: 50 }),
     ]),
     disabledDirectives: serializeDashboardDirectives(
       [
-        ...store.listDirectives({ includeGlobal: false, includeProject: true, includeDisabled: true, limit: 100 }),
-        ...store.listDirectives({ includeGlobal: true, includeProject: false, includeDisabled: true, limit: 100 })
-      ].filter((directive) => directive.status !== "active")
+        ...store.listDirectives({
+          includeGlobal: false,
+          includeProject: true,
+          includeDisabled: true,
+          limit: 100,
+        }),
+        ...store.listDirectives({
+          includeGlobal: true,
+          includeProject: false,
+          includeDisabled: true,
+          limit: 100,
+        }),
+      ].filter((directive) => directive.status !== "active"),
     ),
     recentMemories: store.listMemories({ limit: 10 }).map((memory) => ({
       id: memory.id,
@@ -320,16 +345,18 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
       importance: memory.importance,
       confidence: memory.confidence,
       status: memory.status,
-      updatedAt: memory.updatedAt.toISOString()
+      updatedAt: memory.updatedAt.toISOString(),
     })),
     recentEvents: store.listRecentEvents({ limit: 10 }).map((event) => ({
       id: event.id,
       memoryId: event.memoryId,
       eventType: event.eventType,
-      createdAt: event.createdAt.toISOString()
+      createdAt: event.createdAt.toISOString(),
     })),
     memoryFreshness: memoryFreshnessReport.freshness,
-    memoryUpdateCandidates: autoMemoryCuration.reviewCandidates.map((evaluation) => evaluation.candidate),
+    memoryUpdateCandidates: autoMemoryCuration.reviewCandidates.map(
+      (evaluation) => evaluation.candidate,
+    ),
     autoMemoryCuration: {
       mode: autoMemoryCuration.mode,
       threshold: autoMemoryCuration.threshold,
@@ -339,22 +366,26 @@ export async function buildDashboardStatus(store: MemoryStore, options: Dashboar
       autoWriteEligibleCount: autoMemoryCuration.autoWriteCandidates.length,
       skippedCount: autoMemoryCuration.skippedCandidates.length,
       evaluations: autoMemoryCuration.evaluated,
-      note: "Dashboard は評価結果だけを表示します。safe mode の自動保存は start_memory_session の実行時に行います。"
+      note: "Dashboard は評価結果だけを表示します。safe mode の自動保存は start_memory_session の実行時に行います。",
     },
     warnings,
-    warningActions
+    warningActions,
   };
 }
 
-function serializeDashboardBackup(backup: ReturnType<MemoryStore["planBackupRetention"]>["backups"][number]) {
+function serializeDashboardBackup(
+  backup: ReturnType<MemoryStore["planBackupRetention"]>["backups"][number],
+) {
   return {
     backupPath: backup.backupPath,
     sizeBytes: backup.sizeBytes,
-    mtime: backup.mtime.toISOString()
+    mtime: backup.mtime.toISOString(),
   };
 }
 
-function serializeDashboardDirectives(directives: ReturnType<MemoryStore["listDirectives"]>): DashboardStatus["directives"] {
+function serializeDashboardDirectives(
+  directives: ReturnType<MemoryStore["listDirectives"]>,
+): DashboardStatus["directives"] {
   return directives.map((directive) => ({
     id: directive.id,
     scope: directive.scope,
@@ -366,11 +397,14 @@ function serializeDashboardDirectives(directives: ReturnType<MemoryStore["listDi
     sourceRef: directive.sourceRef,
     priority: directive.priority,
     status: directive.status,
-    updatedAt: directive.updatedAt.toISOString()
+    updatedAt: directive.updatedAt.toISOString(),
   }));
 }
 
-export function createDashboardServer(store: MemoryStore, options: DashboardOptions = {}): http.Server {
+export function createDashboardServer(
+  store: MemoryStore,
+  options: DashboardOptions = {},
+): http.Server {
   return http.createServer(async (request, response) => {
     try {
       if (!isAllowedDashboardHostHeader(request.headers.host)) {
@@ -437,18 +471,14 @@ export function shouldOpenDashboardBrowser(value: string | undefined): boolean {
 
 export function openDashboardUrl(url: string, opener: DashboardBrowserOpener = spawn): boolean {
   const command =
-    process.platform === "win32"
-      ? "cmd"
-      : process.platform === "darwin"
-        ? "open"
-        : "xdg-open";
+    process.platform === "win32" ? "cmd" : process.platform === "darwin" ? "open" : "xdg-open";
   const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
 
   try {
     const child = opener(command, args, {
       detached: true,
       stdio: "ignore",
-      windowsHide: true
+      windowsHide: true,
     });
     child.on?.("error", (error) => {
       console.warn(`codex-memory-sidecar dashboard browser open failed: ${error.message}`);
@@ -463,7 +493,7 @@ export function openDashboardUrl(url: string, opener: DashboardBrowserOpener = s
 }
 
 export async function probeOllamaStatus(
-  options: OllamaStatusOptions
+  options: OllamaStatusOptions,
 ): Promise<Omit<NonNullable<DashboardStatus["ollama"]>, "required">> {
   const baseUrl = options.baseUrl.replace(/\/$/, "");
   const fetchImpl = options.fetch ?? globalThis.fetch;
@@ -488,7 +518,7 @@ export async function probeOllamaStatus(
       embeddingModelAvailable,
       maintenanceModelAvailable,
       modelNames,
-      error: null
+      error: null,
     };
   } catch (error) {
     return {
@@ -499,7 +529,7 @@ export async function probeOllamaStatus(
       embeddingModelAvailable: false,
       maintenanceModelAvailable: false,
       modelNames: [],
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -542,30 +572,37 @@ function buildWarningActions(options: {
       title: "メモリ更新が古い可能性があります",
       message: options.memoryFreshness.message,
       action: options.memoryFreshness.recommendedAction,
-      tools: ["propose_memory_update", "write_memory"]
+      tools: ["propose_memory_update", "write_memory"],
     });
   }
 
   if (
     options.repairRecommended ||
-    options.warnings.some((warning) => warning.includes("FTS index is missing") || warning.includes("FTS index has"))
+    options.warnings.some(
+      (warning) => warning.includes("FTS index is missing") || warning.includes("FTS index has"),
+    )
   ) {
     actions.push({
       severity: "warning",
       title: "検索インデックスの修復が必要です",
       message: "全文検索インデックスとメモリDBの内容に差分があります。",
       action: "MCP tool の repair_memory_index を実行してください。",
-      tools: ["backup_memory", "repair_memory_index", "health_check"]
+      tools: ["backup_memory", "repair_memory_index", "health_check"],
     });
   }
 
-  if (options.warnings.some((warning) => warning.includes("Embedding provider") || warning.includes("Embedding unavailable"))) {
+  if (
+    options.warnings.some(
+      (warning) =>
+        warning.includes("Embedding provider") || warning.includes("Embedding unavailable"),
+    )
+  ) {
     actions.push({
       severity: "warning",
       title: "Embedding が利用できません",
       message: "検索の意味ベクトル処理が使えないため、検索品質が下がる可能性があります。",
       action: "Ollama アプリの起動状態と embedding model のインストール状態を確認してください。",
-      tools: ["health_check"]
+      tools: ["health_check"],
     });
   }
 
@@ -575,14 +612,14 @@ function buildWarningActions(options: {
       title: "Ollama に接続できません",
       message: options.ollama.error,
       action: "Ollama アプリを起動し、OLLAMA_BASE_URL の endpoint が正しいか確認してください。",
-      tools: ["health_check"]
+      tools: ["health_check"],
     });
   }
 
   if (options.ollamaRequired && options.ollama && !options.ollama.error) {
     const missingModels = [
       ...(options.ollama.embeddingModelAvailable ? [] : [options.ollama.embeddingModel]),
-      ...(options.ollama.maintenanceModelAvailable ? [] : [options.ollama.maintenanceModel])
+      ...(options.ollama.maintenanceModelAvailable ? [] : [options.ollama.maintenanceModel]),
     ];
     for (const model of missingModels) {
       actions.push({
@@ -590,7 +627,7 @@ function buildWarningActions(options: {
         title: "Ollama モデルが見つかりません",
         message: `設定済みモデル ${model} が Ollama のモデル一覧にありません。`,
         action: `Ollama に不足モデルを追加してください: ollama pull ${model}`,
-        tools: ["health_check"]
+        tools: ["health_check"],
       });
     }
   }
@@ -600,8 +637,9 @@ function buildWarningActions(options: {
       severity: "warning",
       title: "確認が必要な警告があります",
       message: options.warnings.join(" / "),
-      action: "README と health_check の結果を確認し、必要ならバックアップを作成してから対応してください。",
-      tools: ["health_check", "backup_memory"]
+      action:
+        "README と health_check の結果を確認し、必要ならバックアップを作成してから対応してください。",
+      tools: ["health_check", "backup_memory"],
     });
   }
 
@@ -622,28 +660,36 @@ function readOllamaModelNames(json: unknown): string[] {
 }
 
 function hasOllamaModel(modelNames: string[], configuredModel: string): boolean {
-  return modelNames.some((name) => name === configuredModel || name === `${configuredModel}:latest` || name.split(":")[0] === configuredModel);
+  return modelNames.some(
+    (name) =>
+      name === configuredModel ||
+      name === `${configuredModel}:latest` ||
+      name.split(":")[0] === configuredModel,
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-async function probeEmbedding(provider: EmbeddingProvider, required: boolean): Promise<DashboardStatus["embedding"]> {
+async function probeEmbedding(
+  provider: EmbeddingProvider,
+  required: boolean,
+): Promise<DashboardStatus["embedding"]> {
   try {
     const vector = await provider.embed("codex memory sidecar dashboard health check");
     return {
       ok: true,
       dimensions: vector.length,
       error: null,
-      required
+      required,
     };
   } catch (error) {
     return {
       ok: false,
       dimensions: 0,
       error: error instanceof Error ? error.message : String(error),
-      required
+      required,
     };
   }
 }
@@ -1070,7 +1116,7 @@ function renderDashboardHtml(): string {
 function sendJson(response: ServerResponse, statusCode: number, body: unknown): void {
   response.writeHead(statusCode, {
     "content-type": "application/json; charset=utf-8",
-    "cache-control": "no-store"
+    "cache-control": "no-store",
   });
   response.end(JSON.stringify(body, null, 2));
 }
@@ -1078,7 +1124,7 @@ function sendJson(response: ServerResponse, statusCode: number, body: unknown): 
 function sendHtml(response: ServerResponse, statusCode: number, body: string): void {
   response.writeHead(statusCode, {
     "content-type": "text/html; charset=utf-8",
-    "cache-control": "no-store"
+    "cache-control": "no-store",
   });
   response.end(body);
 }
@@ -1086,7 +1132,7 @@ function sendHtml(response: ServerResponse, statusCode: number, body: string): v
 function sendText(response: ServerResponse, statusCode: number, body: string): void {
   response.writeHead(statusCode, {
     "content-type": "text/plain; charset=utf-8",
-    "cache-control": "no-store"
+    "cache-control": "no-store",
   });
   response.end(body);
 }
@@ -1104,7 +1150,7 @@ async function main(): Promise<void> {
       ? undefined
       : new OllamaEmbeddingProvider({
           baseUrl: config.ollamaBaseUrl,
-          model: config.embeddingModel
+          model: config.embeddingModel,
         });
   const server = createDashboardServer(store, {
     embeddingProvider,
@@ -1116,9 +1162,9 @@ async function main(): Promise<void> {
         : {
             baseUrl: config.ollamaBaseUrl,
             embeddingModel: config.embeddingModel,
-            maintenanceModel: config.maintenanceModel
+            maintenanceModel: config.maintenanceModel,
           },
-    ollamaRequired: config.embeddingMode === "ollama"
+    ollamaRequired: config.embeddingMode === "ollama",
   });
 
   server.listen(port, "127.0.0.1", () => {

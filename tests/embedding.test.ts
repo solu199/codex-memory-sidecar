@@ -17,12 +17,12 @@ describe("OllamaEmbeddingProvider", () => {
   test("reads embeddings from Ollama /api/embed responses", async () => {
     const fetch = vi.fn(async () => ({
       ok: true,
-      json: async () => ({ embeddings: [[0.1, 0.2, 0.3]] })
+      json: async () => ({ embeddings: [[0.1, 0.2, 0.3]] }),
     })) as unknown as typeof globalThis.fetch;
     const provider = new OllamaEmbeddingProvider({
       baseUrl: "http://localhost:11434",
       model: "embeddinggemma",
-      fetch
+      fetch,
     });
 
     await expect(provider.embed("hello")).resolves.toEqual([0.1, 0.2, 0.3]);
@@ -31,12 +31,12 @@ describe("OllamaEmbeddingProvider", () => {
   test("supports legacy /api/embeddings response shape", async () => {
     const fetch = vi.fn(async () => ({
       ok: true,
-      json: async () => ({ embedding: [0.4, 0.5] })
+      json: async () => ({ embedding: [0.4, 0.5] }),
     })) as unknown as typeof globalThis.fetch;
     const provider = new OllamaEmbeddingProvider({
       baseUrl: "http://localhost:11434",
       model: "all-minilm",
-      fetch
+      fetch,
     });
 
     await expect(provider.embed("hello")).resolves.toEqual([0.4, 0.5]);
@@ -46,12 +46,12 @@ describe("OllamaEmbeddingProvider", () => {
     const fetch = vi.fn(async () => ({
       ok: false,
       status: 404,
-      text: async () => "model not found"
+      text: async () => "model not found",
     })) as unknown as typeof globalThis.fetch;
     const provider = new OllamaEmbeddingProvider({
       baseUrl: "http://localhost:11434",
       model: "missing",
-      fetch
+      fetch,
     });
 
     await expect(provider.embed("hello")).rejects.toThrow(/model not found/);
