@@ -15,6 +15,7 @@
     "smoke:mcp": "tsc -p tsconfig.json && node dist/src/mcp-smoke.js",
     "smoke:ollama": "tsc -p tsconfig.json && node dist/src/ollama-smoke.js",
     "smoke:practical": "tsc -p tsconfig.json && node dist/src/practical-smoke.js",
+    "smoke:hook": "tsc -p tsconfig.json && node dist/src/hook-session-start-smoke.js",
     "smoke:comparison": "tsc -p tsconfig.json && node dist/src/comparison-smoke.js",
     "bench:recall": "tsc -p tsconfig.json && node dist/src/recall-benchmark.js",
     "start": "node dist/src/index.js"
