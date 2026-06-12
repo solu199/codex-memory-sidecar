@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import { describe, expect, test } from "vitest";
 
@@ -23,9 +23,32 @@ describe("documentation", () => {
     expect(readme).toContain("busy_timeout");
     expect(readme).toContain("GitHub token");
     expect(readme).toContain("Codex app は利用例のひとつ");
+    expect(readme).toContain("docs/assets/dashboard-overview.png");
+    expect(readme).toContain("3分セットアップ");
+    expect(readme).toContain("docs/daily-operations.md");
+    expect(readme).toContain("CHANGELOG.md");
     expect(readme).not.toContain("C:\\Users\\hare1");
     expect(readme).not.toContain("個人利用を前提");
     expect(readme).not.toContain("private package");
+  });
+
+  test("public release readiness materials are present", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const changelog = readFileSync("CHANGELOG.md", "utf8");
+    const releaseDraft = readFileSync(".github/releases/v0.1.0.md", "utf8");
+    const metadata = readFileSync("docs/github-repository-metadata.md", "utf8");
+
+    expect(existsSync("docs/assets/dashboard-overview.png")).toBe(true);
+    expect(readme).toContain("Codex Memory Sidecar Dashboard");
+    expect(changelog).toContain("## [0.1.0] - 2026-06-12");
+    expect(changelog).toContain("初回公開準備版");
+    expect(releaseDraft).toContain("# v0.1.0 - 初回公開準備版");
+    expect(releaseDraft).toContain("#91");
+    expect(releaseDraft).toContain("#92");
+    expect(releaseDraft).toContain("#93");
+    expect(metadata).toContain("AIエージェント向けのローカルMCPメモリ基盤");
+    expect(metadata).toContain("gh repo edit");
+    expect(metadata).toContain("ユーザー承認後");
   });
 
   test("README and AGENTS memory protocol include custom instruction bootstrap guidance", () => {

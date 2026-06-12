@@ -4,6 +4,48 @@ Codex Memory Sidecar は、MCP対応AIエージェント向けのローカルメ
 
 Codex app は利用例のひとつです。MCP に対応したエージェントであれば、同じ考え方でローカルの長期作業メモリとして利用できます。
 
+![Codex Memory Sidecar Dashboard](docs/assets/dashboard-overview.png)
+
+## すぐ分かる概要
+
+- **何をするものか**: AIエージェントのための、ローカル保存型の作業メモリ基盤です。
+- **なぜ作ったか**: チャットをまたいでも、設計判断、運用ルール、検証結果、ユーザーの長期的な好みを安全に参照できるようにするためです。
+- **どこに保存するか**: ローカルの SQLite に保存します。外部サービスへ自動送信しません。
+- **Ollama は必須か**: 必須ではありません。Ollamaなしでも利用できます。SQLite FTS trigram と短語LIKE fallback で基本検索が動きます。Ollamaを使うと semantic search とモデル状態確認がより便利になります。
+- **安全設計**: `propose_memory_update` / `propose_directive_update` による保存前レビュー、backup / verify / restore plan、secret検出、audit log、Dashboard の警告表示を備えています。
+
+## 3分セットアップ
+
+Node.js 22 系を推奨します。初めて試す場合は、まず Ollama なしで動作確認できます。
+
+```powershell
+git clone https://github.com/solu199/codex-memory-sidecar.git
+cd codex-memory-sidecar
+npm install
+npm run build
+npm test
+npm run smoke:mcp
+npm run smoke:practical
+```
+
+Dashboard を見る場合:
+
+```powershell
+npm run dashboard
+```
+
+ブラウザで `http://127.0.0.1:3737` を開くと、health、メモリ件数、メモリ鮮度、directive memory、backup、Ollama モデル状態、警告対応アクションを確認できます。
+
+## まず読む場所
+
+- 日常運用: [docs/daily-operations.md](docs/daily-operations.md)
+- Codex / AGENTS.md 用の短い導入文: [AGENTS-memory-protocol.md](AGENTS-memory-protocol.md)
+- Skill と詳細運用: [skills/codex-memory-sidecar/SKILL.md](skills/codex-memory-sidecar/SKILL.md)
+- 公開前監査: [docs/public-readiness-audit.md](docs/public-readiness-audit.md)
+- セキュリティ方針: [SECURITY.md](SECURITY.md)
+- 貢献方針: [CONTRIBUTING.md](CONTRIBUTING.md)
+- 変更履歴: [CHANGELOG.md](CHANGELOG.md)
+
 ## 目的
 
 AIコーディングエージェントは、チャットや作業セッションをまたぐと過去の判断や運用ルールを忘れがちです。このツールは、次のような情報をローカルに残し、必要なときだけ参照できるようにします。
