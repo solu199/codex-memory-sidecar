@@ -59,6 +59,19 @@ describe("documentation", () => {
     expect(roadmap).toContain("#100");
   });
 
+  test("node:sqlite migration investigation is documented", () => {
+    const investigation = readFileSync("docs/node-sqlite-migration.md", "utf8");
+
+    expect(investigation).toContain("Issue: #98");
+    expect(investigation).toContain("すぐ置き換えない");
+    expect(investigation).toContain("Active development");
+    expect(investigation).toContain("Node.js 22.16.0");
+    expect(investigation).toContain("FTS5 trigram");
+    expect(investigation).toContain("WAL checkpoint");
+    expect(investigation).toContain("backup(db, backupPath)");
+    expect(investigation).toContain("SqliteDatabaseAdapter");
+  });
+
   test("README and AGENTS memory protocol include custom instruction bootstrap guidance", () => {
     const readme = readFileSync("README.md", "utf8");
     const protocol = readFileSync("AGENTS-memory-protocol.md", "utf8");
