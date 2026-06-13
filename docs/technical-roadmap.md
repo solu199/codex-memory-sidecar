@@ -64,6 +64,7 @@
 ## 4. bi-temporal memory invalidation
 
 - Issue: #99
+- 設計: [docs/bi-temporal-invalidation-design.md](bi-temporal-invalidation-design.md)
 - 目的: 古いメモリを単に忘れるのではなく、「いつから無効になったか」「何により無効化されたか」を追跡する。
 - 方針:
   - `valid_from`

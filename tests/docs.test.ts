@@ -28,6 +28,7 @@ describe("documentation", () => {
     expect(readme).toContain("3分セットアップ");
     expect(readme).toContain("docs/daily-operations.md");
     expect(readme).toContain("docs/session-start-hook.md");
+    expect(readme).toContain("docs/bi-temporal-invalidation-design.md");
     expect(readme).toContain("CHANGELOG.md");
     expect(readme).not.toContain("C:\\Users\\hare1");
     expect(readme).not.toContain("個人利用を前提");
@@ -58,6 +59,7 @@ describe("documentation", () => {
     expect(roadmap).toContain("porter + trigram");
     expect(roadmap).toContain("node:sqlite");
     expect(roadmap).toContain("bi-temporal");
+    expect(roadmap).toContain("docs/bi-temporal-invalidation-design.md");
     expect(roadmap).toContain("#95");
     expect(roadmap).toContain("#100");
   });
@@ -102,6 +104,23 @@ describe("documentation", () => {
     expect(hook).toContain("auto-write を発火させません");
     expect(hook).toContain("exit 0");
     expect(hook).toContain("hooks.json");
+  });
+
+  test("bi-temporal invalidation design is documented", () => {
+    const design = readFileSync("docs/bi-temporal-invalidation-design.md", "utf8");
+
+    expect(design).toContain("Issue: #99");
+    expect(design).toContain("valid_from");
+    expect(design).toContain("invalidated_at");
+    expect(design).toContain("invalidated_by_ref");
+    expect(design).toContain("superseded");
+    expect(design).toContain("forgotten");
+    expect(design).toContain("migration");
+    expect(design).toContain("backup compatibility");
+    expect(design).toContain("Dashboard");
+    expect(design).toContain("PR 分割");
+    expect(design).toContain("Graphiti");
+    expect(design).toContain("Temporal Knowledge Graph");
   });
 
   test("README and AGENTS memory protocol include custom instruction bootstrap guidance", () => {
