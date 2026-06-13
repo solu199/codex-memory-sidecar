@@ -42,6 +42,7 @@ npm run dashboard
 - Codex / AGENTS.md 用の短い導入文: [AGENTS-memory-protocol.md](AGENTS-memory-protocol.md)
 - Skill と詳細運用: [skills/codex-memory-sidecar/SKILL.md](skills/codex-memory-sidecar/SKILL.md)
 - Codex SessionStart hook: [docs/session-start-hook.md](docs/session-start-hook.md)
+- bi-temporal invalidation 設計: [docs/bi-temporal-invalidation-design.md](docs/bi-temporal-invalidation-design.md)
 - 公開前監査: [docs/public-readiness-audit.md](docs/public-readiness-audit.md)
 - メモリ評価ベンチ: [docs/memory-evaluation.md](docs/memory-evaluation.md)
 - 技術的な中期改善: [docs/technical-roadmap.md](docs/technical-roadmap.md)
