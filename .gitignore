@@ -6,3 +6,8 @@ data/
 .env.*
 !.env.example
 docs/friend-explanation.html
+docs/dashboard-redesign-visual-brief.html
+docs/superpowers/
+.superpowers/
+.playwright-cli/
+output/

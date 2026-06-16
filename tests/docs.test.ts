@@ -29,6 +29,7 @@ describe("documentation", () => {
     expect(readme).toContain("docs/daily-operations.md");
     expect(readme).toContain("docs/session-start-hook.md");
     expect(readme).toContain("docs/bi-temporal-invalidation-design.md");
+    expect(readme).toContain("docs/memory-observatory.md");
     expect(readme).toContain("CHANGELOG.md");
     expect(readme).not.toContain("C:\\Users\\hare1");
     expect(readme).not.toContain("個人利用を前提");
@@ -44,6 +45,8 @@ describe("documentation", () => {
 
     expect(existsSync("docs/assets/dashboard-overview.png")).toBe(true);
     expect(readme).toContain("Codex Memory Sidecar Dashboard");
+    expect(readme).toContain("Memory Observatory");
+    expect(existsSync("docs/memory-observatory.md")).toBe(true);
     expect(changelog).toContain("## [0.1.0] - 2026-06-12");
     expect(changelog).toContain("初回公開準備版");
     expect(releaseDraft).toContain("# v0.1.0 - 初回公開準備版");
@@ -121,6 +124,20 @@ describe("documentation", () => {
     expect(design).toContain("PR 分割");
     expect(design).toContain("Graphiti");
     expect(design).toContain("Temporal Knowledge Graph");
+  });
+
+  test("Memory Observatory is documented as a privacy-safe Dashboard graph", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const observatory = readFileSync("docs/memory-observatory.md", "utf8");
+
+    expect(readme).toContain("/api/graph");
+    expect(readme).toContain("本文と audit payload は返さず");
+    expect(observatory).toContain("Memory Observatory");
+    expect(observatory).toContain("/api/graph");
+    expect(observatory).toContain("contentIncluded: false");
+    expect(observatory).toContain("eventPayloadIncluded: false");
+    expect(observatory).toContain("Dashboard の再読み込みだけで検索履歴が増えたり");
+    expect(observatory).toContain("通常メモリ本文を表示しません");
   });
 
   test("README and AGENTS memory protocol include custom instruction bootstrap guidance", () => {
