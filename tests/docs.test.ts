@@ -23,7 +23,12 @@ describe("documentation", () => {
     expect(readme).toContain("externalAuthor");
     expect(readme).toContain("busy_timeout");
     expect(readme).toContain("GitHub token");
-    expect(readme).toContain("Codex app は利用例のひとつ");
+    expect(readme).toContain("Codex app 環境での利用を主に検証");
+    expect(readme).toContain(
+      "現時点で実運用として継続的にテストしている対象は Codex app / Codex 環境",
+    );
+    expect(readme).toContain("他の MCP 対応クライアントでも同じ考え方で使える可能性");
+    expect(readme).toContain("Codex app 以外の MCP クライアントでは");
     expect(readme).toContain("docs/assets/dashboard-overview.png");
     expect(readme).toContain("3分セットアップ");
     expect(readme).toContain("docs/daily-operations.md");
@@ -196,6 +201,7 @@ describe("documentation", () => {
 
   test("README includes manual MCP examples and Ollama mode guidance", () => {
     const readme = readFileSync("README.md", "utf8");
+    const exampleConfig = readFileSync("config/memory-sidecar.example.toml", "utf8");
 
     expect(readme).toContain('"tool": "start_memory_session"');
     expect(readme).toContain('"tool": "write_memory"');
@@ -204,6 +210,7 @@ describe("documentation", () => {
     expect(readme).toContain('"tool": "propose_directive_update"');
     expect(readme).toContain("Dashboard では Ollama が無効または任意扱いとして表示されます");
     expect(readme).toContain("Ollama を必須扱いにします");
+    expect(exampleConfig).toContain('embedding_mode = "auto"');
   });
 
   test("public safety and contribution documents are present", () => {

@@ -48,6 +48,7 @@ describe("tooling configuration", () => {
       devDependencies: Record<string, string>;
     };
     const notice = readFileSync("vendor/observatory-3d.bundle.NOTICE.md", "utf8");
+    const gitAttributes = readFileSync(".gitattributes", "utf8");
     const checksum = readFileSync("vendor/observatory-3d.bundle.sha256", "utf8").trim();
     const bundle = readFileSync("vendor/observatory-3d.bundle.js");
     const bundleSource = bundle.toString("utf8");
@@ -65,6 +66,8 @@ describe("tooling configuration", () => {
     expect(existsSync("scripts/build-observatory-bundle.mjs")).toBe(true);
     expect(existsSync("scripts/check-observatory-bundle.mjs")).toBe(true);
     expect(existsSync("scripts/observatory-3d-entry.mjs")).toBe(true);
+    expect(gitAttributes).toContain("vendor/observatory-3d.bundle.js text eol=lf");
+    expect(gitAttributes).toContain("vendor/observatory-3d.bundle.sha256 text eol=lf");
     expect(checksum).toBe(`${digest}  observatory-3d.bundle.js`);
     expect(bundleSource).not.toMatch(/[ \t]+$/m);
     expect(notice).toContain("3d-force-graph");
