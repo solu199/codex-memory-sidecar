@@ -19,6 +19,10 @@ export interface Memory {
   embedding: number[] | null;
   createdAt: Date;
   updatedAt: Date;
+  validFrom: Date;
+  invalidatedAt: Date | null;
+  invalidatedByRef: string | null;
+  invalidationReason: string | null;
   lastAccessedAt: Date | null;
   expiresAt: Date | null;
   status: MemoryStatus;
@@ -195,6 +199,10 @@ export interface BackupMemorySummary {
   confidence: number;
   createdAt: Date;
   updatedAt: Date;
+  validFrom: Date | null;
+  invalidatedAt: Date | null;
+  invalidatedByRef: string | null;
+  invalidationReason: string | null;
   lastAccessedAt: Date | null;
   expiresAt: Date | null;
   status: MemoryStatus;

@@ -76,6 +76,7 @@ AIコーディングエージェントは、チャットや作業セッション
 - `propose_memory_update` は、DBを書き換えずに保存候補、重複候補、推奨 layer、sourceRef の品質を確認できます。
 - sourceRef は `pr:#123`、`issue:#123`、`git:<hash>`、`session:<id>`、docs path、named chat/evaluation id のように追跡できる形式を推奨します。`propose_memory_update` と auto memory curation は同じ sourceRef 判定を使います。
 - `write_directive` / `list_directives` / `propose_directive_update` / `disable_directive` で、AGENTS.md に近い強い作用を持つ directive memory を扱えます。
+- 通常メモリは `valid_from` / `invalidated_at` / `invalidated_by_ref` / `invalidation_reason` を持ち、古い記憶をすぐ削除せず、いつ・何により通常利用から外れたかを追跡できる土台を備えています。
 - `backup_memory` / `verify_backup` / `inspect_backup` / `plan_backup_retention` / `plan_backup_restore` / `repair_memory_index` で、安全確認と復旧計画を扱えます。
 - Dashboard で health、バックアップ、Ollama モデル、警告対応、project scope、directive memory、最近のメモリ、メモリ鮮度、保存候補を確認できます。
 - Memory Observatory の 3D runtime は vendored bundle として同梱し、`npm run build:observatory-bundle` と `npm run check:observatory-bundle` で由来、checksum、再生成可能性を確認できます。

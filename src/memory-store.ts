@@ -53,6 +53,10 @@ interface MemoryRow {
   embedding: string | null;
   created_at: string;
   updated_at: string;
+  valid_from?: string | null;
+  invalidated_at?: string | null;
+  invalidated_by_ref?: string | null;
+  invalidation_reason?: string | null;
   last_accessed_at: string | null;
   expires_at: string | null;
   status: Memory["status"];
@@ -93,6 +97,10 @@ interface BackupMemorySummaryRow {
   confidence: number;
   created_at: string;
   updated_at: string;
+  valid_from?: string | null;
+  invalidated_at?: string | null;
+  invalidated_by_ref?: string | null;
+  invalidation_reason?: string | null;
   last_accessed_at: string | null;
   expires_at: string | null;
   status: Memory["status"];
@@ -121,6 +129,15 @@ const GLOBAL_PROJECT_SCOPE = "global";
 const DEFAULT_BACKUP_RETENTION_KEEP_COUNT = 10;
 const DEFAULT_BACKUP_FILE_PATTERN = /^memory-\d{8}-\d{6}-\d{3}(?:-\d+)?\.sqlite$/;
 const MAX_AUDIT_STRING_LENGTH = 2048;
+const BI_TEMPORAL_BACKFILL_REF = "migration:bi-temporal-v1";
+const BI_TEMPORAL_BACKFILL_REASON =
+  "Backfilled from existing memory status during bi-temporal migration.";
+const BI_TEMPORAL_MEMORY_COLUMNS = [
+  "valid_from",
+  "invalidated_at",
+  "invalidated_by_ref",
+  "invalidation_reason",
+];
 
 export class MemoryStore {
   private readonly db: Database.Database;
@@ -149,10 +166,10 @@ export class MemoryStore {
       .prepare(
         `INSERT INTO memories (
           layer, content, summary, tags, project_scope, source_type, source_ref,
-          importance, confidence, embedding, created_at, updated_at, expires_at, status
+          importance, confidence, embedding, created_at, updated_at, valid_from, expires_at, status
         ) VALUES (
           @layer, @content, @summary, @tags, @projectScope, @sourceType, @sourceRef,
-          @importance, @confidence, @embedding, @createdAt, @updatedAt, @expiresAt, 'active'
+          @importance, @confidence, @embedding, @createdAt, @updatedAt, @validFrom, @expiresAt, 'active'
         )`,
       )
       .run({
@@ -168,6 +185,7 @@ export class MemoryStore {
         embedding: input.embedding ? JSON.stringify(input.embedding) : null,
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
+        validFrom: now.toISOString(),
         expiresAt: input.expiresAt?.toISOString() ?? null,
       });
 
@@ -693,6 +711,10 @@ export class MemoryStore {
       const requiredTables = ["memories", "memory_events", "memories_fts"];
       const missingTables = requiredTables.filter((table) => !tableExists(backupDb, table));
       const warnings = missingTables.map((table) => `Backup is missing required table: ${table}`);
+      const missingTemporalColumns = missingBiTemporalMemoryColumns(backupDb);
+      if (missingTemporalColumns.length) {
+        warnings.push(formatMissingBiTemporalColumnsWarning(missingTemporalColumns));
+      }
       const schemaOk = missingTables.length === 0;
       const memoryCount = tableExists(backupDb, "memories") ? countRows(backupDb, "memories") : 0;
       const eventCount = tableExists(backupDb, "memory_events")
@@ -747,10 +769,30 @@ export class MemoryStore {
       }
 
       const projectScopeSelection = hasProjectScope ? "project_scope" : "'global' AS project_scope";
+      const missingTemporalColumns = missingBiTemporalMemoryColumns(backupDb);
+      const temporalSelections = {
+        validFrom: missingTemporalColumns.includes("valid_from")
+          ? "NULL AS valid_from"
+          : "valid_from",
+        invalidatedAt: missingTemporalColumns.includes("invalidated_at")
+          ? "NULL AS invalidated_at"
+          : "invalidated_at",
+        invalidatedByRef: missingTemporalColumns.includes("invalidated_by_ref")
+          ? "NULL AS invalidated_by_ref"
+          : "invalidated_by_ref",
+        invalidationReason: missingTemporalColumns.includes("invalidation_reason")
+          ? "NULL AS invalidation_reason"
+          : "invalidation_reason",
+      };
+      const warnings = missingTemporalColumns.length
+        ? [formatMissingBiTemporalColumnsWarning(missingTemporalColumns)]
+        : [];
       const rows = backupDb
         .prepare(
           `SELECT id, layer, summary, tags, ${projectScopeSelection}, source_type, source_ref, importance, confidence,
-                  created_at, updated_at, last_accessed_at, expires_at, status
+                  created_at, updated_at, ${temporalSelections.validFrom}, ${temporalSelections.invalidatedAt},
+                  ${temporalSelections.invalidatedByRef}, ${temporalSelections.invalidationReason},
+                  last_accessed_at, expires_at, status
            FROM memories
            WHERE ${clauses.join(" AND ")}
            ORDER BY updated_at DESC, id DESC
@@ -765,7 +807,7 @@ export class MemoryStore {
         eventCount: countRows(backupDb, "memory_events"),
         integrityCheck: runIntegrityCheck(backupDb, "quick_check"),
         schemaOk: true,
-        warnings: [],
+        warnings,
         checkedAt: new Date(),
         memories: rows.map(mapBackupMemorySummary),
       };
@@ -907,6 +949,10 @@ export class MemoryStore {
         confidence REAL NOT NULL DEFAULT 0.5,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
+      valid_from TEXT,
+      invalidated_at TEXT,
+      invalidated_by_ref TEXT,
+      invalidation_reason TEXT,
       last_accessed_at TEXT,
       expires_at TEXT,
         status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'superseded', 'forgotten'))
@@ -980,6 +1026,11 @@ export class MemoryStore {
     `);
     this.addColumnIfMissing("memories", "embedding", "TEXT");
     this.addColumnIfMissing("memories", "project_scope", "TEXT NOT NULL DEFAULT 'global'");
+    this.addColumnIfMissing("memories", "valid_from", "TEXT");
+    this.addColumnIfMissing("memories", "invalidated_at", "TEXT");
+    this.addColumnIfMissing("memories", "invalidated_by_ref", "TEXT");
+    this.addColumnIfMissing("memories", "invalidation_reason", "TEXT");
+    this.backfillBiTemporalMetadata();
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_memories_project_scope_status_updated
         ON memories(project_scope, status, updated_at DESC);
@@ -993,6 +1044,35 @@ export class MemoryStore {
     `);
     this.ensureTrigramFtsTable();
     this.ensurePorterFtsTable();
+  }
+
+  private backfillBiTemporalMetadata(): void {
+    this.db
+      .prepare(
+        "UPDATE memories SET valid_from = created_at WHERE valid_from IS NULL OR valid_from = ''",
+      )
+      .run();
+    this.db
+      .prepare(
+        `UPDATE memories
+         SET invalidated_at = updated_at
+         WHERE status != 'active' AND (invalidated_at IS NULL OR invalidated_at = '')`,
+      )
+      .run();
+    this.db
+      .prepare(
+        `UPDATE memories
+         SET invalidated_by_ref = ?
+         WHERE status != 'active' AND (invalidated_by_ref IS NULL OR invalidated_by_ref = '')`,
+      )
+      .run(BI_TEMPORAL_BACKFILL_REF);
+    this.db
+      .prepare(
+        `UPDATE memories
+         SET invalidation_reason = ?
+         WHERE status != 'active' AND (invalidation_reason IS NULL OR invalidation_reason = '')`,
+      )
+      .run(BI_TEMPORAL_BACKFILL_REASON);
   }
 
   private ensureTrigramFtsTable(): void {
@@ -1279,6 +1359,10 @@ function mapMemory(row: MemoryRow): Memory {
     embedding: row.embedding ? parseEmbedding(row.embedding) : null,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
+    validFrom: new Date(row.valid_from ?? row.created_at),
+    invalidatedAt: row.invalidated_at ? new Date(row.invalidated_at) : null,
+    invalidatedByRef: row.invalidated_by_ref ?? null,
+    invalidationReason: row.invalidation_reason ?? null,
     lastAccessedAt: row.last_accessed_at ? new Date(row.last_accessed_at) : null,
     expiresAt: row.expires_at ? new Date(row.expires_at) : null,
     status: row.status,
@@ -1325,6 +1409,10 @@ function mapBackupMemorySummary(row: BackupMemorySummaryRow): BackupMemorySummar
     confidence: row.confidence,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
+    validFrom: row.valid_from ? new Date(row.valid_from) : null,
+    invalidatedAt: row.invalidated_at ? new Date(row.invalidated_at) : null,
+    invalidatedByRef: row.invalidated_by_ref ?? null,
+    invalidationReason: row.invalidation_reason ?? null,
     lastAccessedAt: row.last_accessed_at ? new Date(row.last_accessed_at) : null,
     expiresAt: row.expires_at ? new Date(row.expires_at) : null,
     status: row.status,
@@ -1371,6 +1459,17 @@ function tableExists(db: Database.Database, table: string): boolean {
 function columnExists(db: Database.Database, table: string, column: string): boolean {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
   return columns.some((item) => item.name === column);
+}
+
+function missingBiTemporalMemoryColumns(db: Database.Database): string[] {
+  if (!tableExists(db, "memories")) {
+    return [];
+  }
+  return BI_TEMPORAL_MEMORY_COLUMNS.filter((column) => !columnExists(db, "memories", column));
+}
+
+function formatMissingBiTemporalColumnsWarning(columns: string[]): string {
+  return `Backup is missing optional bi-temporal memories columns: ${columns.join(", ")}`;
 }
 
 function runIntegrityCheck(

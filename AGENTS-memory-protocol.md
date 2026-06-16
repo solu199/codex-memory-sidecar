@@ -98,6 +98,7 @@ directive memory が現在のユーザー指示や `AGENTS.md` と矛盾する�
 
 - メモリ由来の主張をユーザーに伝えるときは、可能な限り memory id、directive id、summary、sourceRef を添えます。
 - 長く残すメモリでは、sourceRef を `pr:#123`、`issue:#123`、`git:<hash>`、`session:<id>`、docs path、または named chat/evaluation id に寄せます。
+- 通常メモリに `invalidated_at` / `invalidated_by_ref` / `invalidation_reason` が含まれる場合は、古い判断として扱い、現在有効な根拠として使う前に active なメモリ、README/docs、実ファイル、git 履歴で裏取りします。
 - 重要な判断は `audit_memory` で直近の参照・書き込みイベントを確認できる形にします。
 - メモリと実ファイルが矛盾した場合は、実ファイルとユーザーの最新指示を優先し、必要に応じて古いメモリを更新します。
 
