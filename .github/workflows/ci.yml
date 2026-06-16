@@ -30,6 +30,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Observatory bundle provenance
+        run: npm run check:observatory-bundle
+
       - name: Build
         run: npm run build
 
