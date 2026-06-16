@@ -141,9 +141,16 @@ describe("documentation", () => {
     const observatory = readFileSync("docs/memory-observatory.md", "utf8");
 
     expect(readme).toContain("/api/graph");
+    expect(readme).toContain("/api/memories/:id?includeContent=true");
     expect(readme).toContain("本文と audit payload は返さず");
+    expect(readme).toContain("既定では省電力モードが有効で、自動回転はオフです");
     expect(observatory).toContain("Memory Observatory");
     expect(observatory).toContain("/api/graph");
+    expect(observatory).toContain("/api/memories/:id");
+    expect(observatory).toContain("includeContent=true");
+    expect(observatory).toContain("## 負荷対策");
+    expect(observatory).toContain("省電力モード");
+    expect(observatory).toContain("ノード名はグラフを見やすく保つため");
     expect(observatory).toContain("contentIncluded: false");
     expect(observatory).toContain("eventPayloadIncluded: false");
     expect(observatory).toContain("Dashboard の再読み込みだけで検索履歴が増えたり");

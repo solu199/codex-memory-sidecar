@@ -7,6 +7,7 @@ import vm from "node:vm";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
+  buildDashboardMemoryDetail,
   buildDashboardStatus,
   createDashboardServer,
   DASHBOARD_BUILD_FINGERPRINT,
@@ -108,6 +109,45 @@ describe("dashboard", () => {
     expect(JSON.stringify(status)).not.toContain("Dashboard must not expose memory contents.");
     expect(JSON.stringify(status)).not.toContain("Visible memory body should stay hidden.");
     expect(JSON.stringify(status)).not.toContain("hide payload details");
+  });
+
+  test("buildDashboardMemoryDetail exposes metadata by default and content only on explicit request", () => {
+    const created = store.createMemory({
+      content: "Detailed dashboard body should require an explicit reveal.",
+      summary: "Detailed dashboard summary",
+      layer: "recall",
+      tags: ["dashboard", "detail"],
+      sourceType: "github-pr",
+      sourceRef: "pr:#118",
+      projectScope: "alpha",
+      importance: 0.8,
+      confidence: 0.9,
+    });
+
+    const metadataOnly = buildDashboardMemoryDetail(store, created.id);
+    expect(metadataOnly).toMatchObject({
+      ok: true,
+      memory: {
+        id: created.id,
+        summary: "Detailed dashboard summary",
+        contentIncluded: false,
+        contentAvailable: true,
+        sourceType: "github-pr",
+        sourceRef: "pr:#118",
+        sourceUrl: "https://github.com/solu199/codex-memory-sidecar/pull/118",
+      },
+    });
+    expect(JSON.stringify(metadataOnly)).not.toContain("explicit reveal");
+
+    const withContent = buildDashboardMemoryDetail(store, created.id, { includeContent: true });
+    expect(withContent).toMatchObject({
+      ok: true,
+      memory: {
+        id: created.id,
+        contentIncluded: true,
+        content: "Detailed dashboard body should require an explicit reveal.",
+      },
+    });
   });
 
   test("buildDashboardStatus reports maintenance guidance for repairable index warnings", async () => {
@@ -357,8 +397,29 @@ describe("dashboard", () => {
       expect(html).toContain('id="showSim"');
       expect(html).toContain('id="showHebb"');
       expect(html).toContain('id="autoRotate"');
+      expect(html).toContain('id="lowPowerMode"');
       expect(html).toContain('id="fogOn"');
+      expect(html).toContain('id="memory-detail"');
+      expect(html).toContain('id="memory-detail-title"');
+      expect(html).toContain('id="memory-detail-content"');
+      expect(html).toContain("data-memory-detail-id");
       expect(html).toContain("/api/graph");
+      expect(html).toContain("/api/memories/");
+      expect(html).toContain("function openMemoryDetail");
+      expect(html).toContain("openMemoryDetail(node.id");
+      expect(html).toContain("function isObservatoryRenderable");
+      expect(html).toContain("function scheduleNextObservatoryFrame");
+      expect(html).toContain("document.hidden");
+      expect(html).toContain("cancelAnimationFrame(animationFrame)");
+      expect(html).toContain("function shouldShowNodeLabel");
+      expect(html).toContain("state.hover === node");
+      expect(html).not.toContain("score > 0.45 ? 1 : 0");
+      expect(html).toContain('id="autoRotate">');
+      expect(html).toContain('id="lowPowerMode" checked>');
+      expect(html).toContain(".app-view:not(#view-observatory).active");
+      expect(html).toContain("max-width: 1160px");
+      expect(html).toContain('class="table-wrap"');
+      expect(html).toContain("overflow-x: auto");
       expect(html).toContain("メモリ統計");
       expect(html).toContain("Directive Memory");
       expect(html).toContain("無効化済み Directive Memory");
@@ -393,6 +454,70 @@ describe("dashboard", () => {
           mode: "safe",
         },
       });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  test("serves memory detail over HTTP with explicit content reveal", async () => {
+    const created = store.createMemory({
+      content: "HTTP detail body should not be returned until explicitly requested.",
+      summary: "HTTP detail summary",
+      layer: "recall",
+      tags: ["dashboard", "detail"],
+      sourceType: "git-commit",
+      sourceRef: "git:abc1234",
+      projectScope: "alpha",
+    });
+    const server = createDashboardServer(store, {
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) },
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Expected TCP server address.");
+      }
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+
+      const metadataResponse = await fetch(`${baseUrl}/api/memories/${created.id}`);
+      const metadata = await metadataResponse.json();
+      expect(metadataResponse.status).toBe(200);
+      expect(metadata).toMatchObject({
+        ok: true,
+        memory: {
+          id: created.id,
+          summary: "HTTP detail summary",
+          contentIncluded: false,
+          contentAvailable: true,
+          sourceRef: "git:abc1234",
+        },
+      });
+      expect(JSON.stringify(metadata)).not.toContain("explicitly requested");
+
+      const contentResponse = await fetch(
+        `${baseUrl}/api/memories/${created.id}?includeContent=true`,
+      );
+      const content = await contentResponse.json();
+      expect(contentResponse.status).toBe(200);
+      expect(content).toMatchObject({
+        ok: true,
+        memory: {
+          id: created.id,
+          contentIncluded: true,
+          content: "HTTP detail body should not be returned until explicitly requested.",
+        },
+      });
+
+      const missingResponse = await fetch(`${baseUrl}/api/memories/999999`);
+      await expect(missingResponse.json()).resolves.toEqual({
+        ok: false,
+        error: "Memory 999999 was not found.",
+      });
+      expect(missingResponse.status).toBe(404);
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

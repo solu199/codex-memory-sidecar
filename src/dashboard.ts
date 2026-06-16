@@ -23,6 +23,7 @@ import {
   type WorkspaceActivity,
 } from "./memory-freshness.js";
 import { MemoryStore } from "./memory-store.js";
+import type { Memory } from "./types.js";
 import { runStartupMaintenance } from "./startup-maintenance.js";
 
 export const DASHBOARD_SCHEMA_VERSION = "2026-06-13-dashboard-status-v3";
@@ -234,6 +235,43 @@ export interface DashboardStatus {
   }>;
 }
 
+export interface DashboardMemoryDetailOptions {
+  includeContent?: boolean;
+}
+
+export type DashboardMemoryDetail =
+  | {
+      ok: true;
+      memory: {
+        id: number;
+        layer: string;
+        summary: string;
+        tags: string[];
+        projectScope: string;
+        sourceType: string;
+        sourceRef: string;
+        sourceUrl: string | null;
+        importance: number;
+        confidence: number;
+        status: string;
+        contentAvailable: boolean;
+        contentIncluded: boolean;
+        content?: string;
+        createdAt: string;
+        updatedAt: string;
+        validFrom: string;
+        invalidatedAt: string | null;
+        invalidatedByRef: string | null;
+        invalidationReason: string | null;
+        lastAccessedAt: string | null;
+        expiresAt: string | null;
+      };
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 export async function buildDashboardStatus(
   store: MemoryStore,
   options: DashboardOptions = {},
@@ -423,6 +461,79 @@ function serializeDashboardDirectives(
   }));
 }
 
+export function buildDashboardMemoryDetail(
+  store: MemoryStore,
+  memoryId: number,
+  options: DashboardMemoryDetailOptions = {},
+): DashboardMemoryDetail {
+  const memory = store.getMemory(memoryId);
+  if (!memory) {
+    return {
+      ok: false,
+      error: `Memory ${memoryId} was not found.`,
+    };
+  }
+
+  return {
+    ok: true,
+    memory: serializeDashboardMemoryDetail(memory, options),
+  };
+}
+
+function serializeDashboardMemoryDetail(
+  memory: Memory,
+  options: DashboardMemoryDetailOptions,
+): Extract<DashboardMemoryDetail, { ok: true }>["memory"] {
+  const includeContent = options.includeContent ?? false;
+  return {
+    id: memory.id,
+    layer: memory.layer,
+    summary: memory.summary,
+    tags: memory.tags,
+    projectScope: memory.projectScope,
+    sourceType: memory.sourceType,
+    sourceRef: memory.sourceRef,
+    sourceUrl: sourceRefUrl(memory.sourceType, memory.sourceRef),
+    importance: memory.importance,
+    confidence: memory.confidence,
+    status: memory.status,
+    contentAvailable: memory.content.length > 0,
+    contentIncluded: includeContent,
+    ...(includeContent ? { content: memory.content } : {}),
+    createdAt: memory.createdAt.toISOString(),
+    updatedAt: memory.updatedAt.toISOString(),
+    validFrom: memory.validFrom.toISOString(),
+    invalidatedAt: memory.invalidatedAt?.toISOString() ?? null,
+    invalidatedByRef: memory.invalidatedByRef,
+    invalidationReason: memory.invalidationReason,
+    lastAccessedAt: memory.lastAccessedAt?.toISOString() ?? null,
+    expiresAt: memory.expiresAt?.toISOString() ?? null,
+  };
+}
+
+function sourceRefUrl(sourceType: string, sourceRef: string): string | null {
+  if (/^https?:\/\//.test(sourceRef)) {
+    return sourceRef;
+  }
+  const repositoryUrl = "https://github.com/solu199/codex-memory-sidecar";
+  const pullRequestMatch = /^pr:#?(\d+)$/i.exec(sourceRef);
+  if (sourceType === "github-pr" || pullRequestMatch) {
+    const number = pullRequestMatch?.[1] ?? /^#?(\d+)$/.exec(sourceRef)?.[1];
+    return number ? `${repositoryUrl}/pull/${number}` : null;
+  }
+  const issueMatch = /^issue:#?(\d+)$/i.exec(sourceRef);
+  if (sourceType === "github-issue" || issueMatch) {
+    const number = issueMatch?.[1] ?? /^#?(\d+)$/.exec(sourceRef)?.[1];
+    return number ? `${repositoryUrl}/issues/${number}` : null;
+  }
+  const commitMatch = /^git:([0-9a-f]{7,40})$/i.exec(sourceRef);
+  if (sourceType === "git-commit" || commitMatch) {
+    const hash = commitMatch?.[1] ?? sourceRef;
+    return /^[0-9a-f]{7,40}$/i.test(hash) ? `${repositoryUrl}/commit/${hash}` : null;
+  }
+  return null;
+}
+
 export function createDashboardServer(
   store: MemoryStore,
   options: DashboardOptions = {},
@@ -447,6 +558,18 @@ export function createDashboardServer(
 
       if (url.pathname === "/api/graph") {
         sendJson(response, 200, buildMemoryGraph(store));
+        return;
+      }
+
+      const memoryDetailMatch = /^\/api\/memories\/(\d+)$/.exec(url.pathname);
+      if (memoryDetailMatch) {
+        const includeContent = ["1", "true", "yes"].includes(
+          (url.searchParams.get("includeContent") ?? "").toLowerCase(),
+        );
+        const detail = buildDashboardMemoryDetail(store, Number(memoryDetailMatch[1]), {
+          includeContent,
+        });
+        sendJson(response, detail.ok ? 200 : 404, detail);
         return;
       }
 
@@ -792,6 +915,7 @@ function renderDashboardHtml(): string {
     .app-content {
       padding: 24px;
       min-width: 0;
+      overflow-x: hidden;
     }
     .app-inspector {
       border-left: 1px solid #d2d6dc;
@@ -808,6 +932,22 @@ function renderDashboardHtml(): string {
     }
     .app-view.active {
       display: block;
+    }
+    .app-view:not(#view-observatory).active {
+      width: min(100%, 1160px);
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 8px 0 40px;
+    }
+    .app-view:not(#view-observatory) h1 {
+      font-size: 26px;
+      margin: 2px 0 18px;
+    }
+    .app-view:not(#view-observatory) h2 {
+      margin: 28px 0 10px;
+      color: #dbe7fb;
+      font-size: 15px;
+      letter-spacing: 0;
     }
     .hero-row {
       display: flex;
@@ -866,10 +1006,12 @@ function renderDashboardHtml(): string {
     }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
       gap: 12px;
     }
     .panel {
+      min-width: 0;
+      box-sizing: border-box;
       border: 1px solid #d2d6dc;
       border-radius: 8px;
       padding: 16px;
@@ -895,6 +1037,24 @@ function renderDashboardHtml(): string {
       border-radius: 8px;
       overflow: hidden;
     }
+    .table-wrap {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      margin-top: 12px;
+      border: 1px solid #d2d6dc;
+      border-radius: 8px;
+      background: #ffffff;
+    }
+    .table-wrap table {
+      min-width: 720px;
+      margin-top: 0;
+      border: 0;
+      border-radius: 0;
+    }
+    .table-wrap.wide table {
+      min-width: 980px;
+    }
     .summary {
       max-width: 420px;
       overflow-wrap: anywhere;
@@ -906,7 +1066,7 @@ function renderDashboardHtml(): string {
     }
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
       gap: 12px;
       margin-top: 12px;
     }
@@ -919,9 +1079,15 @@ function renderDashboardHtml(): string {
     .stats-list li {
       display: flex;
       justify-content: space-between;
+      align-items: flex-start;
       gap: 12px;
       padding: 6px 0;
       border-bottom: 1px solid #e4e7eb;
+    }
+    .stats-list strong {
+      min-width: 0;
+      text-align: right;
+      overflow-wrap: anywhere;
     }
     .observatory {
       position: relative;
@@ -948,6 +1114,59 @@ function renderDashboardHtml(): string {
       display: block;
       color: #52606d;
       line-height: 1.5;
+    }
+    .detail-panel {
+      margin-top: 18px;
+      border-color: rgba(238, 160, 48, 0.26);
+    }
+    .detail-panel.empty {
+      opacity: 0.78;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 10px;
+      margin: 12px 0;
+    }
+    .detail-grid .label {
+      margin-bottom: 2px;
+    }
+    .detail-grid strong {
+      display: block;
+      overflow-wrap: anywhere;
+      font-size: 14px;
+    }
+    .detail-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 12px 0;
+    }
+    .link-button {
+      padding: 4px 8px;
+      font-size: 12px;
+      border-color: rgba(238, 160, 48, 0.42);
+      color: #ffd891;
+      background: rgba(238, 160, 48, 0.08);
+    }
+    .source-link {
+      color: #79a8ff;
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }
+    .source-link:hover {
+      text-decoration: underline;
+    }
+    .memory-content {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      border: 1px solid rgba(95, 127, 170, 0.28);
+      border-radius: 8px;
+      padding: 12px;
+      background: rgba(5, 10, 16, 0.42);
+      color: #dbe7fb;
+      max-height: 360px;
+      overflow: auto;
     }
     th, td {
       border-bottom: 1px solid #e4e7eb;
@@ -1312,7 +1531,8 @@ function renderDashboardHtml(): string {
       font-size: 12px;
     }
     .app-content {
-      padding: 14px 14px 14px 0;
+      padding: 14px;
+      overflow-x: hidden;
     }
     #view-observatory {
       height: calc(100vh - 28px);
@@ -1495,7 +1715,8 @@ function renderDashboardHtml(): string {
       background: rgba(5, 10, 16, 0.90);
     }
     .panel,
-    table {
+    table,
+    .table-wrap {
       color: #dbe7fb;
       border-color: rgba(95, 127, 170, 0.28);
       background: rgba(8, 14, 22, 0.82);
@@ -1537,7 +1758,7 @@ function renderDashboardHtml(): string {
         color: #f9fafb;
         border-color: #4b5563;
       }
-      button, .panel, table {
+      button, .panel, table, .table-wrap {
         background: #1f2937;
         color: #f9fafb;
         border-color: #4b5563;
@@ -1587,7 +1808,8 @@ function renderDashboardHtml(): string {
       }
       button,
       .panel,
-      table {
+      table,
+      .table-wrap {
         color: #dbe7fb;
         border-color: rgba(95, 127, 170, 0.28);
         background: rgba(8, 14, 22, 0.82);
@@ -1663,7 +1885,8 @@ function renderDashboardHtml(): string {
               <label class="opt"><input type="checkbox" id="showTitles" checked> タイトル表示</label>
               <label class="opt"><input type="checkbox" id="showSim" checked> 類似エッジ</label>
               <label class="opt"><input type="checkbox" id="showHebb" checked> 共起エッジ</label>
-              <label class="opt"><input type="checkbox" id="autoRotate" checked> 自動回転</label>
+              <label class="opt"><input type="checkbox" id="autoRotate"> 自動回転</label>
+              <label class="opt"><input type="checkbox" id="lowPowerMode" checked> 省電力モード</label>
               <label class="opt"><input type="checkbox" id="fogOn" checked> 忘却の霧</label>
               <div class="hint">
                 奥行き(Z軸)はACT-R風の活性度です。よく想起される記憶ほど手前に浮上し、忘れられつつある記憶は霧の奥へ沈みます。ドラッグで回転、ホイールでズーム、右ドラッグでパンできます。ノードを掴んで動かすと追従し、クリックでフォーカスします。Ctrl+ホバーで要約を表示します。
@@ -1714,16 +1937,23 @@ function renderDashboardHtml(): string {
           <div class="panel"><p class="label">Auto Memory Curation</p><ul class="stats-list" id="auto-curation"></ul></div>
         </section>
         <h2>プロジェクトスコープ</h2>
-        <table><thead><tr><th>スコープ</th><th>有効</th><th>合計</th><th>最新</th></tr></thead><tbody id="project-scopes"></tbody></table>
+        <div class="table-wrap"><table><thead><tr><th>スコープ</th><th>有効</th><th>合計</th><th>最新</th></tr></thead><tbody id="project-scopes"></tbody></table></div>
         <h2>最近のメモリ</h2>
-        <table><thead><tr><th>ID</th><th>レイヤー</th><th>要約</th><th>情報源</th><th>スコープ</th><th>タグ</th><th>更新</th></tr></thead><tbody id="recent-memories"></tbody></table>
+        <div class="table-wrap wide"><table><thead><tr><th>ID</th><th>レイヤー</th><th>要約</th><th>情報源</th><th>スコープ</th><th>タグ</th><th>更新</th><th>操作</th></tr></thead><tbody id="recent-memories"></tbody></table></div>
+        <section id="memory-detail" class="panel detail-panel empty">
+          <p class="label">メモリ詳細</p>
+          <h2 id="memory-detail-title">メモリを選択してください</h2>
+          <div id="memory-detail-meta" class="detail-grid"></div>
+          <div id="memory-detail-actions" class="detail-actions"></div>
+          <div id="memory-detail-content" class="tags">Observatory のノード、または最近のメモリ一覧の「詳細」から確認できます。本文は明示的に開くまで表示しません。</div>
+        </section>
       </section>
       <section id="view-directives" class="app-view">
         <h1>Directive Memory</h1>
         <h2>Directive Memory</h2>
-        <table><thead><tr><th>ID</th><th>範囲</th><th>スコープ</th><th>指示内容</th><th>理由</th><th>情報源</th><th>更新</th></tr></thead><tbody id="directives"></tbody></table>
+        <div class="table-wrap wide"><table><thead><tr><th>ID</th><th>範囲</th><th>スコープ</th><th>指示内容</th><th>理由</th><th>情報源</th><th>更新</th></tr></thead><tbody id="directives"></tbody></table></div>
         <h2>無効化済み Directive Memory</h2>
-        <table><thead><tr><th>ID</th><th>範囲</th><th>スコープ</th><th>指示内容</th><th>理由</th><th>情報源</th><th>更新</th></tr></thead><tbody id="disabled-directives"></tbody></table>
+        <div class="table-wrap wide"><table><thead><tr><th>ID</th><th>範囲</th><th>スコープ</th><th>指示内容</th><th>理由</th><th>情報源</th><th>更新</th></tr></thead><tbody id="disabled-directives"></tbody></table></div>
       </section>
       <section id="view-maintenance" class="app-view">
         <h1>メンテナンス</h1>
@@ -1736,7 +1966,7 @@ function renderDashboardHtml(): string {
       </section>
       <section id="view-events" class="app-view">
         <h1>イベント</h1>
-        <table><thead><tr><th>ID</th><th>メモリ</th><th>種類</th><th>作成</th></tr></thead><tbody id="recent-events"></tbody></table>
+        <div class="table-wrap"><table><thead><tr><th>ID</th><th>メモリ</th><th>種類</th><th>作成</th></tr></thead><tbody id="recent-events"></tbody></table></div>
       </section>
       <section id="view-settings" class="app-view">
         <h1>設定</h1>
@@ -1803,7 +2033,8 @@ function renderDashboardHtml(): string {
           '<label class="opt"><input type="checkbox" id="showTitles" checked> タイトル表示</label>',
           '<label class="opt"><input type="checkbox" id="showSim" checked> 類似エッジ</label>',
           '<label class="opt"><input type="checkbox" id="showHebb" checked> 共起エッジ</label>',
-          '<label class="opt"><input type="checkbox" id="autoRotate" checked> 自動回転</label>',
+          '<label class="opt"><input type="checkbox" id="autoRotate"> 自動回転</label>',
+          '<label class="opt"><input type="checkbox" id="lowPowerMode" checked> 省電力モード</label>',
           '<label class="opt"><input type="checkbox" id="fogOn" checked> 忘却の霧</label>',
           '<div class="hint">奥行き(Z軸)はACT-R風の活性度です。よく想起される記憶ほど手前に浮かび、忘れられつつある記憶は霧の奥へ沈みます。ドラッグで回転、ホイールでズーム、右ドラッグでパンできます。</div>'
         ].join("");
@@ -1839,6 +2070,7 @@ function renderDashboardHtml(): string {
       activeView: "observatory",
       graph: null,
       observatory3d: null,
+      selectedMemoryId: null,
       mode: "live",
       search: ""
     };
@@ -1864,6 +2096,7 @@ function renderDashboardHtml(): string {
         panel.classList[active ? "add" : "remove"]("active");
       }
       if (view === "observatory") {
+        resumeObservatoryRender();
         redrawMemoryGraph();
       }
     }
@@ -1883,6 +2116,9 @@ function renderDashboardHtml(): string {
       if (dashboardState.graph) {
         renderMemoryGraph(dashboardState.graph);
       }
+    }
+    function resumeObservatoryRender() {
+      dashboardState.observatory3d?.resume?.();
     }
     async function refresh() {
       const response = await fetch("/api/status");
@@ -1984,11 +2220,96 @@ function renderDashboardHtml(): string {
         ? renderDirectiveRows(status.disabledDirectives)
         : "<tr><td colspan=\\"7\\">無効化済み directive memory はありません</td></tr>";
       document.getElementById("recent-memories").innerHTML = status.recentMemories.map((memory) => (
-        "<tr><td>" + memory.id + "</td><td>" + escapeHtml(memory.layer) + "</td><td class=\\"summary\\">" + escapeHtml(memory.summary) + "</td><td class=\\"tags\\">" + escapeHtml(memory.sourceType + ': ' + memory.sourceRef) + "</td><td class=\\"tags\\">" + escapeHtml(memory.projectScope) + "</td><td class=\\"tags\\">" + escapeHtml(memory.tags.join(", ")) + "</td><td>" + escapeHtml(memory.updatedAt) + "</td></tr>"
+        "<tr><td>" + memory.id + "</td><td>" + escapeHtml(memory.layer) + "</td><td class=\\"summary\\">" + escapeHtml(memory.summary) + "</td><td class=\\"tags\\">" + escapeHtml(memory.sourceType + ': ' + memory.sourceRef) + "</td><td class=\\"tags\\">" + escapeHtml(memory.projectScope) + "</td><td class=\\"tags\\">" + escapeHtml(memory.tags.join(", ")) + "</td><td>" + escapeHtml(memory.updatedAt) + "</td><td><button type=\\"button\\" class=\\"link-button\\" data-memory-detail-id=\\"" + memory.id + "\\">詳細</button></td></tr>"
       )).join("");
+      bindMemoryDetailLinks();
       document.getElementById("recent-events").innerHTML = status.recentEvents.map((event) => (
         "<tr><td>" + event.id + "</td><td>" + event.memoryId + "</td><td>" + event.eventType + "</td><td>" + event.createdAt + "</td></tr>"
       )).join("");
+    }
+    function bindMemoryDetailLinks() {
+      for (const button of queryAll("[data-memory-detail-id]")) {
+        if (button.dataset?.memoryDetailBound === "true") continue;
+        button.dataset.memoryDetailBound = "true";
+        button.addEventListener("click", () => {
+          void openMemoryDetail(button.dataset.memoryDetailId);
+        });
+      }
+    }
+    async function openMemoryDetail(memoryId, options = {}) {
+      const id = Number(memoryId);
+      if (!Number.isFinite(id) || id <= 0) return;
+      dashboardState.selectedMemoryId = id;
+      setActiveView("memories");
+      renderMemoryDetailLoading(id);
+      const includeContent = options.includeContent === true;
+      const path = "/api/memories/" + id + (includeContent ? "?includeContent=true" : "");
+      try {
+        const response = await fetch(path);
+        const detail = await response.json();
+        if (!response.ok || !detail.ok) {
+          renderMemoryDetailError(detail.error ?? ("Memory " + id + " could not be loaded."));
+          return;
+        }
+        renderMemoryDetail(detail.memory);
+      } catch (error) {
+        renderMemoryDetailError(error instanceof Error ? error.message : String(error));
+      }
+    }
+    function renderMemoryDetailLoading(memoryId) {
+      const panel = document.getElementById("memory-detail");
+      if (panel) panel.classList.remove("empty");
+      document.getElementById("memory-detail-title").textContent = "Memory #" + memoryId;
+      document.getElementById("memory-detail-meta").innerHTML = renderStats({ loading: "読み込み中" });
+      document.getElementById("memory-detail-actions").innerHTML = "";
+      document.getElementById("memory-detail-content").textContent = "詳細を読み込んでいます。";
+    }
+    function renderMemoryDetailError(message) {
+      const panel = document.getElementById("memory-detail");
+      if (panel) panel.classList.remove("empty");
+      document.getElementById("memory-detail-title").textContent = "メモリ詳細を開けません";
+      document.getElementById("memory-detail-meta").innerHTML = "";
+      document.getElementById("memory-detail-actions").innerHTML = "";
+      document.getElementById("memory-detail-content").textContent = message;
+    }
+    function renderMemoryDetail(memory) {
+      const panel = document.getElementById("memory-detail");
+      if (panel) {
+        panel.classList.remove("empty");
+        panel.scrollIntoView?.({ block: "start", behavior: "smooth" });
+      }
+      document.getElementById("memory-detail-title").textContent = "Memory #" + memory.id + " / " + memory.layer;
+      document.getElementById("memory-detail-meta").innerHTML = renderStats({
+        status: memory.status,
+        source: memory.sourceType + ": " + memory.sourceRef,
+        project: memory.projectScope,
+        tags: (memory.tags ?? []).join(", ") || "-",
+        importance: Number(memory.importance ?? 0).toFixed(2),
+        confidence: Number(memory.confidence ?? 0).toFixed(2),
+        updated: memory.updatedAt,
+        validFrom: memory.validFrom,
+        invalidatedAt: memory.invalidatedAt ?? "-",
+        invalidatedByRef: memory.invalidatedByRef ?? "-"
+      });
+      const source = memory.sourceUrl
+        ? "<a class=\\"source-link\\" href=\\"" + escapeHtml(memory.sourceUrl) + "\\" target=\\"_blank\\" rel=\\"noreferrer\\">sourceRefを開く</a>"
+        : "<span class=\\"tags\\">sourceRefリンクなし</span>";
+      const reveal = memory.contentAvailable && !memory.contentIncluded
+        ? "<button type=\\"button\\" id=\\"memory-content-reveal\\" class=\\"link-button\\">本文を表示</button>"
+        : "";
+      document.getElementById("memory-detail-actions").innerHTML = source + reveal;
+      document.getElementById("memory-detail-content").innerHTML = [
+        "<p class=\\"summary\\">" + escapeHtml(memory.summary) + "</p>",
+        memory.contentIncluded
+          ? "<pre class=\\"memory-content\\">" + escapeHtml(memory.content ?? "") + "</pre>"
+          : "<p class=\\"tags\\">本文は明示的に開くまで表示しません。</p>"
+      ].join("");
+      const revealButton = document.getElementById("memory-content-reveal");
+      if (revealButton) {
+        revealButton.addEventListener("click", () => {
+          void openMemoryDetail(memory.id, { includeContent: true });
+        });
+      }
     }
     async function fetchGraph() {
       try {
@@ -2046,6 +2367,9 @@ function renderDashboardHtml(): string {
         userMovedCamera: false,
         visualDensityDamping,
         lastFeedHtml: "",
+        activeUntil: 0,
+        draggingNode: false,
+        lastFrameAt: 0,
         viewCenter: { x: 0, y: 0, z: 0 }
       };
       const graph3d = new window.ForceGraph3D(container, { controlType: "orbit" })
@@ -2125,67 +2449,127 @@ function renderDashboardHtml(): string {
       controls.dampingFactor = 0.085;
       controls.screenSpacePanning = true;
       controls.zoomToCursor = true;
-      controls.autoRotate = true;
+      controls.autoRotate = false;
       controls.autoRotateSpeed = 0.45;
       controls.addEventListener?.("start", () => {
         if (!state.autoCentering) state.userMovedCamera = true;
+        markObservatoryActive(state, 1600);
       });
-      let draggingNode = false;
       graph3d.onNodeDrag(() => {
-        if (!draggingNode) {
-          draggingNode = true;
+        if (!state.draggingNode) {
+          state.draggingNode = true;
           graph3d.d3ReheatSimulation();
         }
+        markObservatoryActive(state, 1200);
       });
       graph3d.onNodeDragEnd((node) => {
-        draggingNode = false;
+        state.draggingNode = false;
+        markObservatoryActive(state, 1400);
         node.fx = undefined;
         node.fy = undefined;
         node.fz = undefined;
       });
       graph3d.onNodeHover((node, event) => {
         state.hover = node || null;
+        if (node) markObservatoryActive(state, 900);
         showTooltip(node, event, state);
         setCursor(node ? "pointer" : "default");
       });
       graph3d.onNodeClick((node) => {
         state.focus = state.focus === node ? null : node;
+        markObservatoryActive(state, 1600);
         graph3d.nodeVisibility(graph3d.nodeVisibility()).linkVisibility(graph3d.linkVisibility());
         state.viewCenter = graphPoint(node);
         controls.target.set(state.viewCenter.x, state.viewCenter.y, state.viewCenter.z);
         graph3d.cameraPosition({ x: node.x * 1.35, y: node.y * 1.35, z: (node.z || 0) + 160 }, node, 900);
         refreshObservatoryPanels(model, state);
+        void openMemoryDetail(node.id);
       });
       graph3d.onBackgroundClick(() => {
         state.focus = null;
+        markObservatoryActive(state, 1000);
         graph3d.linkVisibility(graph3d.linkVisibility()).nodeVisibility(graph3d.nodeVisibility());
         refreshObservatoryPanels(model, state);
       });
       bindObservatoryUi(model, graph3d, controls, state);
-      const interval = window.setInterval(() => refreshObservatoryPanels(model, state), 900);
+      const interval = window.setInterval(() => {
+        if (isObservatoryRenderable()) {
+          refreshObservatoryPanels(model, state);
+        }
+      }, 1800);
       let frame = 0;
+      let animationFrame = null;
+      let animationTimeout = null;
+      let destroyed = false;
+      function observatoryFrameDelay() {
+        if (!isObservatoryRenderable()) return 900;
+        if (!isLowPowerMode()) return 0;
+        if (state.mode === "replay" && state.replayPlaying) return 33;
+        const active = state.draggingNode || state.autoCentering || performance.now() < state.activeUntil;
+        if (active || state.hover || state.focus || isChecked("autoRotate")) return 66;
+        return 250;
+      }
+      function scheduleNextObservatoryFrame(delay = 0, force = false) {
+        if (destroyed) return;
+        if (force && animationTimeout !== null) {
+          window.clearTimeout(animationTimeout);
+          animationTimeout = null;
+        }
+        if (force && animationFrame !== null) {
+          cancelAnimationFrame(animationFrame);
+          animationFrame = null;
+        }
+        if (animationFrame !== null || animationTimeout !== null) return;
+        if (delay > 0) {
+          animationTimeout = window.setTimeout(() => {
+            animationTimeout = null;
+            animationFrame = requestAnimationFrame(animate);
+          }, delay);
+          return;
+        }
+        animationFrame = requestAnimationFrame(animate);
+      }
+      const resume = () => {
+        state.lastFrameAt = 0;
+        scheduleNextObservatoryFrame(0, true);
+      };
+      document.addEventListener("visibilitychange", resume);
       const animate = (time) => {
+        animationFrame = null;
+        if (destroyed) return;
+        if (!isObservatoryRenderable()) {
+          scheduleNextObservatoryFrame(observatoryFrameDelay());
+          return;
+        }
+        state.lastFrameAt = time;
         controls.autoRotate = isChecked("autoRotate") && state.mode !== "replay";
         scene.fog = isChecked("fogOn") ? fog : null;
         controls.update();
         updateReplay(time, model, graph3d, state);
-        if (!state.paused && state.mode === "live" && time - state.lastParticleT > 1150) {
+        const particleInterval = isLowPowerMode() ? 3600 : 1150;
+        if (!state.paused && state.mode === "live" && time - state.lastParticleT > particleInterval) {
           state.lastParticleT = time;
           emitRecentParticle(model, graph3d, state);
         }
-        if (frame++ % 5 === 0) {
+        const objectUpdateEvery = isLowPowerMode() ? 12 : 5;
+        if (frame++ % objectUpdateEvery === 0) {
           for (const node of model.nodes) updateNodeObject(node, state, graph3d);
         }
-        requestAnimationFrame(animate);
+        scheduleNextObservatoryFrame(observatoryFrameDelay());
       };
-      requestAnimationFrame(animate);
+      scheduleNextObservatoryFrame(0);
       refreshObservatoryPanels(model, state);
       dashboardState.observatory3d = {
         source: graph,
         modelLinks: model.links,
         graph3d,
         controls,
+        resume,
         destroy() {
+          destroyed = true;
+          if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+          if (animationTimeout !== null) window.clearTimeout(animationTimeout);
+          document.removeEventListener("visibilitychange", resume);
           resizeObserver?.disconnect();
           window.removeEventListener("resize", resizeGraph);
           window.clearInterval(interval);
@@ -2277,7 +2661,8 @@ function renderDashboardHtml(): string {
         for (const button of tabs) button.classList.remove("active");
         document.getElementById(mode === "live" ? "tabLive" : mode === "replay" ? "tabReplay" : "tabExplore")?.classList.add("active");
         document.getElementById("timeline")?.classList[mode === "replay" ? "add" : "remove"]("show");
-        controls.autoRotate = mode !== "replay";
+        controls.autoRotate = mode !== "replay" && isChecked("autoRotate");
+        markObservatoryActive(state, 1200);
         graph3d.nodeVisibility(graph3d.nodeVisibility()).linkVisibility(graph3d.linkVisibility());
         refreshObservatoryPanels(model, state);
       }
@@ -2286,22 +2671,26 @@ function renderDashboardHtml(): string {
       tabExplore?.addEventListener("click", () => setMode("explore"));
       document.getElementById("pauseBtn")?.addEventListener("click", (event) => {
         state.paused = !state.paused;
+        markObservatoryActive(state, 900);
         event.target.textContent = state.paused ? "再開" : "一時停止";
       });
       document.getElementById("searchBox")?.addEventListener("input", (event) => {
         dashboardState.search = event.target?.value ?? "";
+        markObservatoryActive(state, 1100);
         graph3d.nodeVisibility(graph3d.nodeVisibility()).linkVisibility(graph3d.linkVisibility());
         refreshObservatoryPanels(model, state);
         centerGraphView(graph3d, controls, model, state, { animateMs: 450, fit: true, userInitiated: false });
       });
-      for (const id of ["showTitles", "showSim", "showHebb", "autoRotate", "fogOn"]) {
+      for (const id of ["showTitles", "showSim", "showHebb", "autoRotate", "lowPowerMode", "fogOn"]) {
         document.getElementById(id)?.addEventListener("change", () => {
+          markObservatoryActive(state, id === "lowPowerMode" ? 600 : 1100);
           graph3d.nodeVisibility(graph3d.nodeVisibility()).linkVisibility(graph3d.linkVisibility());
           refreshObservatoryPanels(model, state);
         });
       }
       document.getElementById("scrub")?.addEventListener("input", (event) => {
         state.simH = Number(event.target.value);
+        markObservatoryActive(state, 1000);
         graph3d.nodeVisibility(graph3d.nodeVisibility()).linkVisibility(graph3d.linkVisibility());
         refreshObservatoryPanels(model, state);
         centerGraphView(graph3d, controls, model, state, { animateMs: 450, fit: true, userInitiated: false });
@@ -2309,6 +2698,7 @@ function renderDashboardHtml(): string {
       document.getElementById("replayPlay")?.addEventListener("click", (event) => {
         state.replayPlaying = !state.replayPlaying;
         state.replayLast = null;
+        markObservatoryActive(state, 1200);
         event.target.textContent = state.replayPlaying ? "停止" : "再生";
       });
     }
@@ -2473,7 +2863,7 @@ function renderDashboardHtml(): string {
         const glowScale = (7 + 15 * total) * clamp(glowDamping + 0.16, 0.54, 1);
         node.__glow.scale.set(glowScale, glowScale, 1);
       }
-      const labelOpacity = (state.focus === node || state.hover === node || score > 0.45 ? 1 : 0) * alpha;
+      const labelOpacity = shouldShowNodeLabel(node, state) ? 1 * alpha : 0;
       const showLabel = labelOpacity > 0.06;
       if (node.__labelTitle && node.__labelAnon) {
         node.__labelTitle.visible = showLabel && isChecked("showTitles");
@@ -2481,6 +2871,9 @@ function renderDashboardHtml(): string {
         node.__labelTitle.material.opacity = labelOpacity;
         node.__labelAnon.material.opacity = labelOpacity;
       }
+    }
+    function shouldShowNodeLabel(node, state) {
+      return state.hover === node;
     }
     function memVisible(node, state) {
       if (state.mode === "replay" && (node.createdH > state.simH || node.forgottenH <= state.simH)) return false;
@@ -2711,6 +3104,16 @@ function renderDashboardHtml(): string {
     function isChecked(id) {
       const element = document.getElementById(id);
       return element ? element.checked !== false : true;
+    }
+    function isObservatoryRenderable() {
+      return dashboardState.activeView === "observatory" && !document.hidden;
+    }
+    function isLowPowerMode() {
+      return isChecked("lowPowerMode");
+    }
+    function markObservatoryActive(state, durationMs = 1200) {
+      state.activeUntil = performance.now() + durationMs;
+      resumeObservatoryRender();
     }
     function drawMemoryGraph(graph) {
       const canvas = document.getElementById("memory-graph");
