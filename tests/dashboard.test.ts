@@ -426,6 +426,34 @@ describe("dashboard", () => {
     }
   });
 
+  test("serves vendored 3D observatory runtime when launched outside the repo cwd", async () => {
+    const originalCwd = process.cwd();
+    const externalCwd = mkdtempSync(path.join(os.tmpdir(), "codex-memory-sidecar-cwd-"));
+    const server = createDashboardServer(store);
+
+    process.chdir(externalCwd);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Expected TCP server address.");
+      }
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+
+      const response = await fetch(`${baseUrl}/assets/observatory-3d.bundle.js`);
+      const source = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(source).toContain("window.ForceGraph3D");
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+      process.chdir(originalCwd);
+      rmSync(externalCwd, { recursive: true, force: true });
+    }
+  });
+
   test("serves privacy-safe memory graph data over HTTP", async () => {
     store.createMemory({
       content: "Graph endpoint must not expose this memory body.",

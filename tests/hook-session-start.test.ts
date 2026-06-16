@@ -84,7 +84,14 @@ describe("SessionStart hook adapter", () => {
         health: {
           ok: true,
           integrityCheck: "ok",
-          fts: { ok: true, expectedCount: 0, indexedCount: 0, missingCount: 0, orphanCount: 0 },
+          fts: {
+            ok: true,
+            expectedCount: 0,
+            indexedCount: 0,
+            missingCount: 0,
+            orphanCount: 0,
+            porter: { indexedCount: 0, missingCount: 0, orphanCount: 0 },
+          },
           walCheckpoint: { busy: 0, log: 0, checkpointed: 0 },
           warnings: [],
           checkedAt: now,

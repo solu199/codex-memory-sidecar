@@ -1333,6 +1333,39 @@ describe("MCP tool handlers", () => {
     expect(store.getMemory(created.structuredContent.memory.id)?.status).toBe("active");
   });
 
+  test("forget_memory serializes bi-temporal invalidation metadata", async () => {
+    const tools = createToolHandlers(store);
+    const created = await tools.writeMemory({
+      content: "MCP logical delete should preserve invalidation metadata.",
+      layer: "recall",
+      tags: ["invalidation"],
+      sourceType: "manual",
+      sourceRef: "test",
+    });
+
+    const result = await tools.forgetMemory({
+      memoryId: created.structuredContent.memory.id,
+      reason: "covered by a newer memory",
+      invalidatedByRef: "issue:#116",
+    });
+
+    expect(result.structuredContent.memory).toMatchObject({
+      status: "forgotten",
+      invalidatedByRef: "issue:#116",
+      invalidationReason: "covered by a newer memory",
+    });
+    expect(result.structuredContent.memory.invalidatedAt).toEqual(expect.any(String));
+
+    const audit = await tools.auditMemory({
+      memoryId: created.structuredContent.memory.id,
+      limit: 1,
+    });
+    expect(audit.structuredContent.events[0]?.payload).toMatchObject({
+      invalidatedByRef: "issue:#116",
+      invalidationReason: "covered by a newer memory",
+    });
+  });
+
   test("backup_memory creates a database backup", async () => {
     const tools = createToolHandlers(store);
     await tools.writeMemory({

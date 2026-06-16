@@ -30,6 +30,19 @@ export const DASHBOARD_BUILD_FINGERPRINT = createHash("sha256")
   .update(readFileSync(fileURLToPath(import.meta.url)))
   .digest("hex")
   .slice(0, 16);
+const DASHBOARD_MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
+const DASHBOARD_REPO_ROOT =
+  path.basename(DASHBOARD_MODULE_DIR) === "src" &&
+  path.basename(path.dirname(DASHBOARD_MODULE_DIR)) === "dist"
+    ? path.dirname(path.dirname(DASHBOARD_MODULE_DIR))
+    : path.basename(DASHBOARD_MODULE_DIR) === "src"
+      ? path.dirname(DASHBOARD_MODULE_DIR)
+      : process.cwd();
+const OBSERVATORY_RUNTIME_PATH = path.join(
+  DASHBOARD_REPO_ROOT,
+  "vendor",
+  "observatory-3d.bundle.js",
+);
 
 export interface DashboardOptions {
   embeddingProvider?: EmbeddingProvider;
@@ -438,11 +451,7 @@ export function createDashboardServer(
       }
 
       if (url.pathname === "/assets/observatory-3d.bundle.js") {
-        sendJavaScript(
-          response,
-          200,
-          readFileSync(path.join(process.cwd(), "vendor", "observatory-3d.bundle.js"), "utf8"),
-        );
+        sendJavaScript(response, 200, readFileSync(OBSERVATORY_RUNTIME_PATH, "utf8"));
         return;
       }
 

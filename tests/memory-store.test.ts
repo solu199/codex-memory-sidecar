@@ -382,6 +382,41 @@ describe("MemoryStore", () => {
     expect(health.warnings).toContain("FTS index is missing 1 active memory row(s).");
   });
 
+  test("reports missing porter FTS rows in database health", () => {
+    const created = store.createMemory({
+      content: "Missing porter FTS rows should be visible.",
+      layer: "recall",
+      tags: ["health"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8,
+    });
+    const db = new Database(path.join(tempDir, "memory.sqlite"));
+    try {
+      db.prepare("DELETE FROM memories_fts_porter WHERE rowid = ?").run(created.id);
+    } finally {
+      db.close();
+    }
+
+    const health = store.checkDatabaseHealth();
+
+    expect(health.ok).toBe(false);
+    expect(health.fts).toMatchObject({
+      ok: false,
+      expectedCount: 1,
+      indexedCount: 1,
+      missingCount: 0,
+      orphanCount: 0,
+      porter: {
+        indexedCount: 0,
+        missingCount: 1,
+        orphanCount: 0,
+      },
+    });
+    expect(health.warnings).toContain("Porter FTS index is missing 1 active memory row(s).");
+  });
+
   test("repairs FTS index after creating a verified backup", async () => {
     const created = store.createMemory({
       content: "Repair should rebuild missing FTS rows.",
@@ -459,11 +494,20 @@ describe("MemoryStore", () => {
     const forgotten = store.forgetMemory({
       memoryId: created.id,
       reason: "No longer useful.",
+      invalidatedByRef: "issue:#116",
     });
 
     expect(forgotten.status).toBe("forgotten");
+    expect(forgotten.invalidatedAt).toBeInstanceOf(Date);
+    expect(forgotten.invalidatedByRef).toBe("issue:#116");
+    expect(forgotten.invalidationReason).toBe("No longer useful.");
     expect(store.getMemory(created.id)?.status).toBe("forgotten");
-    expect(store.listEvents(created.id).at(-1)?.eventType).toBe("forgotten");
+    const event = store.listEvents(created.id).at(-1);
+    expect(event?.eventType).toBe("forgotten");
+    expect(event?.payload).toMatchObject({
+      invalidatedByRef: "issue:#116",
+      invalidationReason: "No longer useful.",
+    });
   });
 
   test("refuses hard delete unless it is explicitly confirmed", () => {
@@ -1050,6 +1094,34 @@ describe("MemoryStore", () => {
     expect(store.getMemory(created.id)?.content).toBe(
       "Backup schema verification should be read-only.",
     );
+  });
+
+  test("inspects invalid backup schema as a structured failure", () => {
+    const created = store.createMemory({
+      content: "Backup inspection should be read-only.",
+      layer: "recall",
+      tags: ["backup"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.6,
+      confidence: 0.9,
+    });
+    const invalidBackupPath = path.join(tempDir, "invalid-inspection-backup.sqlite");
+    const invalidDb = new Database(invalidBackupPath);
+    invalidDb.exec("CREATE TABLE unrelated (id INTEGER PRIMARY KEY)");
+    invalidDb.close();
+
+    const result = store.inspectBackup({ backupPath: invalidBackupPath });
+
+    expect(result.ok).toBe(false);
+    expect(result.memoryCount).toBe(0);
+    expect(result.eventCount).toBe(0);
+    expect(result.integrityCheck).toBe("ok");
+    expect(result.schemaOk).toBe(false);
+    expect(result.memories).toEqual([]);
+    expect(result.warnings).toContain("Backup is missing required table: memories");
+    expect(result.warnings).toContain("Backup is missing required table: memory_events");
+    expect(store.getMemory(created.id)?.content).toBe("Backup inspection should be read-only.");
   });
 
   test("inspects legacy backups without bi-temporal columns as compatible", () => {

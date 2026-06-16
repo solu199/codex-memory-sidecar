@@ -128,6 +128,7 @@ const MAX_HYBRID_CANDIDATE_LIMIT = 1000;
 const GLOBAL_PROJECT_SCOPE = "global";
 const DEFAULT_BACKUP_RETENTION_KEEP_COUNT = 10;
 const DEFAULT_BACKUP_FILE_PATTERN = /^memory-\d{8}-\d{6}-\d{3}(?:-\d+)?\.sqlite$/;
+const REQUIRED_BACKUP_TABLES = ["memories", "memory_events", "memories_fts"] as const;
 const MAX_AUDIT_STRING_LENGTH = 2048;
 const BI_TEMPORAL_BACKFILL_REF = "migration:bi-temporal-v1";
 const BI_TEMPORAL_BACKFILL_REASON =
@@ -241,6 +242,12 @@ export class MemoryStore {
 
   forgetMemory(input: ForgetMemoryInput): Memory {
     const existing = this.requireMemory(input.memoryId);
+    const invalidatedAt = new Date();
+    const invalidationPayload = {
+      invalidatedAt: invalidatedAt.toISOString(),
+      invalidatedByRef: input.invalidatedByRef ?? null,
+      invalidationReason: input.reason,
+    };
 
     if (input.hardDelete) {
       if (!input.confirmHardDelete) {
@@ -252,18 +259,34 @@ export class MemoryStore {
         reason: input.reason,
         hardDelete: true,
         previousStatus: existing.status,
+        ...invalidationPayload,
       });
       return { ...existing, status: "forgotten" };
     }
 
     this.db
-      .prepare("UPDATE memories SET status = 'forgotten', updated_at = ? WHERE id = ?")
-      .run(new Date().toISOString(), input.memoryId);
+      .prepare(
+        `UPDATE memories
+         SET status = 'forgotten',
+             updated_at = ?,
+             invalidated_at = ?,
+             invalidated_by_ref = ?,
+             invalidation_reason = ?
+         WHERE id = ?`,
+      )
+      .run(
+        invalidatedAt.toISOString(),
+        invalidatedAt.toISOString(),
+        input.invalidatedByRef ?? null,
+        input.reason,
+        input.memoryId,
+      );
     this.deleteFtsRow(input.memoryId);
     this.recordEvent(input.memoryId, "forgotten", {
       reason: input.reason,
       hardDelete: false,
       previousStatus: existing.status,
+      ...invalidationPayload,
     });
     return this.requireMemory(input.memoryId);
   }
@@ -577,6 +600,12 @@ export class MemoryStore {
       ...(fts.orphanCount > 0
         ? [`FTS index contains ${fts.orphanCount} orphan or forgotten row(s).`]
         : []),
+      ...(fts.porter.missingCount > 0
+        ? [`Porter FTS index is missing ${fts.porter.missingCount} active memory row(s).`]
+        : []),
+      ...(fts.porter.orphanCount > 0
+        ? [`Porter FTS index contains ${fts.porter.orphanCount} orphan or forgotten row(s).`]
+        : []),
       ...(walCheckpoint.busy > 0
         ? [`WAL checkpoint reported ${walCheckpoint.busy} busy frame(s).`]
         : []),
@@ -708,8 +737,7 @@ export class MemoryStore {
     const backupDb = new Database(input.backupPath, { readonly: true, fileMustExist: true });
     try {
       const integrityCheck = runIntegrityCheck(backupDb, "quick_check");
-      const requiredTables = ["memories", "memory_events", "memories_fts"];
-      const missingTables = requiredTables.filter((table) => !tableExists(backupDb, table));
+      const missingTables = missingRequiredBackupTables(backupDb);
       const warnings = missingTables.map((table) => `Backup is missing required table: ${table}`);
       const missingTemporalColumns = missingBiTemporalMemoryColumns(backupDb);
       if (missingTemporalColumns.length) {
@@ -743,6 +771,24 @@ export class MemoryStore {
     const limit = Math.max(1, Math.min(input.limit ?? 20, 100));
     const backupDb = new Database(input.backupPath, { readonly: true, fileMustExist: true });
     try {
+      const integrityCheck = runIntegrityCheck(backupDb, "quick_check");
+      const missingTables = missingRequiredBackupTables(backupDb);
+      if (missingTables.length) {
+        return {
+          backupPath: input.backupPath,
+          ok: false,
+          memoryCount: tableExists(backupDb, "memories") ? countRows(backupDb, "memories") : 0,
+          eventCount: tableExists(backupDb, "memory_events")
+            ? countRows(backupDb, "memory_events")
+            : 0,
+          integrityCheck,
+          schemaOk: false,
+          warnings: missingTables.map((table) => `Backup is missing required table: ${table}`),
+          checkedAt: new Date(),
+          memories: [],
+        };
+      }
+
       const statuses: Memory["status"][] = ["active"];
       if (input.includeSuperseded) {
         statuses.push("superseded");
@@ -805,7 +851,7 @@ export class MemoryStore {
         ok: true,
         memoryCount: countRows(backupDb, "memories"),
         eventCount: countRows(backupDb, "memory_events"),
-        integrityCheck: runIntegrityCheck(backupDb, "quick_check"),
+        integrityCheck,
         schemaOk: true,
         warnings,
         checkedAt: new Date(),
@@ -854,27 +900,43 @@ export class MemoryStore {
 
   private checkFtsConsistency(): DatabaseHealth["fts"] {
     const expectedCount = countRowsWhere(this.db, "memories", "status != 'forgotten'");
-    const indexedCount = countRows(this.db, "memories_fts");
+    const primary = this.checkFtsTableConsistency("memories_fts");
+    const porter = this.checkFtsTableConsistency("memories_fts_porter");
+
+    return {
+      ok:
+        primary.missingCount === 0 &&
+        primary.orphanCount === 0 &&
+        porter.missingCount === 0 &&
+        porter.orphanCount === 0,
+      expectedCount,
+      indexedCount: primary.indexedCount,
+      missingCount: primary.missingCount,
+      orphanCount: primary.orphanCount,
+      porter,
+    };
+  }
+
+  private checkFtsTableConsistency(table: "memories_fts" | "memories_fts_porter") {
+    const indexedCount = countRows(this.db, table);
     const missing = this.db
       .prepare(
         `SELECT COUNT(*) AS count
          FROM memories m
-         LEFT JOIN memories_fts f ON f.rowid = m.id
+         LEFT JOIN ${table} f ON f.rowid = m.id
          WHERE m.status != 'forgotten' AND f.rowid IS NULL`,
       )
       .get() as { count: number };
     const orphan = this.db
       .prepare(
         `SELECT COUNT(*) AS count
-         FROM memories_fts f
+         FROM ${table} f
          LEFT JOIN memories m ON m.id = f.rowid
          WHERE m.id IS NULL OR m.status = 'forgotten'`,
       )
       .get() as { count: number };
 
     return {
-      ok: missing.count === 0 && orphan.count === 0,
-      expectedCount,
       indexedCount,
       missingCount: missing.count,
       orphanCount: orphan.count,
@@ -1456,6 +1518,10 @@ function tableExists(db: Database.Database, table: string): boolean {
   return row?.found === 1;
 }
 
+function missingRequiredBackupTables(db: Database.Database): string[] {
+  return REQUIRED_BACKUP_TABLES.filter((table) => !tableExists(db, table));
+}
+
 function columnExists(db: Database.Database, table: string, column: string): boolean {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
   return columns.some((item) => item.name === column);
@@ -1501,6 +1567,11 @@ function skippedFtsHealth(): DatabaseHealth["fts"] {
     indexedCount: 0,
     missingCount: 0,
     orphanCount: 0,
+    porter: {
+      indexedCount: 0,
+      missingCount: 0,
+      orphanCount: 0,
+    },
   };
 }
 

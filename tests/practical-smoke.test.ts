@@ -20,12 +20,13 @@ describe("runPracticalSmoke", () => {
       backupVerified: true,
       backupRetentionDryRun: true,
       backupRestoreDryRun: true,
+      invalidationMetadata: true,
       inspectBackupScoped: true,
       repairMemoryIndex: true,
       auditRecorded: true,
       dashboardShowsProjectScopes: true,
     });
-    expect(result.memoryCount).toBe(5);
+    expect(result.memoryCount).toBe(6);
     expect(result.eventCount).toBeGreaterThan(0);
     expect(result.warnings).toEqual([]);
   });
