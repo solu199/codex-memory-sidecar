@@ -78,4 +78,22 @@ describe("tooling configuration", () => {
     expect(notice).toContain("observatory-3d.bundle.sha256");
     expect(notice).toContain("Issue #109");
   });
+
+  test("Dashboard React/Vite app build is wired into the package build", () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
+      scripts: Record<string, string>;
+      dependencies?: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+
+    expect(pkg.scripts["build:dashboard-app"]).toBe("vite build --config vite.dashboard.config.ts");
+    expect(pkg.scripts.build).toBe("tsc -p tsconfig.json && npm run build:dashboard-app");
+    expect(pkg.scripts.dashboard).toBe("npm run build && node dist/src/dashboard.js");
+    expect(pkg.dependencies?.react ?? pkg.devDependencies.react).toBeDefined();
+    expect(pkg.dependencies?.["react-dom"] ?? pkg.devDependencies["react-dom"]).toBeDefined();
+    expect(pkg.devDependencies.vite).toBeDefined();
+    expect(existsSync("vite.dashboard.config.ts")).toBe(true);
+    expect(existsSync("src/dashboard-app/index.html")).toBe(true);
+    expect(existsSync("src/dashboard-app/src/main.tsx")).toBe(true);
+  });
 });

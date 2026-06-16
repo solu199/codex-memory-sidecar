@@ -212,6 +212,8 @@ http://127.0.0.1:3737
 npm run dashboard
 ```
 
+`npm run build` は MCP server 側の TypeScript と、React/Vite 製 Dashboard app の両方をビルドします。Dashboard app の成果物は `dist/dashboard-app` に生成され、ローカル server から `/dashboard-assets/` 配下で配信されます。
+
 既に同じポートで古い Dashboard が動いている場合は、`http://127.0.0.1:3737/api/status` の `dashboard.schemaVersion` と `warnings` を確認し、古いプロセスを停止してから再起動してください。別ポートで確認したい場合は `CODEX_MEMORY_DASHBOARD_PORT` を MCP 登録または実行環境に設定します。
 
 MCP server 起動時の Dashboard 自動起動を止める場合は、MCP 登録に環境変数 `CODEX_MEMORY_DASHBOARD_ON_MCP_START=false` を追加します。
@@ -220,7 +222,7 @@ MCP server と同時起動する Dashboard は、既定では同じ URL を一�
 
 Dashboard は active directive memory と無効化済み directive memory の内容を表示します。これは強い記憶をユーザーが監査できるようにするためです。通常メモリは一覧・グラフでは本文や audit payload を表示せず、要約とメタデータだけを表示します。メモリ詳細パネルでは、選択したメモリの layer、status、sourceRef、タグ、confidence、importance、無効化情報を確認できます。本文は「本文を表示」を明示的に押した場合だけ `/api/memories/:id?includeContent=true` で取得します。
 
-Memory Observatory は、通常メモリ同士の関係を 3D グラフで俯瞰する読み取り専用ビューです。Dashboard は左ナビ付きのローカルWebアプリとして構成され、観測、状態、メモリ、Directive、メンテナンス、イベント、設定を切り替えられます。観測ビューでは `ライブ` / `リプレイ` / `探索` の3モード、検索、similarity / hebbian edge の表示切替、タイトル表示、自動回転、忘却の霧、省電力モード、忘却予測、イベントフィードを使えます。既定では省電力モードが有効で、自動回転はオフです。観測ビュー以外を開いている時、ブラウザタブが非表示の時、操作していない時は 3D 描画頻度を落とします。グラフのノードをクリックすると、対応するメモリ詳細へ移動できます。`/api/graph` は通常メモリの要約、layer、project scope、sourceRef、活性度、7日後の想起しやすさ、clusters、safe events、embedding 類似度、検索イベント由来の共起関係だけを返します。本文と audit payload は返さず、Dashboard の表示や再読み込みだけでメモリやイベントを書き込みません。詳しくは [docs/memory-observatory.md](docs/memory-observatory.md) を参照してください。
+Memory Observatory は、通常メモリ同士の関係を 3D グラフで俯瞰する読み取り専用ビューです。Dashboard は React/Vite 製のローカルWebアプリとして構成され、観測、状態、メモリ、Directive、メンテナンス、イベント、設定を切り替えられます。観測ビューでは `ライブ` / `リプレイ` / `探索` の3モード、検索、similarity / hebbian edge の表示切替、自動回転、忘却の霧、省電力モード、忘却予測、イベントフィードを使えます。既定では省電力モードが有効で、自動回転はオフです。ノード名はグラフを見やすく保つため、カーソルが近い時だけ表示します。観測ビュー以外を開いている時、ブラウザタブが非表示の時、操作していない時は 3D 描画頻度を落とし、必要な時だけ `resumeAnimation` します。グラフのノードをクリックすると、対応するメモリ詳細へ移動できます。`/api/graph` は通常メモリの要約、layer、project scope、sourceRef、活性度、7日後の想起しやすさ、clusters、safe events、embedding 類似度、検索イベント由来の共起関係だけを返します。本文と audit payload は返さず、Dashboard の表示や再読み込みだけでメモリやイベントを書き込みません。詳しくは [docs/memory-observatory.md](docs/memory-observatory.md) を参照してください。
 
 Dashboard の `/api/status` は `memoryFreshness`、`memoryUpdateCandidates`、`autoMemoryCuration` も返します。`memoryFreshness` は最新メモリ更新日と最近の作業履歴の差を示し、`memoryUpdateCandidates` は最近のIssue、PR、commit、session activityなどから通常メモリに残す候補を提示します。`memory_auto_write = "off"` / `"review"` では自動保存しません。`"safe"` では `start_memory_session` 実行時だけ、高信頼・非重複・sourceRef良好・secret検出通過の候補だけを自動保存します。
 

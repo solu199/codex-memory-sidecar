@@ -5,19 +5,20 @@
   "type": "module",
   "description": "Local MCP memory sidecar for Codex app.",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && npm run build:dashboard-app",
     "test": "vitest run",
     "lint": "eslint .",
     "format:check": "prettier . --check",
     "format": "prettier . --write",
-    "dashboard": "tsc -p tsconfig.json && node dist/src/dashboard.js",
-    "check:skill-install": "tsc -p tsconfig.json && node dist/src/skill-install-check.js",
-    "smoke:mcp": "tsc -p tsconfig.json && node dist/src/mcp-smoke.js",
-    "smoke:ollama": "tsc -p tsconfig.json && node dist/src/ollama-smoke.js",
-    "smoke:practical": "tsc -p tsconfig.json && node dist/src/practical-smoke.js",
-    "smoke:hook": "tsc -p tsconfig.json && node dist/src/hook-session-start-smoke.js",
-    "smoke:comparison": "tsc -p tsconfig.json && node dist/src/comparison-smoke.js",
-    "bench:recall": "tsc -p tsconfig.json && node dist/src/recall-benchmark.js",
+    "dashboard": "npm run build && node dist/src/dashboard.js",
+    "check:skill-install": "npm run build && node dist/src/skill-install-check.js",
+    "smoke:mcp": "npm run build && node dist/src/mcp-smoke.js",
+    "smoke:ollama": "npm run build && node dist/src/ollama-smoke.js",
+    "smoke:practical": "npm run build && node dist/src/practical-smoke.js",
+    "smoke:hook": "npm run build && node dist/src/hook-session-start-smoke.js",
+    "smoke:comparison": "npm run build && node dist/src/comparison-smoke.js",
+    "bench:recall": "npm run build && node dist/src/recall-benchmark.js",
+    "build:dashboard-app": "vite build --config vite.dashboard.config.ts",
     "build:observatory-bundle": "node scripts/build-observatory-bundle.mjs",
     "check:observatory-bundle": "node scripts/check-observatory-bundle.mjs",
     "start": "node dist/src/index.js"
@@ -25,12 +26,16 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.13.0",
     "better-sqlite3": "^11.10.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "zod": "^3.25.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "3d-force-graph": "^1.80.0",
     "esbuild": "^0.28.1",
     "eslint": "^10.4.1",
@@ -38,6 +43,7 @@
     "three": "^0.184.0",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.61.0",
+    "vite": "^8.0.16",
     "vitest": "^4.1.9"
   }
 }

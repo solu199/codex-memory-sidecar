@@ -2,7 +2,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import vm from "node:vm";
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -376,61 +375,18 @@ describe("dashboard", () => {
       expect(page.headers.get("content-type")).toContain("text/html");
       const html = await page.text();
       expect(html).toContain("Codex Memory Sidecar");
-      expect(html).toContain("app-shell");
-      expect(html).toContain("app-nav");
-      expect(html).toContain("view-observatory");
-      expect(html).toContain("view-health");
-      expect(html).toContain("view-memories");
-      expect(html).toContain("view-directives");
-      expect(html).toContain("view-maintenance");
-      expect(html).toContain("view-events");
-      expect(html).toContain("view-settings");
-      expect(html).toContain('data-view-target="observatory"');
-      expect(html).toContain("Auto Memory Curation");
-      expect(html).toContain("Memory Observatory");
-      expect(html).toContain("observatory-3d.bundle.js");
-      expect(html).toContain('id="graph"');
-      expect(html).toContain('id="tabLive"');
-      expect(html).toContain('id="tabReplay"');
-      expect(html).toContain('id="tabExplore"');
-      expect(html).toContain('id="searchBox"');
-      expect(html).toContain('id="showSim"');
-      expect(html).toContain('id="showHebb"');
-      expect(html).toContain('id="autoRotate"');
-      expect(html).toContain('id="lowPowerMode"');
-      expect(html).toContain('id="fogOn"');
-      expect(html).toContain('id="memory-detail"');
-      expect(html).toContain('id="memory-detail-title"');
-      expect(html).toContain('id="memory-detail-content"');
-      expect(html).toContain("data-memory-detail-id");
-      expect(html).toContain("/api/graph");
-      expect(html).toContain("/api/memories/");
-      expect(html).toContain("function openMemoryDetail");
-      expect(html).toContain("openMemoryDetail(node.id");
-      expect(html).toContain("function isObservatoryRenderable");
-      expect(html).toContain("function scheduleNextObservatoryFrame");
-      expect(html).toContain("document.hidden");
-      expect(html).toContain("cancelAnimationFrame(animationFrame)");
-      expect(html).toContain("function shouldShowNodeLabel");
-      expect(html).toContain("state.hover === node");
+      expect(html).toContain('<div id="root"></div>');
+      expect(html).toContain("/dashboard-assets/assets/");
+      expect(html).toContain('type="module"');
+      expect(html).not.toContain("function renderMemoryGraph3d");
+      expect(html).not.toContain("function openMemoryDetail");
       expect(html).not.toContain("score > 0.45 ? 1 : 0");
-      expect(html).toContain('id="autoRotate">');
-      expect(html).toContain('id="lowPowerMode" checked>');
-      expect(html).toContain(".app-view:not(#view-observatory).active");
-      expect(html).toContain("max-width: 1160px");
-      expect(html).toContain('class="table-wrap"');
-      expect(html).toContain("overflow-x: auto");
-      expect(html).toContain("メモリ統計");
-      expect(html).toContain("Directive Memory");
-      expect(html).toContain("無効化済み Directive Memory");
-      expect(html).toContain("指示内容");
-      expect(html).toContain("メンテナンス");
-      expect(html).toContain("バックアップ保持");
-      expect(html).toContain("警告と対応");
-      expect(html).toContain("Ollama モデル");
-      expect(html).toContain("プロジェクトスコープ");
-      expect(html).toContain("最近のメモリ");
-      expect(html).toContain("情報源");
+      const scriptMatch = html.match(/src="(\/dashboard-assets\/assets\/[^"]+\.js)"/);
+      expect(scriptMatch?.[1]).toBeDefined();
+      const scriptResponse = await fetch(`${baseUrl}${scriptMatch?.[1]}`);
+      expect(scriptResponse.status).toBe(200);
+      expect(scriptResponse.headers.get("content-type")).toContain("text/javascript");
+      await expect(scriptResponse.text()).resolves.toContain("createRoot");
 
       const response = await fetch(`${baseUrl}/api/status`);
       expect(response.headers.get("content-type")).toContain("application/json");
@@ -680,20 +636,20 @@ describe("dashboard", () => {
     }
   });
 
-  test("renders dashboard data into the DOM after the browser script refreshes", async () => {
-    store.createMemory({
-      content: "Dashboard DOM test memory body must stay out of visible summary.",
+  test("serves React dashboard shell without leaking memory body text", async () => {
+    const created = store.createMemory({
+      content: "Dashboard DOM test memory body must stay out of the initial shell.",
       summary: "DOM rendered memory summary",
       layer: "recall",
       tags: ["dashboard", "dom"],
       sourceType: "manual",
       sourceRef: "dom-test",
-      projectScope: "alpha",
+      embedding: [1, 0, 0],
     });
     store.createDirective({
       content: "DOM rendered directive content",
       scope: "global",
-      rationale: "DOM rendering should expose directive memory for inspection.",
+      rationale: "DOM rendering should expose directive memory through API data.",
       tags: ["dashboard", "dom"],
       sourceType: "manual",
       sourceRef: "dom-test",
@@ -730,138 +686,30 @@ describe("dashboard", () => {
       const html = await (await fetch(baseUrl)).text();
       const status = await (await fetch(`${baseUrl}/api/status`)).json();
       const graph = await (await fetch(`${baseUrl}/api/graph`)).json();
-      const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
-      if (!script) {
-        throw new Error("Dashboard script was not found.");
-      }
-      const elements = new Map<
-        string,
-        { textContent: string; innerHTML: string; className: string; listeners: string[] }
-      >();
-      const classLists = new Map<string, Set<string>>();
-      const navButtons = [
-        "observatory",
-        "health",
-        "memories",
-        "directives",
-        "maintenance",
-        "events",
-        "settings",
-      ].map((view) => ({
-        dataset: { viewTarget: view },
-        listeners: [] as string[],
-        classList: {
-          add(className: string) {
-            const classes = classLists.get(`nav-${view}`) ?? new Set<string>();
-            classes.add(className);
-            classLists.set(`nav-${view}`, classes);
-          },
-          remove(className: string) {
-            classLists.get(`nav-${view}`)?.delete(className);
-          },
-        },
-        addEventListener(eventName: string) {
-          this.listeners.push(eventName);
-        },
-      }));
-      const views = [
-        "observatory",
-        "health",
-        "memories",
-        "directives",
-        "maintenance",
-        "events",
-        "settings",
-      ].map((view) => ({
-        id: `view-${view}`,
-        classList: {
-          add(className: string) {
-            const classes = classLists.get(`view-${view}`) ?? new Set<string>();
-            classes.add(className);
-            classLists.set(`view-${view}`, classes);
-          },
-          remove(className: string) {
-            classLists.get(`view-${view}`)?.delete(className);
-          },
-        },
-      }));
-      const elementFor = (id: string) => {
-        const existing = elements.get(id);
-        if (existing) {
-          return existing;
-        }
-        const created = {
-          textContent: "",
-          innerHTML: "",
-          className: "",
-          listeners: [] as string[],
-          addEventListener(eventName: string) {
-            this.listeners.push(eventName);
-          },
-        };
-        elements.set(id, created);
-        return created;
-      };
-      const context = {
-        fetch: vi.fn(async (url: string) => ({
-          ok: true,
-          json: async () => (url === "/api/graph" ? graph : status),
-        })),
-        document: {
-          getElementById: elementFor,
-          querySelectorAll(selector: string) {
-            if (selector === ".nav-button") return navButtons;
-            if (selector === ".app-view") return views;
-            return [];
-          },
-        },
-        window: {},
-      };
+      const detail = await (await fetch(`${baseUrl}/api/memories/${created.id}`)).json();
+      const detailWithContent = await (
+        await fetch(`${baseUrl}/api/memories/${created.id}?includeContent=true`)
+      ).json();
+      const scriptMatch = html.match(/src="(\/dashboard-assets\/assets\/[^"]+\.js)"/);
+      expect(scriptMatch?.[1]).toBeDefined();
+      const script = await (await fetch(`${baseUrl}${scriptMatch?.[1]}`)).text();
 
-      vm.runInNewContext(script, context);
-      await vi.waitFor(() => {
-        expect(elementFor("status").textContent).toBe("正常");
-      });
-
-      expect(elementFor("status")).toMatchObject({
-        textContent: "正常",
-        className: "value status-ok",
-      });
-      expect(context.fetch).toHaveBeenCalledWith("/api/status");
-      expect(elementFor("memories").textContent).toBe("1");
-      expect(elementFor("embedding").textContent).toBe("3");
-      expect(elementFor("repair")).toMatchObject({
-        textContent: "不要",
-        className: "value status-ok",
-      });
-      expect(elementFor("warnings").innerHTML).toContain("現在");
-      expect(elementFor("warnings").innerHTML).toContain("なし");
-      expect(elementFor("memory-freshness").innerHTML).toContain("最新メモリ更新");
-      expect(elementFor("memory-candidates").innerHTML).toContain("保存候補");
-      expect(elementFor("ollama-status")).toMatchObject({
-        textContent: "正常",
-        className: "value status-ok",
-      });
-      expect(elementFor("ollama-configured").innerHTML).toContain("必須");
-      expect(elementFor("ollama-models").innerHTML).toContain("embeddinggemma:latest");
-      expect(elementFor("directives").innerHTML).toContain("DOM rendered directive content");
-      expect(elementFor("recent-memories").innerHTML).toContain("DOM rendered memory summary");
-      expect(elementFor("recent-memories").innerHTML).not.toContain(
-        "Dashboard DOM test memory body",
+      expect(html).toContain('<div id="root"></div>');
+      expect(html).not.toContain("Dashboard DOM test memory body");
+      expect(script).not.toContain("Dashboard DOM test memory body");
+      expect(status.database.memoryCount).toBe(1);
+      expect(status.embedding.dimensions).toBe(3);
+      expect(status.ollama.ok).toBe(true);
+      expect(status.directives[0].content).toBe("DOM rendered directive content");
+      expect(status.recentMemories[0].summary).toBe("DOM rendered memory summary");
+      expect(JSON.stringify(status)).not.toContain("Dashboard DOM test memory body");
+      expect(JSON.stringify(graph)).not.toContain("Dashboard DOM test memory body");
+      expect(detail.memory.contentIncluded).toBe(false);
+      expect(JSON.stringify(detail)).not.toContain("Dashboard DOM test memory body");
+      expect(detailWithContent.memory.contentIncluded).toBe(true);
+      expect(detailWithContent.memory.content).toBe(
+        "Dashboard DOM test memory body must stay out of the initial shell.",
       );
-      expect(elementFor("refresh").listeners).toEqual(["click"]);
-      expect(navButtons.map((button) => button.listeners)).toEqual([
-        ["click"],
-        ["click"],
-        ["click"],
-        ["click"],
-        ["click"],
-        ["click"],
-        ["click"],
-      ]);
-      expect(elementFor("settings-dashboard").innerHTML).toContain("schema");
-      expect(elementFor("forecast").innerHTML).toContain("DOM rendered memory summary");
-      expect(elementFor("feed").innerHTML).toContain("作成");
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
@@ -1025,7 +873,7 @@ describe("dashboard", () => {
     expect(status.warningActions).toEqual([]);
   });
 
-  test("renders optional Ollama mode as non-blocking in the DOM", async () => {
+  test("serves optional Ollama mode as non-blocking API data for the React dashboard", async () => {
     const server = createDashboardServer(store, {
       embeddingProvider: { embed: vi.fn(async () => Promise.reject(new Error("Ollama offline"))) },
       embeddingRequired: false,
@@ -1049,53 +897,15 @@ describe("dashboard", () => {
       const baseUrl = `http://127.0.0.1:${address.port}`;
       const html = await (await fetch(baseUrl)).text();
       const status = await (await fetch(`${baseUrl}/api/status`)).json();
-      const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
-      if (!script) {
-        throw new Error("Dashboard script was not found.");
-      }
-      const elements = new Map<
-        string,
-        { textContent: string; innerHTML: string; className: string; listeners: string[] }
-      >();
-      const elementFor = (id: string) => {
-        const existing = elements.get(id);
-        if (existing) {
-          return existing;
-        }
-        const created = {
-          textContent: "",
-          innerHTML: "",
-          className: "",
-          listeners: [] as string[],
-          addEventListener(eventName: string) {
-            this.listeners.push(eventName);
-          },
-        };
-        elements.set(id, created);
-        return created;
-      };
-      const context = {
-        fetch: vi.fn(async () => ({
-          json: async () => status,
-        })),
-        document: {
-          getElementById: elementFor,
-        },
-      };
 
-      vm.runInNewContext(script, context);
-      await vi.waitFor(() => {
-        expect(elementFor("ollama-status").textContent).toBe("任意");
-      });
-
+      expect(html).toContain('<div id="root"></div>');
       expect(status.ok).toBe(true);
       expect(status.ollama.required).toBe(false);
-      expect(elementFor("ollama-status")).toMatchObject({
-        textContent: "任意",
-        className: "value status-ok",
-      });
-      expect(elementFor("ollama-configured").innerHTML).toContain("任意");
-      expect(elementFor("warnings").innerHTML).toContain("なし");
+      expect(status.ollama.ok).toBe(false);
+      expect(status.warnings).toEqual([]);
+      expect(
+        status.warningActions.some((action: { title: string }) => action.title.includes("Ollama")),
+      ).toBe(false);
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
