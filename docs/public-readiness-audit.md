@@ -13,16 +13,16 @@ Codex Memory Sidecar を日本企業向けポートフォリオとして公開�
 - Security / Contribution / License: 追加済み
 - Ollama: 任意機能として整理済み
 - Codex Skill: 配布用雛形を追加済み
-- v0.1.0 release draft: `.github/releases/v0.1.0.md` として準備済み。最終タグ作成前に内容を更新する
+- v0.1.0 release draft: `.github/releases/v0.1.0.md` として準備済み。タグ作成とGitHub Release発行は #112 で追跡する
 - Dashboard画像: `docs/assets/dashboard-overview.png` としてREADMEに掲載
 - GitHub About / topics: 設定済み。候補と運用メモは `docs/github-repository-metadata.md` に残す
-- Memory Observatory bundle provenance: Issue #109 で vendored bundle の由来、再生成、checksum、notice、CI検証を整備中
+- Memory Observatory bundle provenance: Issue #109 で vendored bundle の由来、再生成、checksum、notice、CI検証を整備済み
 
 ## 確認結果
 
 ### 0. 公開後の最終確認
 
-2026-06-12 時点で、GitHub repository は public です。公開済みの状態を前提に、tracked file、Git履歴、Issue/PR本文、依存関係、CI、ローカル生成物を確認しました。
+2026-06-16 時点で、GitHub repository は public です。公開済みの状態を前提に、tracked file、Git履歴、Issue/PR本文、依存関係、CI、ローカル生成物を確認しました。
 
 確認結果:
 
@@ -32,7 +32,7 @@ Codex Memory Sidecar を日本企業向けポートフォリオとして公開�
 - build / test / smoke / skill install check はローカルで成功
 - 最新の GitHub Actions は `main` で成功
 - README は日本語のまま、概要、3分セットアップ、Dashboard画像、安全設計、詳細docs導線が冒頭で分かる構成に更新済み
-- `CHANGELOG.md` と v0.1.0 GitHub Release draft を追加済み。Memory Observatory と bundle provenance の更新を反映する
+- `CHANGELOG.md` と v0.1.0 GitHub Release draft を追加済み。Memory Observatory と bundle provenance の更新も反映済み
 
 注意点:
 
@@ -98,6 +98,7 @@ Issue起点、ブランチ、PR、CI、テスト結果を追える形に整備�
 - #92 READMEを日本語ポートフォリオ向けに再整理してDashboard画像を追加
 - #93 GitHub About欄とtopicsをポートフォリオ向けに設定する
 - #109 Memory Observatoryのvendored bundle由来と再現性を整理する
+- #112 v0.1.0タグとGitHub Releaseを発行する
 
 ## 後続Issue
 
@@ -109,10 +110,11 @@ Issue起点、ブランチ、PR、CI、テスト結果を追える形に整備�
 - #63 Codex Skill化: 完了
 - #64 SECURITY / CONTRIBUTING / LICENSE追加: 完了
 - #69 CI annotation対応: 完了
-- #91 v0.1.0リリース準備とCHANGELOG整備: release draft / CHANGELOG は整備済み。タグとGitHub Release作成前に最終確認する
+- #91 v0.1.0リリース準備とCHANGELOG整備: 完了
 - #92 READMEを日本語ポートフォリオ向けに再整理してDashboard画像を追加: 完了
 - #93 GitHub About欄とtopicsをポートフォリオ向けに設定する: 完了
-- #109 Memory Observatoryのvendored bundle由来と再現性を整理する: 対応中
+- #109 Memory Observatoryのvendored bundle由来と再現性を整理する: 完了
+- #112 v0.1.0タグとGitHub Releaseを発行する: タグ作成、GitHub Release発行、最終検証で完了予定
 
 ## 公開後の定期チェック
 

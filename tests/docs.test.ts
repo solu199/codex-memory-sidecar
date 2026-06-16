@@ -52,12 +52,14 @@ describe("documentation", () => {
     expect(readme).toContain("Codex Memory Sidecar Dashboard");
     expect(readme).toContain("Memory Observatory");
     expect(existsSync("docs/memory-observatory.md")).toBe(true);
-    expect(changelog).toContain("## [0.1.0] - 2026-06-12");
+    expect(changelog).toContain("## [0.1.0] - 2026-06-16");
     expect(changelog).toContain("初回公開準備版");
     expect(releaseDraft).toContain("# v0.1.0 - 初回公開準備版");
     expect(releaseDraft).toContain("#91");
     expect(releaseDraft).toContain("#92");
     expect(releaseDraft).toContain("#93");
+    expect(releaseDraft).toContain("#109");
+    expect(releaseDraft).toContain("#112");
     expect(metadata).toContain("AIエージェント向けのローカルMCPメモリ基盤");
     expect(metadata).toContain("gh repo edit");
     expect(metadata).toContain("ユーザー承認後");
