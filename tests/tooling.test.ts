@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 
 import { describe, expect, test } from "vitest";
@@ -29,11 +30,49 @@ describe("tooling configuration", () => {
 
     expect(ci).toContain("npm run format:check");
     expect(ci).toContain("npm run lint");
+    expect(ci).toContain("npm run check:observatory-bundle");
     expect(ci).toContain("npm run smoke:hook");
     expect(ci).toContain("npm run bench:recall");
     expect(ci.indexOf("npm run format:check")).toBeLessThan(ci.indexOf("npm run build"));
     expect(ci.indexOf("npm run lint")).toBeLessThan(ci.indexOf("npm run build"));
+    expect(ci.indexOf("npm run check:observatory-bundle")).toBeLessThan(
+      ci.indexOf("npm run build"),
+    );
     expect(ci.indexOf("npm run smoke:practical")).toBeLessThan(ci.indexOf("npm run smoke:hook"));
     expect(ci.indexOf("npm run smoke:hook")).toBeLessThan(ci.indexOf("npm run bench:recall"));
+  });
+
+  test("Memory Observatory bundle provenance is reproducible and documented", () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
+      scripts: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    const notice = readFileSync("vendor/observatory-3d.bundle.NOTICE.md", "utf8");
+    const checksum = readFileSync("vendor/observatory-3d.bundle.sha256", "utf8").trim();
+    const bundle = readFileSync("vendor/observatory-3d.bundle.js");
+    const bundleSource = bundle.toString("utf8");
+    const digest = createHash("sha256").update(bundle).digest("hex");
+
+    expect(pkg.scripts["build:observatory-bundle"]).toBe(
+      "node scripts/build-observatory-bundle.mjs",
+    );
+    expect(pkg.scripts["check:observatory-bundle"]).toBe(
+      "node scripts/check-observatory-bundle.mjs",
+    );
+    expect(pkg.devDependencies.esbuild).toBeDefined();
+    expect(pkg.devDependencies["3d-force-graph"]).toBeDefined();
+    expect(pkg.devDependencies.three).toBeDefined();
+    expect(existsSync("scripts/build-observatory-bundle.mjs")).toBe(true);
+    expect(existsSync("scripts/check-observatory-bundle.mjs")).toBe(true);
+    expect(existsSync("scripts/observatory-3d-entry.mjs")).toBe(true);
+    expect(checksum).toBe(`${digest}  observatory-3d.bundle.js`);
+    expect(bundleSource).not.toMatch(/[ \t]+$/m);
+    expect(notice).toContain("3d-force-graph");
+    expect(notice).toContain("three");
+    expect(notice).toContain("MIT");
+    expect(notice).toContain("npm run build:observatory-bundle");
+    expect(notice).toContain("npm run check:observatory-bundle");
+    expect(notice).toContain("observatory-3d.bundle.sha256");
+    expect(notice).toContain("Issue #109");
   });
 });

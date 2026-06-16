@@ -44,6 +44,7 @@ npm run dashboard
 - Codex SessionStart hook: [docs/session-start-hook.md](docs/session-start-hook.md)
 - bi-temporal invalidation 設計: [docs/bi-temporal-invalidation-design.md](docs/bi-temporal-invalidation-design.md)
 - Memory Observatory 設計: [docs/memory-observatory.md](docs/memory-observatory.md)
+- Memory Observatory 3D bundle notice: [vendor/observatory-3d.bundle.NOTICE.md](vendor/observatory-3d.bundle.NOTICE.md)
 - 公開前監査: [docs/public-readiness-audit.md](docs/public-readiness-audit.md)
 - メモリ評価ベンチ: [docs/memory-evaluation.md](docs/memory-evaluation.md)
 - 技術的な中期改善: [docs/technical-roadmap.md](docs/technical-roadmap.md)
@@ -76,6 +77,7 @@ AIコーディングエージェントは、チャットや作業セッション
 - `write_directive` / `list_directives` / `propose_directive_update` / `disable_directive` で、AGENTS.md に近い強い作用を持つ directive memory を扱えます。
 - `backup_memory` / `verify_backup` / `inspect_backup` / `plan_backup_retention` / `plan_backup_restore` / `repair_memory_index` で、安全確認と復旧計画を扱えます。
 - Dashboard で health、バックアップ、Ollama モデル、警告対応、project scope、directive memory、最近のメモリ、メモリ鮮度、保存候補を確認できます。
+- Memory Observatory の 3D runtime は vendored bundle として同梱し、`npm run build:observatory-bundle` と `npm run check:observatory-bundle` で由来、checksum、再生成可能性を確認できます。
 
 ## 優先順位
 
@@ -138,6 +140,7 @@ npm run smoke:ollama
 - セキュリティ方針: `SECURITY.md`
 - コントリビューション手順: `CONTRIBUTING.md`
 - ライセンス: `LICENSE`
+- Memory Observatory 3D bundle notice: `vendor/observatory-3d.bundle.NOTICE.md`
 
 公開前には、`data/` 配下の実DBやバックアップ、`.env`、token、個人情報、実チャット全文が含まれていないことを確認してください。Issue、PR、コミットメッセージは日本語を基本にします。
 

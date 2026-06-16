@@ -13,9 +13,10 @@ Codex Memory Sidecar を日本企業向けポートフォリオとして公開�
 - Security / Contribution / License: 追加済み
 - Ollama: 任意機能として整理済み
 - Codex Skill: 配布用雛形を追加済み
-- v0.1.0 release draft: `.github/releases/v0.1.0.md` として準備中
+- v0.1.0 release draft: `.github/releases/v0.1.0.md` として準備済み。最終タグ作成前に内容を更新する
 - Dashboard画像: `docs/assets/dashboard-overview.png` としてREADMEに掲載
-- GitHub About / topics: `docs/github-repository-metadata.md` に候補を整理済み。実設定はユーザー承認後に行う
+- GitHub About / topics: 設定済み。候補と運用メモは `docs/github-repository-metadata.md` に残す
+- Memory Observatory bundle provenance: Issue #109 で vendored bundle の由来、再生成、checksum、notice、CI検証を整備中
 
 ## 確認結果
 
@@ -27,11 +28,11 @@ Codex Memory Sidecar を日本企業向けポートフォリオとして公開�
 
 - tracked file に `data/`、SQLite DB、`.env`、`dist/`、`node_modules/` は含まれていない
 - 非テスト・非検出ロジックの範囲で、実シークレットらしき履歴ヒットはない
-- `npm audit --omit=dev` は `npm audit fix` 後に 0 vulnerabilities
+- `npm audit` と `npm audit --omit=dev` は依存更新後に 0 vulnerabilities
 - build / test / smoke / skill install check はローカルで成功
 - 最新の GitHub Actions は `main` で成功
-- README は日本語のまま、概要、3分セットアップ、Dashboard画像、安全設計、詳細docs導線が冒頭で分かる構成に更新中
-- `CHANGELOG.md` と v0.1.0 GitHub Release draft を追加中
+- README は日本語のまま、概要、3分セットアップ、Dashboard画像、安全設計、詳細docs導線が冒頭で分かる構成に更新済み
+- `CHANGELOG.md` と v0.1.0 GitHub Release draft を追加済み。Memory Observatory と bundle provenance の更新を反映する
 
 注意点:
 
@@ -96,6 +97,7 @@ Issue起点、ブランチ、PR、CI、テスト結果を追える形に整備�
 - #91 v0.1.0リリース準備とCHANGELOG整備
 - #92 READMEを日本語ポートフォリオ向けに再整理してDashboard画像を追加
 - #93 GitHub About欄とtopicsをポートフォリオ向けに設定する
+- #109 Memory Observatoryのvendored bundle由来と再現性を整理する
 
 ## 後続Issue
 
@@ -107,9 +109,10 @@ Issue起点、ブランチ、PR、CI、テスト結果を追える形に整備�
 - #63 Codex Skill化: 完了
 - #64 SECURITY / CONTRIBUTING / LICENSE追加: 完了
 - #69 CI annotation対応: 完了
-- #91 v0.1.0リリース準備とCHANGELOG整備: 対応中
-- #92 READMEを日本語ポートフォリオ向けに再整理してDashboard画像を追加: 対応中
-- #93 GitHub About欄とtopicsをポートフォリオ向けに設定する: 候補提示中。ユーザー承認後に設定する
+- #91 v0.1.0リリース準備とCHANGELOG整備: release draft / CHANGELOG は整備済み。タグとGitHub Release作成前に最終確認する
+- #92 READMEを日本語ポートフォリオ向けに再整理してDashboard画像を追加: 完了
+- #93 GitHub About欄とtopicsをポートフォリオ向けに設定する: 完了
+- #109 Memory Observatoryのvendored bundle由来と再現性を整理する: 対応中
 
 ## 公開後の定期チェック
 
@@ -120,7 +123,8 @@ Issue起点、ブランチ、PR、CI、テスト結果を追える形に整備�
 - untracked file を公開対象へ含めない
 - README のセットアップ手順が現在の実装と一致している
 - Issue/PRに不要な個人情報やローカル絶対パスがないか確認する
-- `npm audit --omit=dev`、`npm run build`、`npm test`、主要 smoke を実行する
+- `npm audit`、`npm audit --omit=dev`、`npm run build`、`npm test`、主要 smoke を実行する
+- `npm run check:observatory-bundle` で Memory Observatory の vendored bundle が再生成結果とchecksumに一致することを確認する
 - Release draft、CHANGELOG、README、Dashboard画像の内容が同じ説明になっているか確認する
 
 ## 判断
