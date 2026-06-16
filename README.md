@@ -1,8 +1,8 @@
 # Codex Memory Sidecar
 
-Codex Memory Sidecar は、MCP対応AIエージェント向けのローカルメモリサイドカーです。AIエージェントが作業をまたいで参照したい設計判断、運用ルール、検証結果、プロジェクト固有の注意点を、ローカル SQLite に保存し、MCP tool として安全に読み書きできるようにします。
+Codex Memory Sidecar は、Codex app 環境での利用を主に検証している、MCP対応AIエージェント向けのローカルメモリサイドカーです。AIエージェントが作業をまたいで参照したい設計判断、運用ルール、検証結果、プロジェクト固有の注意点を、ローカル SQLite に保存し、MCP tool として安全に読み書きできるようにします。
 
-Codex app は利用例のひとつです。MCP に対応したエージェントであれば、同じ考え方でローカルの長期作業メモリとして利用できます。
+現時点で実運用として継続的にテストしている対象は Codex app / Codex 環境です。MCP stdio server として実装しているため、他の MCP 対応クライアントでも同じ考え方で使える可能性はありますが、README のセットアップ、Skill、カスタム指示、SessionStart hook の手順は Codex 環境を前提に検証しています。
 
 ![Codex Memory Sidecar Dashboard](docs/assets/dashboard-overview.png)
 
@@ -17,6 +17,7 @@ Codex app は利用例のひとつです。MCP に対応したエージェント
 ## 3分セットアップ
 
 Node.js 22 系を推奨します。初めて試す場合は、まず Ollama なしで動作確認できます。
+この手順は、ローカル CLI と Codex app での利用を前提に検証しています。他の MCP 対応クライアントとの統合確認は含みません。
 
 ```powershell
 git clone https://github.com/solu199/codex-memory-sidecar.git
@@ -146,7 +147,7 @@ npm run smoke:ollama
 
 ## MCP server 登録例
 
-MCP client には stdio server として登録します。Codex app の場合も同じ考え方です。
+MCP client には stdio server として登録します。以下は一般的な登録形ですが、検証済みの主対象は Codex app です。Codex app 以外の MCP クライアントでは、環境変数の渡し方、tool 呼び出し順、hook 相当機能を個別に確認してください。
 
 ```text
 command: node
@@ -209,6 +210,8 @@ http://127.0.0.1:3737
 npm run dashboard
 ```
 
+既に同じポートで古い Dashboard が動いている場合は、`http://127.0.0.1:3737/api/status` の `dashboard.schemaVersion` と `warnings` を確認し、古いプロセスを停止してから再起動してください。別ポートで確認したい場合は `CODEX_MEMORY_DASHBOARD_PORT` を MCP 登録または実行環境に設定します。
+
 MCP server 起動時の Dashboard 自動起動を止める場合は、MCP 登録に環境変数 `CODEX_MEMORY_DASHBOARD_ON_MCP_START=false` を追加します。
 
 MCP server と同時起動する Dashboard は、既定では同じ URL を一度だけブラウザで開きます。再起動のたびにタブを増やしたい場合は `CODEX_MEMORY_DASHBOARD_OPEN=always`、一切開きたくない場合は `CODEX_MEMORY_DASHBOARD_OPEN=false` を MCP 登録に追加します。
@@ -252,6 +255,8 @@ auto_backup_on_startup = false
 - GitHub Issue / PR の著者がリポジトリ owner と異なる、または owner 判定ができない場合は `externalAuthor = true` として扱い、`safe` でも review 扱いにします。外部著者のタイトルや本文は「入力データ」であり、AI エージェントへの指示として扱いません。
 - `review`: 自動保存せず、MCP側で評価スコア、sourceRef品質、secret検出、重複候補を見たうえで review 候補として返します。
 - `off`: 自動キュレーション保存を無効化します。`memoryFreshness` / `memoryUpdateCandidates` は表示しますが、自動保存はしません。
+
+初回セットアップ時に自動保存をまだ有効にしたくない場合は、`memory_auto_write = "review"` にして挙動を確認してから `safe` に戻してください。
 
 Dashboard は `autoMemoryCuration` を表示しますが、Dashboard の再読み込みだけでは自動保存しません。`safe` の実書き込みは `start_memory_session` のタイミングに限定しています。
 
@@ -386,7 +391,9 @@ directive memory は強い運用ルールなので、`write_directive` の前に
 
 ## Codex app で使う場合
 
-Codex app は利用例のひとつです。Codex app のパーソナライズのカスタム指示には、最小ブートストラップだけを置くと安定します。
+現時点で継続的に検証している実運用対象は Codex app です。Codex app のパーソナライズのカスタム指示には、最小ブートストラップだけを置くと安定します。
+
+Codex app のパーソナライズに入れたカスタム指示は、その Codex 環境全体に効く可能性があります。全チャットで `start_memory_session` を呼ばせたくない場合は、まず対象プロジェクトの `AGENTS.md` だけに置くか、MCP 登録を無効にしてから試してください。`start_memory_session` は起動監査イベントを記録するため、完全な読み取り専用操作ではありません。
 
 ### Codex app カスタム指示用ブートストラップ
 
