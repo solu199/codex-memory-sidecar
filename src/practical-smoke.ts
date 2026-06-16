@@ -169,6 +169,23 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       projectPath,
       maxCandidates: 10,
     });
+    const invalidated = await tools.writeMemory({
+      content: "Temporary practical memory that should keep invalidation metadata.",
+      layer: "recall",
+      tags: ["practical", "invalidation"],
+      sourceType: "smoke",
+      sourceRef: "npm run smoke:practical",
+      projectPath,
+    });
+    const invalidation = await tools.forgetMemory({
+      memoryId: invalidated.structuredContent.memory.id,
+      reason: "practical invalidation smoke",
+      invalidatedByRef: "issue:#116",
+    });
+    const invalidationAudit = await tools.auditMemory({
+      memoryId: invalidated.structuredContent.memory.id,
+      limit: 1,
+    });
     const restorePlan = await tools.planBackupRestore({ backupPath });
     const repairDb = new Database(databasePath);
     try {
@@ -268,6 +285,13 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         restorePlan.structuredContent.backup.memoryCount <
           restorePlan.structuredContent.current.memoryCount &&
         existsSync(backupPath),
+      invalidationMetadata:
+        invalidation.structuredContent.memory.status === "forgotten" &&
+        typeof invalidation.structuredContent.memory.invalidatedAt === "string" &&
+        invalidation.structuredContent.memory.invalidatedByRef === "issue:#116" &&
+        invalidation.structuredContent.memory.invalidationReason ===
+          "practical invalidation smoke" &&
+        invalidationAudit.structuredContent.events[0]?.payload?.invalidatedByRef === "issue:#116",
       inspectBackupScoped:
         inspection.structuredContent.memories.some(
           (memory) => memory.id === alpha.structuredContent.memory.id,

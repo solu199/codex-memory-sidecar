@@ -8,16 +8,22 @@ import {
   collectWorkspaceActivity,
   type WorkspaceActivity,
 } from "./memory-freshness.js";
+import {
+  serializeBackupMemorySummary,
+  serializeBackupRetentionEntry,
+  serializeBackupRetentionSummary,
+  serializeDatabaseHealth,
+  serializeDirective,
+  serializeMemory,
+  serializeMemoryStats,
+  serializeMemorySummary,
+  serializeSearchResult,
+  serializeSessionMemory,
+} from "./mcp-serializers.js";
 import { MemoryStore } from "./memory-store.js";
 import { containsLikelySecret } from "./secret-detection.js";
 import { analyzeSourceRef } from "./source-ref.js";
-import type {
-  Directive,
-  DirectiveScope,
-  Memory,
-  MemoryLayer,
-  SearchMemoryResult,
-} from "./types.js";
+import type { Directive, DirectiveScope, Memory, MemoryLayer } from "./types.js";
 
 const layerSchema = z.enum(["core", "recall", "archival"]);
 const directiveScopeSchema = z.enum(["global", "project"]);
@@ -135,6 +141,7 @@ const updateMemorySchema = {
 const forgetMemorySchema = {
   memoryId: z.number().int().positive(),
   reason: z.string().min(1),
+  invalidatedByRef: z.string().min(1).optional(),
   hardDelete: z.boolean().default(false),
   confirmHardDelete: z.boolean().default(false),
 };
@@ -311,6 +318,7 @@ interface UpdateMemoryToolInput {
 interface ForgetMemoryToolInput {
   memoryId: number;
   reason: string;
+  invalidatedByRef?: string;
   hardDelete?: boolean;
   confirmHardDelete?: boolean;
 }
@@ -738,6 +746,7 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       const memory = store.forgetMemory({
         memoryId: input.memoryId,
         reason: input.reason,
+        invalidatedByRef: input.invalidatedByRef,
         hardDelete: input.hardDelete ?? false,
         confirmHardDelete: input.confirmHardDelete ?? false,
       });
@@ -1331,63 +1340,6 @@ export function registerMemoryTools(
   );
 }
 
-function serializeDatabaseHealth(health: ReturnType<MemoryStore["checkDatabaseHealth"]>) {
-  return {
-    ok: health.ok,
-    integrityCheck: health.integrityCheck,
-    fts: health.fts,
-    walCheckpoint: health.walCheckpoint,
-    warnings: health.warnings,
-    checkedAt: health.checkedAt.toISOString(),
-  };
-}
-
-function serializeMemoryStats(stats: ReturnType<MemoryStore["getStats"]>) {
-  return {
-    memoryCount: stats.memoryCount,
-    eventCount: stats.eventCount,
-    byStatus: stats.byStatus,
-    byLayer: stats.byLayer,
-    byProjectScope: stats.byProjectScope.map((scope) => ({
-      projectScope: scope.projectScope,
-      total: scope.total,
-      active: scope.active,
-      latestUpdatedAt: scope.latestUpdatedAt?.toISOString() ?? null,
-    })),
-    updatedAtRange: {
-      oldest: stats.updatedAtRange.oldest?.toISOString() ?? null,
-      newest: stats.updatedAtRange.newest?.toISOString() ?? null,
-    },
-  };
-}
-
-function serializeBackupRetentionEntry(
-  entry: ReturnType<MemoryStore["planBackupRetention"]>["backups"][number],
-) {
-  return {
-    backupPath: entry.backupPath,
-    sizeBytes: entry.sizeBytes,
-    mtime: entry.mtime.toISOString(),
-  };
-}
-
-function serializeBackupRetentionSummary(plan: ReturnType<MemoryStore["planBackupRetention"]>) {
-  const latestBackup = plan.backups[0] ?? null;
-
-  return {
-    backupDir: plan.backupDir,
-    keepCount: plan.keepCount,
-    backupCount: plan.backups.length,
-    keptCount: plan.kept.length,
-    prunableCount: plan.prunable.length,
-    prunableSizeBytes: plan.prunable.reduce((total, backup) => total + backup.sizeBytes, 0),
-    latestBackup: latestBackup ? serializeBackupRetentionEntry(latestBackup) : null,
-    prunable: plan.prunable.map(serializeBackupRetentionEntry),
-    wouldDelete: false,
-    plannedAt: plan.plannedAt.toISOString(),
-  };
-}
-
 function toolResult<T extends Record<string, unknown>>(structuredContent: T): ToolResult<T> {
   return {
     content: [
@@ -1397,17 +1349,6 @@ function toolResult<T extends Record<string, unknown>>(structuredContent: T): To
       },
     ],
     structuredContent,
-  };
-}
-
-function serializeSearchResult(
-  result: SearchMemoryResult,
-  options: { includeEmbedding?: boolean } = {},
-) {
-  return {
-    ...serializeMemory(result.memory, options),
-    score: result.score,
-    scoreBreakdown: result.scoreBreakdown,
   };
 }
 
@@ -1481,118 +1422,6 @@ function analyzeProvenance(sourceType: string, sourceRef: string) {
     quality: analysis.quality,
     recognizedRefs: analysis.recognizedRefs,
     suggestions: analysis.suggestions,
-  };
-}
-
-function serializeMemory(memory: Memory, options: { includeEmbedding?: boolean } = {}) {
-  return {
-    id: memory.id,
-    layer: memory.layer,
-    content: memory.content,
-    summary: memory.summary,
-    tags: memory.tags,
-    projectScope: memory.projectScope,
-    sourceType: memory.sourceType,
-    sourceRef: memory.sourceRef,
-    importance: memory.importance,
-    confidence: memory.confidence,
-    embedding: options.includeEmbedding ? memory.embedding : null,
-    createdAt: memory.createdAt.toISOString(),
-    updatedAt: memory.updatedAt.toISOString(),
-    validFrom: memory.validFrom.toISOString(),
-    invalidatedAt: memory.invalidatedAt?.toISOString() ?? null,
-    invalidatedByRef: memory.invalidatedByRef,
-    invalidationReason: memory.invalidationReason,
-    lastAccessedAt: memory.lastAccessedAt?.toISOString() ?? null,
-    expiresAt: memory.expiresAt?.toISOString() ?? null,
-    status: memory.status,
-  };
-}
-
-function serializeDirective(directive: Directive) {
-  return {
-    id: directive.id,
-    scope: directive.scope,
-    projectScope: directive.projectScope,
-    content: directive.content,
-    rationale: directive.rationale,
-    tags: directive.tags,
-    sourceType: directive.sourceType,
-    sourceRef: directive.sourceRef,
-    priority: directive.priority,
-    createdAt: directive.createdAt.toISOString(),
-    updatedAt: directive.updatedAt.toISOString(),
-    status: directive.status,
-  };
-}
-
-function serializeMemorySummary(memory: Memory) {
-  return {
-    id: memory.id,
-    layer: memory.layer,
-    summary: memory.summary,
-    tags: memory.tags,
-    projectScope: memory.projectScope,
-    sourceType: memory.sourceType,
-    sourceRef: memory.sourceRef,
-    importance: memory.importance,
-    confidence: memory.confidence,
-    createdAt: memory.createdAt.toISOString(),
-    updatedAt: memory.updatedAt.toISOString(),
-    validFrom: memory.validFrom.toISOString(),
-    invalidatedAt: memory.invalidatedAt?.toISOString() ?? null,
-    invalidatedByRef: memory.invalidatedByRef,
-    invalidationReason: memory.invalidationReason,
-    lastAccessedAt: memory.lastAccessedAt?.toISOString() ?? null,
-    expiresAt: memory.expiresAt?.toISOString() ?? null,
-    status: memory.status,
-  };
-}
-
-function serializeSessionMemory(result: SearchMemoryResult) {
-  return {
-    id: result.memory.id,
-    layer: result.memory.layer,
-    summary: result.memory.summary,
-    tags: result.memory.tags,
-    projectScope: result.memory.projectScope,
-    sourceType: result.memory.sourceType,
-    sourceRef: result.memory.sourceRef,
-    importance: result.memory.importance,
-    confidence: result.memory.confidence,
-    updatedAt: result.memory.updatedAt.toISOString(),
-    validFrom: result.memory.validFrom.toISOString(),
-    invalidatedAt: result.memory.invalidatedAt?.toISOString() ?? null,
-    invalidatedByRef: result.memory.invalidatedByRef,
-    invalidationReason: result.memory.invalidationReason,
-    status: result.memory.status,
-    score: result.score,
-    scoreBreakdown: result.scoreBreakdown,
-  };
-}
-
-function serializeBackupMemorySummary(
-  memory: ReturnType<MemoryStore["inspectBackup"]>["memories"][number],
-) {
-  return {
-    id: memory.id,
-    layer: memory.layer,
-    summary: memory.summary,
-    tags: memory.tags,
-    projectScope: memory.projectScope,
-    sourceType: memory.sourceType,
-    sourceRef: memory.sourceRef,
-    importance: memory.importance,
-    confidence: memory.confidence,
-    createdAt: memory.createdAt.toISOString(),
-    updatedAt: memory.updatedAt.toISOString(),
-    validFrom: memory.validFrom?.toISOString() ?? null,
-    invalidatedAt: memory.invalidatedAt?.toISOString() ?? null,
-    invalidatedByRef: memory.invalidatedByRef,
-    invalidationReason: memory.invalidationReason,
-    lastAccessedAt: memory.lastAccessedAt?.toISOString() ?? null,
-    expiresAt: memory.expiresAt?.toISOString() ?? null,
-    status: memory.status,
   };
 }
 

@@ -84,6 +84,8 @@ Before writing normal memory, call `propose_memory_update`. Write or update only
 
 Prefer traceable `sourceRef` values such as `pr:#123`, `issue:#123`, `git:<hash>`, `session:<id>`, docs paths, or named chat/evaluation ids. Manual proposal and auto curation use the same sourceRef quality rules.
 
+When a normal memory is stale or should no longer be used, call `forget_memory` with a concise reason. If there is a traceable basis, pass `invalidatedByRef` such as `issue:#123`, `pr:#123`, `git:<hash>`, or a docs path so the invalidation remains auditable.
+
 Before writing directive memory, call `propose_directive_update`. If work is inside a project, ask the user whether the rule should be `global` or `project` scope before calling `write_directive`.
 
 Never store secrets, credentials, private tokens, or unnecessary personal details.

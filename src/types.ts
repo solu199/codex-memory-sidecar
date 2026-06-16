@@ -116,6 +116,7 @@ export interface UpdateMemoryInput {
 export interface ForgetMemoryInput {
   memoryId: number;
   reason: string;
+  invalidatedByRef?: string;
   hardDelete?: boolean;
   confirmHardDelete?: boolean;
 }
@@ -252,6 +253,11 @@ export interface DatabaseHealth {
     indexedCount: number;
     missingCount: number;
     orphanCount: number;
+    porter: {
+      indexedCount: number;
+      missingCount: number;
+      orphanCount: number;
+    };
   };
   walCheckpoint: {
     busy: number;

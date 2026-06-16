@@ -65,7 +65,7 @@
 
 - Issue: #99
 - 設計: [docs/bi-temporal-invalidation-design.md](bi-temporal-invalidation-design.md)
-- 現状: PR1 で schema migration、既存行 backfill、旧 backup 互換読み取り、MCP 出力の temporal metadata 表示まで実装。
+- 現状: PR1 で schema migration、既存行 backfill、旧 backup 互換読み取り、MCP 出力の temporal metadata 表示まで実装。Issue #116 で `forget_memory` の論理削除時に `invalidated_at` / `invalidated_by_ref` / `invalidation_reason` と audit payload を残す経路も実装。
 - 目的: 古いメモリを単に忘れるのではなく、「いつから無効になったか」「何により無効化されたか」を追跡する。
 - 方針:
   - `valid_from`
