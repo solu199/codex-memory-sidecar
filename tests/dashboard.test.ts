@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   buildDashboardStatus,
   createDashboardServer,
+  DASHBOARD_BUILD_FINGERPRINT,
   isAllowedDashboardHostHeader,
   openDashboardUrl,
   probeOllamaStatus,
@@ -335,7 +336,29 @@ describe("dashboard", () => {
       expect(page.headers.get("content-type")).toContain("text/html");
       const html = await page.text();
       expect(html).toContain("Codex Memory Sidecar");
+      expect(html).toContain("app-shell");
+      expect(html).toContain("app-nav");
+      expect(html).toContain("view-observatory");
+      expect(html).toContain("view-health");
+      expect(html).toContain("view-memories");
+      expect(html).toContain("view-directives");
+      expect(html).toContain("view-maintenance");
+      expect(html).toContain("view-events");
+      expect(html).toContain("view-settings");
+      expect(html).toContain('data-view-target="observatory"');
       expect(html).toContain("Auto Memory Curation");
+      expect(html).toContain("Memory Observatory");
+      expect(html).toContain("observatory-3d.bundle.js");
+      expect(html).toContain('id="graph"');
+      expect(html).toContain('id="tabLive"');
+      expect(html).toContain('id="tabReplay"');
+      expect(html).toContain('id="tabExplore"');
+      expect(html).toContain('id="searchBox"');
+      expect(html).toContain('id="showSim"');
+      expect(html).toContain('id="showHebb"');
+      expect(html).toContain('id="autoRotate"');
+      expect(html).toContain('id="fogOn"');
+      expect(html).toContain("/api/graph");
       expect(html).toContain("メモリ統計");
       expect(html).toContain("Directive Memory");
       expect(html).toContain("無効化済み Directive Memory");
@@ -354,6 +377,7 @@ describe("dashboard", () => {
         ok: true,
         dashboard: {
           schemaVersion: expect.any(String),
+          buildFingerprint: DASHBOARD_BUILD_FINGERPRINT,
         },
         database: {
           ok: true,
@@ -369,6 +393,77 @@ describe("dashboard", () => {
           mode: "safe",
         },
       });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  test("serves vendored 3D observatory runtime over HTTP", async () => {
+    const server = createDashboardServer(store);
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Expected TCP server address.");
+      }
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+
+      const response = await fetch(`${baseUrl}/assets/observatory-3d.bundle.js`);
+      const source = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain("text/javascript");
+      expect(source).toContain("window.ForceGraph3D");
+      expect(source).toContain("window.THREE");
+      expect(source).toContain("window.UnrealBloomPass");
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  test("serves privacy-safe memory graph data over HTTP", async () => {
+    store.createMemory({
+      content: "Graph endpoint must not expose this memory body.",
+      summary: "Graph endpoint safe summary",
+      layer: "recall",
+      tags: ["graph"],
+      sourceType: "manual",
+      sourceRef: "test:dashboard-graph",
+      embedding: [1, 0, 0],
+    });
+
+    const server = createDashboardServer(store, {
+      embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) },
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Expected TCP server address.");
+      }
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+
+      const response = await fetch(`${baseUrl}/api/graph`);
+      const graph = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(graph.nodes).toEqual([
+        expect.objectContaining({
+          summary: "Graph endpoint safe summary",
+          privacy: "summary-only",
+        }),
+      ]);
+      expect(graph.privacy).toEqual({
+        contentIncluded: false,
+        eventPayloadIncluded: false,
+      });
+      expect(JSON.stringify(graph)).not.toContain("Graph endpoint must not expose");
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
@@ -481,6 +576,7 @@ describe("dashboard", () => {
       const baseUrl = `http://127.0.0.1:${address.port}`;
       const html = await (await fetch(baseUrl)).text();
       const status = await (await fetch(`${baseUrl}/api/status`)).json();
+      const graph = await (await fetch(`${baseUrl}/api/graph`)).json();
       const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
       if (!script) {
         throw new Error("Dashboard script was not found.");
@@ -489,6 +585,53 @@ describe("dashboard", () => {
         string,
         { textContent: string; innerHTML: string; className: string; listeners: string[] }
       >();
+      const classLists = new Map<string, Set<string>>();
+      const navButtons = [
+        "observatory",
+        "health",
+        "memories",
+        "directives",
+        "maintenance",
+        "events",
+        "settings",
+      ].map((view) => ({
+        dataset: { viewTarget: view },
+        listeners: [] as string[],
+        classList: {
+          add(className: string) {
+            const classes = classLists.get(`nav-${view}`) ?? new Set<string>();
+            classes.add(className);
+            classLists.set(`nav-${view}`, classes);
+          },
+          remove(className: string) {
+            classLists.get(`nav-${view}`)?.delete(className);
+          },
+        },
+        addEventListener(eventName: string) {
+          this.listeners.push(eventName);
+        },
+      }));
+      const views = [
+        "observatory",
+        "health",
+        "memories",
+        "directives",
+        "maintenance",
+        "events",
+        "settings",
+      ].map((view) => ({
+        id: `view-${view}`,
+        classList: {
+          add(className: string) {
+            const classes = classLists.get(`view-${view}`) ?? new Set<string>();
+            classes.add(className);
+            classLists.set(`view-${view}`, classes);
+          },
+          remove(className: string) {
+            classLists.get(`view-${view}`)?.delete(className);
+          },
+        },
+      }));
       const elementFor = (id: string) => {
         const existing = elements.get(id);
         if (existing) {
@@ -507,12 +650,19 @@ describe("dashboard", () => {
         return created;
       };
       const context = {
-        fetch: vi.fn(async () => ({
-          json: async () => status,
+        fetch: vi.fn(async (url: string) => ({
+          ok: true,
+          json: async () => (url === "/api/graph" ? graph : status),
         })),
         document: {
           getElementById: elementFor,
+          querySelectorAll(selector: string) {
+            if (selector === ".nav-button") return navButtons;
+            if (selector === ".app-view") return views;
+            return [];
+          },
         },
+        window: {},
       };
 
       vm.runInNewContext(script, context);
@@ -547,6 +697,18 @@ describe("dashboard", () => {
         "Dashboard DOM test memory body",
       );
       expect(elementFor("refresh").listeners).toEqual(["click"]);
+      expect(navButtons.map((button) => button.listeners)).toEqual([
+        ["click"],
+        ["click"],
+        ["click"],
+        ["click"],
+        ["click"],
+        ["click"],
+        ["click"],
+      ]);
+      expect(elementFor("settings-dashboard").innerHTML).toContain("schema");
+      expect(elementFor("forecast").innerHTML).toContain("DOM rendered memory summary");
+      expect(elementFor("feed").innerHTML).toContain("作成");
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

@@ -2,13 +2,14 @@ import os from "node:os";
 import path from "node:path";
 import http from "node:http";
 
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
   startDashboardCompanion,
   shouldStartDashboardWithMcp,
 } from "../src/dashboard-companion.js";
+import { DASHBOARD_SCHEMA_VERSION } from "../src/dashboard.js";
 import { MemoryStore } from "../src/memory-store.js";
 import type { MemorySidecarConfig } from "../src/config.js";
 
@@ -144,6 +145,43 @@ describe("dashboard companion", () => {
     }
   });
 
+  test("startDashboardCompanion reopens when the old open marker has no live process", async () => {
+    const markerPath = path.join(path.dirname(config.databasePath), ".dashboard-opened.json");
+    writeFileSync(
+      markerPath,
+      JSON.stringify({
+        url: "http://127.0.0.1:12345",
+        schemaVersion: DASHBOARD_SCHEMA_VERSION,
+        openedAt: new Date().toISOString(),
+      }),
+    );
+    const opener = vi.fn(() => ({ on: vi.fn(), unref: vi.fn() }));
+
+    const result = await startDashboardCompanion({
+      store,
+      config,
+      port: 0,
+      opener,
+      fetch: vi.fn(async (url) => {
+        if (String(url).endsWith("/api/tags")) {
+          return new Response(
+            JSON.stringify({
+              models: [{ name: "embeddinggemma:latest" }, { name: "qwen3:latest" }],
+            }),
+          );
+        }
+        return new Response(JSON.stringify({ embeddings: [[0.1, 0.2]] }));
+      }),
+    });
+
+    try {
+      expect(result.started).toBe(true);
+      expect(opener).toHaveBeenCalledOnce();
+    } finally {
+      await result.close();
+    }
+  });
+
   test("startDashboardCompanion can always reopen an existing dashboard when requested", async () => {
     const existing = await startDashboardCompanion({
       store,
@@ -224,4 +262,32 @@ describe("dashboard companion", () => {
       });
     }
   });
+
+  test("startDashboardCompanion does not hang when an existing dashboard port never responds", async () => {
+    const blockingServer = http.createServer((_request, _response) => {
+      // Keep the socket open to emulate a stale or wedged local dashboard process.
+    });
+    await new Promise<void>((resolve) => blockingServer.listen(0, "127.0.0.1", resolve));
+    const address = blockingServer.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Expected blocking server TCP address.");
+    }
+
+    try {
+      const result = await startDashboardCompanion({
+        store,
+        config,
+        port: address.port,
+      });
+
+      expect(result.started).toBe(false);
+      expect(result.url).toBeNull();
+      expect(result.warnings[0]).toContain("Dashboard companion did not start");
+      await result.close();
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        blockingServer.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  }, 7000);
 });

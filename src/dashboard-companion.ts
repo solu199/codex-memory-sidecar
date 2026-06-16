@@ -3,7 +3,12 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import type { MemorySidecarConfig } from "./config.js";
-import { createDashboardServer, DASHBOARD_SCHEMA_VERSION, openDashboardUrl } from "./dashboard.js";
+import {
+  createDashboardServer,
+  DASHBOARD_BUILD_FINGERPRINT,
+  DASHBOARD_SCHEMA_VERSION,
+  openDashboardUrl,
+} from "./dashboard.js";
 import { OllamaEmbeddingProvider } from "./embedding.js";
 import type { MemoryStore } from "./memory-store.js";
 
@@ -204,7 +209,12 @@ function wasDashboardAlreadyOpened(markerPath: string, url: string): boolean {
   try {
     const marker = JSON.parse(readFileSync(markerPath, "utf8")) as unknown;
     return (
-      isRecord(marker) && marker.url === url && marker.schemaVersion === DASHBOARD_SCHEMA_VERSION
+      isRecord(marker) &&
+      marker.url === url &&
+      marker.schemaVersion === DASHBOARD_SCHEMA_VERSION &&
+      marker.buildFingerprint === DASHBOARD_BUILD_FINGERPRINT &&
+      typeof marker.pid === "number" &&
+      isProcessAlive(marker.pid)
     );
   } catch {
     return false;
@@ -220,6 +230,8 @@ function rememberDashboardOpened(markerPath: string, url: string): void {
         {
           url,
           schemaVersion: DASHBOARD_SCHEMA_VERSION,
+          buildFingerprint: DASHBOARD_BUILD_FINGERPRINT,
+          pid: process.pid,
           openedAt: new Date().toISOString(),
         },
         null,
@@ -239,7 +251,7 @@ async function findExistingSidecarDashboard(
 > {
   const url = `http://127.0.0.1:${port}`;
   try {
-    const response = await fetchImpl(`${url}/api/status`);
+    const response = await fetchWithTimeout(fetchImpl, `${url}/api/status`, 1500);
     if (!response.ok) {
       return null;
     }
@@ -248,7 +260,11 @@ async function findExistingSidecarDashboard(
       return null;
     }
     const schemaVersion = isRecord(status.dashboard) ? status.dashboard.schemaVersion : null;
-    if (schemaVersion !== DASHBOARD_SCHEMA_VERSION) {
+    const buildFingerprint = isRecord(status.dashboard) ? status.dashboard.buildFingerprint : null;
+    if (
+      schemaVersion !== DASHBOARD_SCHEMA_VERSION ||
+      buildFingerprint !== DASHBOARD_BUILD_FINGERPRINT
+    ) {
       return {
         reusable: false,
         url,
@@ -263,4 +279,41 @@ async function findExistingSidecarDashboard(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+async function fetchWithTimeout(
+  fetchImpl: typeof globalThis.fetch,
+  url: string,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      fetchImpl(url, { signal: controller.signal }),
+      new Promise<Response>((_, reject) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(new Error(`Dashboard status probe timed out: ${url}`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return !isNodeErrno(error, "ESRCH");
+  }
+}
+
+function isNodeErrno(error: unknown, code: string): boolean {
+  return isRecord(error) && error.code === code;
 }

@@ -43,6 +43,7 @@ npm run dashboard
 - Skill と詳細運用: [skills/codex-memory-sidecar/SKILL.md](skills/codex-memory-sidecar/SKILL.md)
 - Codex SessionStart hook: [docs/session-start-hook.md](docs/session-start-hook.md)
 - bi-temporal invalidation 設計: [docs/bi-temporal-invalidation-design.md](docs/bi-temporal-invalidation-design.md)
+- Memory Observatory 設計: [docs/memory-observatory.md](docs/memory-observatory.md)
 - 公開前監査: [docs/public-readiness-audit.md](docs/public-readiness-audit.md)
 - メモリ評価ベンチ: [docs/memory-evaluation.md](docs/memory-evaluation.md)
 - 技術的な中期改善: [docs/technical-roadmap.md](docs/technical-roadmap.md)
@@ -210,6 +211,8 @@ MCP server 起動時の Dashboard 自動起動を止める場合は、MCP 登録
 MCP server と同時起動する Dashboard は、既定では同じ URL を一度だけブラウザで開きます。再起動のたびにタブを増やしたい場合は `CODEX_MEMORY_DASHBOARD_OPEN=always`、一切開きたくない場合は `CODEX_MEMORY_DASHBOARD_OPEN=false` を MCP 登録に追加します。
 
 Dashboard は active directive memory と無効化済み directive memory の内容を表示します。これは強い記憶をユーザーが監査できるようにするためです。通常メモリの本文や audit payload は表示せず、要約とメタデータだけを表示します。
+
+Memory Observatory は、通常メモリ同士の関係を 3D グラフで俯瞰する読み取り専用ビューです。Dashboard は左ナビ付きのローカルWebアプリとして構成され、観測、状態、メモリ、Directive、メンテナンス、イベント、設定を切り替えられます。観測ビューでは `ライブ` / `リプレイ` / `探索` の3モード、検索、similarity / hebbian edge の表示切替、タイトル表示、自動回転、忘却の霧、忘却予測、イベントフィードを使えます。`/api/graph` は通常メモリの要約、layer、project scope、sourceRef、活性度、7日後の想起しやすさ、clusters、safe events、embedding 類似度、検索イベント由来の共起関係だけを返します。本文と audit payload は返さず、Dashboard の表示や再読み込みだけでメモリやイベントを書き込みません。詳しくは [docs/memory-observatory.md](docs/memory-observatory.md) を参照してください。
 
 Dashboard の `/api/status` は `memoryFreshness`、`memoryUpdateCandidates`、`autoMemoryCuration` も返します。`memoryFreshness` は最新メモリ更新日と最近の作業履歴の差を示し、`memoryUpdateCandidates` は最近のIssue、PR、commit、session activityなどから通常メモリに残す候補を提示します。`memory_auto_write = "off"` / `"review"` では自動保存しません。`"safe"` では `start_memory_session` 実行時だけ、高信頼・非重複・sourceRef良好・secret検出通過の候補だけを自動保存します。
 

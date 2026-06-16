@@ -10,6 +10,7 @@ export default tseslint.config(
       "coverage/**",
       ".github/releases/**",
       "docs/assets/**",
+      "vendor/**",
     ],
   },
   js.configs.recommended,

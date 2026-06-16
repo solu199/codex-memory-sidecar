@@ -294,6 +294,23 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         dashboard.autoMemoryCuration.mode === "safe" &&
         dashboard.memoryUpdateCandidates.some((candidate) => candidate.sourceRef === "pr:#77") &&
         dashboard.memoryUpdateCandidates.some((candidate) => candidate.sourceRef === "git:92e5fcb"),
+      dashboardShowsMemoryObservatory:
+        dashboard.graph.nodes.length > 0 &&
+        dashboard.html.includes("app-shell") &&
+        dashboard.html.includes("app-nav") &&
+        dashboard.html.includes("view-observatory") &&
+        dashboard.html.includes("view-settings") &&
+        dashboard.html.includes("observatory-3d.bundle.js") &&
+        dashboard.html.includes('id="graph"') &&
+        dashboard.html.includes('id="tabLive"') &&
+        dashboard.html.includes('id="tabReplay"') &&
+        dashboard.html.includes('id="tabExplore"') &&
+        dashboard.graph.nodes.every((node) => node.privacy === "summary-only") &&
+        dashboard.graph.clusters.length > 0 &&
+        dashboard.graph.events.every((event) => !("payload" in event)) &&
+        dashboard.graph.privacy.contentIncluded === false &&
+        dashboard.graph.privacy.eventPayloadIncluded === false &&
+        !JSON.stringify(dashboard.graph).includes("payload"),
     };
 
     return {
@@ -335,9 +352,20 @@ async function fetchDashboardSnapshot(
     if (!html.includes("プロジェクトスコープ")) {
       throw new Error("Dashboard HTML did not include プロジェクトスコープ.");
     }
+    if (
+      !html.includes("Memory Observatory") ||
+      !html.includes("observatory-3d.bundle.js") ||
+      !html.includes('id="graph"')
+    ) {
+      throw new Error("Dashboard HTML did not include Memory Observatory.");
+    }
+    if (!html.includes("app-shell") || !html.includes("view-observatory")) {
+      throw new Error("Dashboard HTML did not include the app shell.");
+    }
 
     const response = await fetch(`${baseUrl}/api/status`);
-    return (await response.json()) as {
+    const graphResponse = await fetch(`${baseUrl}/api/graph`);
+    const status = (await response.json()) as {
       ok: boolean;
       memoryStats: {
         byProjectScope: Array<{ projectScope: string }>;
@@ -351,6 +379,20 @@ async function fetchDashboardSnapshot(
         autoWrittenMemories?: Array<{ sourceRef: string }>;
       };
     };
+    const graph = (await graphResponse.json()) as {
+      nodes: Array<{ id: number; summary: string; privacy: "summary-only" }>;
+      clusters: Array<{ id: string; kind: string; label: string; nodeIds: number[] }>;
+      events: Array<{ id: number; eventType: string; memoryIds: number[]; createdAt: string }>;
+      edges: {
+        similarity: Array<unknown>;
+        hebbian: Array<unknown>;
+      };
+      privacy: {
+        contentIncluded: false;
+        eventPayloadIncluded: false;
+      };
+    };
+    return { ...status, graph, html };
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()));
