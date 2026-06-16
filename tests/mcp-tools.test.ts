@@ -37,6 +37,10 @@ describe("MCP tool handlers", () => {
     });
 
     expect(result.structuredContent.memory.status).toBe("active");
+    expect(result.structuredContent.memory.validFrom).toEqual(expect.any(String));
+    expect(result.structuredContent.memory.invalidatedAt).toBeNull();
+    expect(result.structuredContent.memory.invalidatedByRef).toBeNull();
+    expect(result.structuredContent.memory.invalidationReason).toBeNull();
     expect(result.structuredContent.memory.embedding).toBeNull();
     expect(store.getMemory(result.structuredContent.memory.id)?.embedding).toEqual([1, 0]);
     expect(result.structuredContent.duplicateCandidates).toEqual([]);

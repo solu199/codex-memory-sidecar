@@ -2,6 +2,13 @@
 
 このプロジェクトの主な変更を記録します。
 
+## [Unreleased]
+
+### 追加
+
+- 通常メモリに `valid_from` / `invalidated_at` / `invalidated_by_ref` / `invalidation_reason` を追加し、bi-temporal invalidation の schema migration と旧データ backfill の土台を整備。
+- 旧 schema backup は optional bi-temporal columns missing として警告しつつ、`inspect_backup` で互換的に読めるようにした。
+
 ## [0.1.0] - 2026-06-16
 
 初回公開準備版です。AIエージェントが作業をまたいで使える、ローカル保存型の MCP メモリ基盤として使える状態を整えました。

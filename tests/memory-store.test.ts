@@ -34,6 +34,10 @@ describe("MemoryStore", () => {
 
     expect(created.id).toBeGreaterThan(0);
     expect(created.status).toBe("active");
+    expect(created.validFrom.toISOString()).toBe(created.createdAt.toISOString());
+    expect(created.invalidatedAt).toBeNull();
+    expect(created.invalidatedByRef).toBeNull();
+    expect(created.invalidationReason).toBeNull();
     expect(created.summary).toBe("User prefers focused TypeScript modules with tests.");
     expect(created.tags).toEqual(["preference", "typescript"]);
 
@@ -168,6 +172,104 @@ describe("MemoryStore", () => {
       ]);
       expect(indexes.map((index) => index.name)).toContain(
         "idx_memories_project_scope_status_updated",
+      );
+    } finally {
+      legacyStore.close();
+    }
+  });
+
+  test("backfills bi-temporal metadata for legacy memory rows", () => {
+    const legacyPath = path.join(tempDir, "legacy-temporal.sqlite");
+    const legacyDb = new Database(legacyPath);
+    legacyDb.exec(`
+      CREATE TABLE memories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        layer TEXT NOT NULL CHECK (layer IN ('core', 'recall', 'archival')),
+        content TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        tags TEXT NOT NULL DEFAULT '[]',
+        project_scope TEXT NOT NULL DEFAULT 'global',
+        source_type TEXT NOT NULL,
+        source_ref TEXT NOT NULL,
+        importance REAL NOT NULL DEFAULT 0.5,
+        confidence REAL NOT NULL DEFAULT 0.5,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        last_accessed_at TEXT,
+        expires_at TEXT,
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'superseded', 'forgotten'))
+      );
+
+      CREATE TABLE memory_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        memory_id INTEGER NOT NULL,
+        event_type TEXT NOT NULL CHECK (
+          event_type IN ('created', 'updated', 'forgotten', 'consolidated', 'retrieved')
+        ),
+        payload_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL
+      );
+
+      CREATE VIRTUAL TABLE memories_fts USING fts5(content, summary, tags);
+    `);
+    const rows = [
+      {
+        content: "Active legacy memory.",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:10:00.000Z",
+        status: "active",
+      },
+      {
+        content: "Superseded legacy memory.",
+        createdAt: "2026-05-13T00:00:00.000Z",
+        updatedAt: "2026-05-15T00:00:00.000Z",
+        status: "superseded",
+      },
+      {
+        content: "Forgotten legacy memory.",
+        createdAt: "2026-05-12T00:00:00.000Z",
+        updatedAt: "2026-05-16T00:00:00.000Z",
+        status: "forgotten",
+      },
+    ];
+    for (const row of rows) {
+      legacyDb
+        .prepare(
+          `INSERT INTO memories (
+            layer, content, summary, tags, project_scope, source_type, source_ref,
+            importance, confidence, created_at, updated_at, status
+          ) VALUES (
+            'recall', @content, @content, '["legacy"]', 'global', 'manual', 'test',
+            0.6, 0.8, @createdAt, @updatedAt, @status
+          )`,
+        )
+        .run(row);
+    }
+    legacyDb.close();
+
+    const legacyStore = new MemoryStore(legacyPath);
+    try {
+      const active = legacyStore.getMemory(1);
+      const superseded = legacyStore.getMemory(2);
+      const forgotten = legacyStore.getMemory(3);
+
+      expect(active?.validFrom.toISOString()).toBe("2026-05-14T00:00:00.000Z");
+      expect(active?.invalidatedAt).toBeNull();
+      expect(active?.invalidatedByRef).toBeNull();
+      expect(active?.invalidationReason).toBeNull();
+
+      expect(superseded?.validFrom.toISOString()).toBe("2026-05-13T00:00:00.000Z");
+      expect(superseded?.invalidatedAt?.toISOString()).toBe("2026-05-15T00:00:00.000Z");
+      expect(superseded?.invalidatedByRef).toBe("migration:bi-temporal-v1");
+      expect(superseded?.invalidationReason).toBe(
+        "Backfilled from existing memory status during bi-temporal migration.",
+      );
+
+      expect(forgotten?.validFrom.toISOString()).toBe("2026-05-12T00:00:00.000Z");
+      expect(forgotten?.invalidatedAt?.toISOString()).toBe("2026-05-16T00:00:00.000Z");
+      expect(forgotten?.invalidatedByRef).toBe("migration:bi-temporal-v1");
+      expect(forgotten?.invalidationReason).toBe(
+        "Backfilled from existing memory status during bi-temporal migration.",
       );
     } finally {
       legacyStore.close();
@@ -948,6 +1050,72 @@ describe("MemoryStore", () => {
     expect(store.getMemory(created.id)?.content).toBe(
       "Backup schema verification should be read-only.",
     );
+  });
+
+  test("inspects legacy backups without bi-temporal columns as compatible", () => {
+    const legacyBackupPath = path.join(tempDir, "legacy-backup.sqlite");
+    const legacyDb = new Database(legacyBackupPath);
+    legacyDb.exec(`
+      CREATE TABLE memories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        layer TEXT NOT NULL CHECK (layer IN ('core', 'recall', 'archival')),
+        content TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        tags TEXT NOT NULL DEFAULT '[]',
+        project_scope TEXT NOT NULL DEFAULT 'global',
+        source_type TEXT NOT NULL,
+        source_ref TEXT NOT NULL,
+        importance REAL NOT NULL DEFAULT 0.5,
+        confidence REAL NOT NULL DEFAULT 0.5,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        last_accessed_at TEXT,
+        expires_at TEXT,
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'superseded', 'forgotten'))
+      );
+
+      CREATE TABLE memory_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        memory_id INTEGER NOT NULL,
+        event_type TEXT NOT NULL CHECK (
+          event_type IN ('created', 'updated', 'forgotten', 'consolidated', 'retrieved')
+        ),
+        payload_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL
+      );
+
+      CREATE VIRTUAL TABLE memories_fts USING fts5(content, summary, tags);
+    `);
+    legacyDb
+      .prepare(
+        `INSERT INTO memories (
+          layer, content, summary, tags, project_scope, source_type, source_ref,
+          importance, confidence, created_at, updated_at, status
+        ) VALUES (
+          'recall', 'Legacy backup memory.', 'Legacy backup memory.', '["backup"]',
+          'global', 'manual', 'backup:test', 0.6, 0.8,
+          '2026-05-14T00:00:00.000Z', '2026-05-15T00:00:00.000Z', 'active'
+        )`,
+      )
+      .run();
+    legacyDb.close();
+
+    const verification = store.verifyBackup({ backupPath: legacyBackupPath });
+    const inspection = store.inspectBackup({ backupPath: legacyBackupPath });
+
+    expect(verification.ok).toBe(true);
+    expect(verification.warnings).toContain(
+      "Backup is missing optional bi-temporal memories columns: valid_from, invalidated_at, invalidated_by_ref, invalidation_reason",
+    );
+    expect(inspection.ok).toBe(true);
+    expect(inspection.warnings).toEqual(verification.warnings);
+    expect(inspection.memories[0]).toMatchObject({
+      summary: "Legacy backup memory.",
+      validFrom: null,
+      invalidatedAt: null,
+      invalidatedByRef: null,
+      invalidationReason: null,
+    });
   });
 
   test("lists recent audit events across memories", () => {

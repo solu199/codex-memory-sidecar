@@ -17,6 +17,8 @@ describe("documentation", () => {
     expect(readme).toContain('embedding_mode = "ollama"');
     expect(readme).toContain("memoryFreshness");
     expect(readme).toContain("memoryUpdateCandidates");
+    expect(readme).toContain("valid_from");
+    expect(readme).toContain("invalidated_by_ref");
     expect(readme).toContain('memory_auto_write = "off"');
     expect(readme).toContain('memory_auto_write = "safe"');
     expect(readme).toContain("autoMemoryCuration");
@@ -70,6 +72,7 @@ describe("documentation", () => {
     expect(roadmap).toContain("node:sqlite");
     expect(roadmap).toContain("bi-temporal");
     expect(roadmap).toContain("docs/bi-temporal-invalidation-design.md");
+    expect(roadmap).toContain("schema migration");
     expect(roadmap).toContain("#95");
     expect(roadmap).toContain("#100");
   });
@@ -195,6 +198,8 @@ describe("documentation", () => {
     expect(protocol).toContain("memoryUpdateCandidates");
     expect(protocol).toContain("autoMemoryCuration");
     expect(protocol).toContain('memory_auto_write = "safe"');
+    expect(protocol).toContain("invalidated_at");
+    expect(protocol).toContain("invalidated_by_ref");
     expect(protocol).toContain("externalAuthor = true");
     expect(protocol).toContain("GitHub token");
     expect(openaiAgent).toContain('type: "mcp"');
