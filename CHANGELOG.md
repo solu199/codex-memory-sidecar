@@ -6,8 +6,14 @@
 
 ### 追加
 
+- Dashboard shell を React/Vite 製のローカルWebアプリへ分離し、`dist/dashboard-app` を `/dashboard-assets/` から配信する構成に変更。
 - 通常メモリに `valid_from` / `invalidated_at` / `invalidated_by_ref` / `invalidation_reason` を追加し、bi-temporal invalidation の schema migration と旧データ backfill の土台を整備。
 - 旧 schema backup は optional bi-temporal columns missing として警告しつつ、`inspect_backup` で互換的に読めるようにした。
+
+### 改善
+
+- Memory Observatory のノード名をホバー時表示にし、観測ビュー外・非表示タブ・アイドル時の 3D 描画負荷を下げた。
+- リプレイ中の時刻表示とスライダーを React state と同期し、再開時に時間がまとめて進まないようにした。
 
 ## [0.1.0] - 2026-06-16
 

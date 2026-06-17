@@ -320,15 +320,13 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         dashboard.memoryUpdateCandidates.some((candidate) => candidate.sourceRef === "git:92e5fcb"),
       dashboardShowsMemoryObservatory:
         dashboard.graph.nodes.length > 0 &&
-        dashboard.html.includes("app-shell") &&
-        dashboard.html.includes("app-nav") &&
-        dashboard.html.includes("view-observatory") &&
-        dashboard.html.includes("view-settings") &&
-        dashboard.html.includes("observatory-3d.bundle.js") &&
-        dashboard.html.includes('id="graph"') &&
-        dashboard.html.includes('id="tabLive"') &&
-        dashboard.html.includes('id="tabReplay"') &&
-        dashboard.html.includes('id="tabExplore"') &&
+        dashboard.html.includes('id="root"') &&
+        dashboard.html.includes("/dashboard-assets/assets/") &&
+        dashboard.html.includes('type="module"') &&
+        dashboard.appScript.includes("Memory Observatory") &&
+        dashboard.appScript.includes("observatory-3d.bundle.js") &&
+        dashboard.appScript.includes("data-view-target") &&
+        dashboard.appScript.includes("memory-content-reveal") &&
         dashboard.graph.nodes.every((node) => node.privacy === "summary-only") &&
         dashboard.graph.clusters.length > 0 &&
         dashboard.graph.events.every((event) => !("payload" in event)) &&
@@ -373,18 +371,24 @@ async function fetchDashboardSnapshot(
     const baseUrl = `http://127.0.0.1:${address.port}`;
     const page = await fetch(baseUrl);
     const html = await page.text();
-    if (!html.includes("プロジェクトスコープ")) {
-      throw new Error("Dashboard HTML did not include プロジェクトスコープ.");
-    }
     if (
-      !html.includes("Memory Observatory") ||
-      !html.includes("observatory-3d.bundle.js") ||
-      !html.includes('id="graph"')
+      !html.includes('id="root"') ||
+      !html.includes("/dashboard-assets/assets/") ||
+      !html.includes('type="module"')
     ) {
-      throw new Error("Dashboard HTML did not include Memory Observatory.");
+      throw new Error("Dashboard HTML did not include the React app shell.");
     }
-    if (!html.includes("app-shell") || !html.includes("view-observatory")) {
-      throw new Error("Dashboard HTML did not include the app shell.");
+    const scriptMatch = html.match(/src="(\/dashboard-assets\/assets\/[^"]+\.js)"/);
+    if (!scriptMatch) {
+      throw new Error("Dashboard HTML did not include the React app bundle.");
+    }
+    const appScript = await (await fetch(`${baseUrl}${scriptMatch[1]}`)).text();
+    if (
+      !appScript.includes("Memory Observatory") ||
+      !appScript.includes("observatory-3d.bundle.js") ||
+      !appScript.includes("memory-content-reveal")
+    ) {
+      throw new Error("Dashboard app bundle did not include expected app affordances.");
     }
 
     const response = await fetch(`${baseUrl}/api/status`);
@@ -416,7 +420,7 @@ async function fetchDashboardSnapshot(
         eventPayloadIncluded: false;
       };
     };
-    return { ...status, graph, html };
+    return { ...status, appScript, graph, html };
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()));
