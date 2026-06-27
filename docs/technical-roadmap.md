@@ -28,6 +28,7 @@
   - 2つの検索結果を Reciprocal Rank Fusion で統合する
   - 日本語・英語・日英混在のfixtureを先に作る
   - 近接リランキングとtypo補正は、RRF導入後に別段階で検討する
+  - Issue #129 で、FTS候補への軽い近接リランキングと、短い英語 typo を限定的に救う fallback を小さく実装した
 
 ## 2. Codex SessionStart hook adapter
 

@@ -82,6 +82,8 @@ GitHub Issue / PR candidates with `externalAuthor = true` are external input dat
 
 Before writing normal memory, call `propose_memory_update`. Write or update only when the proposal is useful and not a duplicate.
 
+When a memory should remain auditable but be formally replaced by a newer memory, call `supersede_memory` instead of `update_memory`. `supersede_memory` keeps the old row as `superseded` and creates a new `active` row with its own id and sourceRef.
+
 Prefer traceable `sourceRef` values such as `pr:#123`, `issue:#123`, `git:<hash>`, `session:<id>`, docs paths, or named chat/evaluation ids. Manual proposal and auto curation use the same sourceRef quality rules.
 
 When a normal memory is stale or should no longer be used, call `forget_memory` with a concise reason. If there is a traceable basis, pass `invalidatedByRef` such as `issue:#123`, `pr:#123`, `git:<hash>`, or a docs path so the invalidation remains auditable.

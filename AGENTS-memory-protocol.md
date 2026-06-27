@@ -137,6 +137,7 @@ Use the `codex-memory-sidecar` MCP server as the durable local memory layer for 
 - When past decisions, design intent, or project history may matter, use `search_memory` before relying on memory.
 - Do not set `includeEmbedding: true` on `search_memory` unless embedding vectors are explicitly needed, because embedding arrays are large and noisy in normal work.
 - When preserving a new lesson, decision, or durable preference, call `propose_memory_update` first, then use `write_memory` or `update_memory` only when the proposed change is useful.
+- When a memory should remain auditable but be formally replaced by a newer memory, call `supersede_memory` instead of `update_memory`. `supersede_memory` keeps the old row as `superseded` and creates a new `active` row with its own id and sourceRef.
 - When preserving a strong operating rule, call `propose_directive_update` first. If the work is inside a project, ask the user whether to store it as `global` directive or `project` directive before calling `write_directive`.
 - Cite memory-derived claims with enough context to audit them, such as memory IDs, directive IDs, summaries, or sourceRef.
 - Do not store secrets, credentials, private tokens, or unnecessary personal details.

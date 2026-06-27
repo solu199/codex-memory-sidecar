@@ -43,8 +43,10 @@ npm run dashboard
 - Codex / AGENTS.md 用の短い導入文: [AGENTS-memory-protocol.md](AGENTS-memory-protocol.md)
 - Skill と詳細運用: [skills/codex-memory-sidecar/SKILL.md](skills/codex-memory-sidecar/SKILL.md)
 - Codex SessionStart hook: [docs/session-start-hook.md](docs/session-start-hook.md)
+- Codex plugin packaging 調査: [docs/codex-plugin-packaging.md](docs/codex-plugin-packaging.md)
 - bi-temporal invalidation 設計: [docs/bi-temporal-invalidation-design.md](docs/bi-temporal-invalidation-design.md)
 - Memory Observatory 設計: [docs/memory-observatory.md](docs/memory-observatory.md)
+- Memory Observatory 軽量化メモ: [docs/observatory-performance.md](docs/observatory-performance.md)
 - Memory Observatory 3D bundle notice: [vendor/observatory-3d.bundle.NOTICE.md](vendor/observatory-3d.bundle.NOTICE.md)
 - 公開前監査: [docs/public-readiness-audit.md](docs/public-readiness-audit.md)
 - メモリ評価ベンチ: [docs/memory-evaluation.md](docs/memory-evaluation.md)
@@ -78,6 +80,7 @@ AIコーディングエージェントは、チャットや作業セッション
 - `write_directive` / `list_directives` / `propose_directive_update` / `disable_directive` で、AGENTS.md に近い強い作用を持つ directive memory を扱えます。
 - 通常メモリは `valid_from` / `invalidated_at` / `invalidated_by_ref` / `invalidation_reason` を持ち、古い記憶をすぐ削除せず、いつ・何により通常利用から外れたかを追跡できる土台を備えています。
 - `forget_memory` は通常の論理削除時に `invalidated_at` と `invalidation_reason` を記録します。根拠が追跡できる場合は任意の `invalidatedByRef` に `issue:#123`、`pr:#123`、`git:<hash>` などを渡します。
+- `supersede_memory` は、旧メモリを `superseded` として履歴に残しつつ、新しい内容を別の `active` メモリとして作成します。古い判断を上書きせず、旧ID / 新ID / invalidatedByRef / reason を監査できます。
 - `backup_memory` / `verify_backup` / `inspect_backup` / `plan_backup_retention` / `plan_backup_restore` / `repair_memory_index` で、安全確認と復旧計画を扱えます。
 - Dashboard で health、バックアップ、Ollama モデル、警告対応、project scope、directive memory、最近のメモリ、メモリ鮮度、保存候補を確認できます。
 - Memory Observatory の 3D runtime は vendored bundle として同梱し、`npm run build:observatory-bundle` と `npm run check:observatory-bundle` で由来、checksum、再生成可能性を確認できます。
@@ -214,15 +217,15 @@ npm run dashboard
 
 `npm run build` は MCP server 側の TypeScript と、React/Vite 製 Dashboard app の両方をビルドします。Dashboard app の成果物は `dist/dashboard-app` に生成され、ローカル server から `/dashboard-assets/` 配下で配信されます。
 
-既に同じポートで古い Dashboard が動いている場合は、`http://127.0.0.1:3737/api/status` の `dashboard.schemaVersion` と `warnings` を確認し、古いプロセスを停止してから再起動してください。別ポートで確認したい場合は `CODEX_MEMORY_DASHBOARD_PORT` を MCP 登録または実行環境に設定します。
+既に同じポートで Dashboard が動いている場合は、MCP server 起動時に `/api/status` の `dashboard.schemaVersion` と `buildFingerprint` を確認します。一致する既存 Dashboard は再利用し、stale または無応答の Dashboard は、同じ sidecar 由来の古い owner process と安全に確認できた時だけ自動停止して既定ポートを再利用します。安全に停止対象を特定できない場合は、誤停止を避けるため fallback port に退避して起動します。別ポートで固定したい場合は `CODEX_MEMORY_DASHBOARD_PORT` を MCP 登録または実行環境に設定します。
 
 MCP server 起動時の Dashboard 自動起動を止める場合は、MCP 登録に環境変数 `CODEX_MEMORY_DASHBOARD_ON_MCP_START=false` を追加します。
 
 MCP server と同時起動する Dashboard は、既定では同じ URL を一度だけブラウザで開きます。再起動のたびにタブを増やしたい場合は `CODEX_MEMORY_DASHBOARD_OPEN=always`、一切開きたくない場合は `CODEX_MEMORY_DASHBOARD_OPEN=false` を MCP 登録に追加します。
 
-Dashboard は active directive memory と無効化済み directive memory の内容を表示します。これは強い記憶をユーザーが監査できるようにするためです。通常メモリは一覧・グラフでは本文や audit payload を表示せず、要約とメタデータだけを表示します。メモリ詳細パネルでは、選択したメモリの layer、status、sourceRef、タグ、confidence、importance、無効化情報を確認できます。本文は「本文を表示」を明示的に押した場合だけ `/api/memories/:id?includeContent=true` で取得します。
+Dashboard は active directive memory と無効化済み directive memory の内容を表示します。これは強い記憶をユーザーが監査できるようにするためです。通常メモリは一覧・グラフでは本文や audit payload を表示せず、要約とメタデータだけを表示します。メモリ詳細パネルでは、選択したメモリの layer、status、sourceRef、タグ、confidence、importance、無効化情報に加えて、「分かること / 分からないこと / 追加で確認する場所」を表示します。本文は「本文を表示」を明示的に押した場合だけ `/api/memories/:id?includeContent=true` で取得します。
 
-Memory Observatory は、通常メモリ同士の関係を 3D グラフで俯瞰する読み取り専用ビューです。Dashboard は React/Vite 製のローカルWebアプリとして構成され、観測、状態、メモリ、Directive、メンテナンス、イベント、設定を切り替えられます。観測ビューでは `ライブ` / `リプレイ` / `探索` の3モード、検索、similarity / hebbian edge の表示切替、自動回転、忘却の霧、省電力モード、忘却予測、イベントフィードを使えます。既定では省電力モードが有効で、自動回転はオフです。ノード名はグラフを見やすく保つため、カーソルが近い時だけ表示します。観測ビュー以外を開いている時、ブラウザタブが非表示の時、操作していない時は 3D 描画頻度を落とし、必要な時だけ `resumeAnimation` します。グラフのノードをクリックすると、対応するメモリ詳細へ移動できます。`/api/graph` は通常メモリの要約、layer、project scope、sourceRef、活性度、7日後の想起しやすさ、clusters、safe events、embedding 類似度、検索イベント由来の共起関係だけを返します。本文と audit payload は返さず、Dashboard の表示や再読み込みだけでメモリやイベントを書き込みません。詳しくは [docs/memory-observatory.md](docs/memory-observatory.md) を参照してください。
+Memory Observatory は、通常メモリ同士の関係を 3D グラフで俯瞰する読み取り専用ビューです。Dashboard は React/Vite 製のローカルWebアプリとして構成され、観測、状態、メモリ、Directive、メンテナンス、イベント、設定を切り替えられます。観測ビューでは `ライブ` / `リプレイ` / `探索` の3モード、検索、similarity / hebbian edge の表示切替、自動回転、忘却の霧、省電力モード、忘却予測、イベントフィードを使えます。既定では省電力モードが有効で、自動回転はオフです。ノード名はグラフを見やすく保つため、カーソルが近い時だけ表示します。観測ビューでは layer / project scope / tag の複合フィルタをクライアント側で組み合わせて使えます。`superseded` / `forgotten` は既定では混ぜず、`includeSuperseded` / `includeForgotten` を明示的に有効にした時だけ取得し、active より弱く表示します。観測ビュー以外を開いている時、ブラウザタブが非表示の時、操作していない時は 3D 描画頻度を落とし、必要な時だけ `resumeAnimation` します。グラフのノードをクリックすると、対応するメモリ詳細へ移動できます。`/api/graph` は通常メモリの要約、layer、project scope、sourceRef、活性度、7日後の想起しやすさ、clusters、safe events、embedding 類似度、検索イベント由来の共起関係だけを返します。本文と audit payload は返さず、Dashboard の表示や再読み込みだけでメモリやイベントを書き込みません。詳しくは [docs/memory-observatory.md](docs/memory-observatory.md) を参照してください。
 
 Dashboard の `/api/status` は `memoryFreshness`、`memoryUpdateCandidates`、`autoMemoryCuration` も返します。`memoryFreshness` は最新メモリ更新日と最近の作業履歴の差を示し、`memoryUpdateCandidates` は最近のIssue、PR、commit、session activityなどから通常メモリに残す候補を提示します。`memory_auto_write = "off"` / `"review"` では自動保存しません。`"safe"` では `start_memory_session` 実行時だけ、高信頼・非重複・sourceRef良好・secret検出通過の候補だけを自動保存します。
 
@@ -230,9 +233,11 @@ GitHub Issue / PR 由来の候補に `externalAuthor = true` が付く場合、�
 
 既定値は `memory_auto_write = "safe"` です。自動保存を止めたい場合は `off`、評価だけ見たい場合は `review` を設定してください。Dashboard の再読み込みだけでは自動保存しません。
 
-Dashboard の `/api/status` には `dashboard.schemaVersion` が含まれます。MCP server 起動時に同じポートの既存 Dashboard を見つけた場合、この schema version が一致する時だけ再利用します。一致しない、または古い Dashboard が schema version を返さない場合は stale warning を出します。その場合は古い Dashboard プロセスを停止し、MCP server を再起動してください。
+Dashboard の `/api/status` には `dashboard.schemaVersion` と `buildFingerprint` が含まれます。MCP server 起動時に同じポートの既存 Dashboard を見つけた場合、両方が一致する時だけ再利用します。一致しない、または既存 Dashboard が応答しない場合は stale / port conflict として扱います。その際は、marker file に残っている pid とプロセス情報から同じ sidecar owner process だと安全に確認できた時だけ自動停止し、確認できない場合は fallback port に切り替えて起動します。
 
 Dashboard は `127.0.0.1` にだけ bind し、`Host` ヘッダも `127.0.0.1` / `localhost` / `::1` だけを許可します。DB 接続には `busy_timeout` を設定し、通常メモリ・directive memory・auto curation・MCP提案時の secret 検出では OpenAI key だけでなく GitHub token、npm token、AWS access key、Slack token、Bearer token、JWT、private key も拒否対象にします。
+
+Codex plugin packaging は [docs/codex-plugin-packaging.md](docs/codex-plugin-packaging.md) で調査済みですが、現時点では README の一次導線にしていません。継続検証しているのは manual MCP registration + Skill + SessionStart hook の経路です。
 
 ## 設定
 
@@ -374,6 +379,22 @@ Codex app などの MCP client からは自然文で依頼しても使えます�
 }
 ```
 
+既存メモリをその場で書き換えるより、「古い判断を履歴として残しつつ、新しい判断へ置き換えたい」場合は `supersede_memory` を使います。
+
+```json
+{
+  "tool": "supersede_memory",
+  "arguments": {
+    "memoryId": 123,
+    "newContent": "このプロジェクトでは TypeScript を標準にする。",
+    "reason": "以前の JavaScript 方針を正式に置き換えるため",
+    "invalidatedByRef": "issue:#123",
+    "sourceType": "manual",
+    "sourceRef": "docs/decision-log.md"
+  }
+}
+```
+
 ### 検索
 
 ```json
@@ -388,6 +409,8 @@ Codex app などの MCP client からは自然文で依頼しても使えます�
 ```
 
 通常は `includeEmbedding: true` を指定しません。embedding 配列は大きく、普段の判断には不要です。
+
+キーワード検索は SQLite FTS trigram / porter と RRF を基本にしています。さらに、FTS 候補には軽い近接リランキングをかけ、結果が薄い時だけ短い英語 typo を補助的に救う安全な fallback を使います。query 全体を無差別に緩めるのではなく、候補メモリ側の surface score で限定的に補正するため、ノイズを増やしにくい設計です。
 
 ### directive memory の提案
 
