@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { buildObservatoryFilterOptions } from "./observatory-filters";
 import { createObservatoryEngine, type ObservatoryEngine } from "./observatory-engine";
-import type { MemoryGraph } from "./types";
+import type { MemoryGraph, ObservatoryFilters, ObservatoryGraphOptions } from "./types";
 
 const OBSERVATORY_RUNTIME_SRC = "/assets/observatory-3d.bundle.js";
 
 export function ObservatoryView({
   active,
   graph,
+  graphOptions,
+  onGraphOptionsChange,
   onOpenMemory,
 }: {
   active: boolean;
   graph: MemoryGraph | null;
+  graphOptions: ObservatoryGraphOptions;
+  onGraphOptionsChange: (options: ObservatoryGraphOptions) => void;
   onOpenMemory: (id: number) => void;
 }) {
   const graphRef = useRef<HTMLDivElement | null>(null);
@@ -29,6 +34,15 @@ export function ObservatoryView({
   const [replayPlaying, setReplayPlaying] = useState(false);
   const [replaySpeed, setReplaySpeed] = useState(6);
   const [runtimeReady, setRuntimeReady] = useState(false);
+  const [filters, setFilters] = useState<ObservatoryFilters>({
+    layers: [],
+    projectScopes: [],
+    tags: [],
+    includeSuperseded: graphOptions.includeSuperseded,
+    includeForgotten: graphOptions.includeForgotten,
+  });
+
+  const filterOptions = useMemo(() => buildObservatoryFilterOptions(graph?.nodes ?? []), [graph]);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +55,14 @@ export function ObservatoryView({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    setFilters((current) => ({
+      ...current,
+      includeSuperseded: graphOptions.includeSuperseded,
+      includeForgotten: graphOptions.includeForgotten,
+    }));
+  }, [graphOptions]);
 
   useEffect(() => {
     if (!graphRef.current || !graph || !runtimeReady) {
@@ -63,6 +85,7 @@ export function ObservatoryView({
     () => ({
       active,
       autoRotate,
+      filters,
       fogOn,
       lowPowerMode,
       mode,
@@ -78,6 +101,7 @@ export function ObservatoryView({
     [
       active,
       autoRotate,
+      filters,
       fogOn,
       lowPowerMode,
       mode,
@@ -102,12 +126,39 @@ export function ObservatoryView({
     { id: "explore" as const, label: "探索" },
   ];
 
+  const toggleArrayFilter = (key: "layers" | "projectScopes" | "tags", value: string) => {
+    setFilters((current) => {
+      const selected = current[key];
+      const nextSelected = selected.includes(value)
+        ? selected.filter((item) => item !== value)
+        : [...selected, value].sort((left, right) => left.localeCompare(right));
+      return { ...current, [key]: nextSelected };
+    });
+  };
+
+  const toggleInvalidated = (key: "includeSuperseded" | "includeForgotten", checked: boolean) => {
+    setFilters((current) => ({ ...current, [key]: checked }));
+    onGraphOptionsChange({
+      ...graphOptions,
+      [key]: checked,
+    });
+  };
+
+  const clearStructuredFilters = () => {
+    setFilters((current) => ({
+      ...current,
+      layers: [],
+      projectScopes: [],
+      tags: [],
+    }));
+  };
+
   return (
     <div className="observatory-prototype" id="observatory-app">
       <header>
         <h1>
           Memory Observatory <span className="accent-blue">3D</span>
-          <span className="sub">活性度 / 忘却の霧 / 回転・ズーム・ドラッグ対応</span>
+          <span className="sub">想起の偏り、無効化の履歴、検索の結びつきを見る</span>
         </h1>
         <div className="spacer" />
         <input
@@ -153,14 +204,54 @@ export function ObservatoryView({
           {!graph || !runtimeReady ? <div id="loading">LOADING 3D ENGINE...</div> : null}
         </div>
         <aside>
-          <h2>想起フィード</h2>
+          <h2>イベント</h2>
           <ul id="feed" />
-          <h2>忘却予測 (7日後の想起率)</h2>
+          <h2>忘却予測 (7日後)</h2>
           <div id="forecast" />
-          <h2>クラスタ凡例</h2>
+          <h2>クラスタ</h2>
           <div id="legend" />
           <h2>統計</h2>
           <div id="stats" />
+          <h2>フィルタ</h2>
+          <div className="filter-toolbar">
+            <button className="mini-button" onClick={clearStructuredFilters} type="button">
+              条件クリア
+            </button>
+          </div>
+          <label className="opt">
+            <input
+              checked={filters.includeSuperseded}
+              onChange={(event) => toggleInvalidated("includeSuperseded", event.target.checked)}
+              type="checkbox"
+            />
+            superseded を表示
+          </label>
+          <label className="opt">
+            <input
+              checked={filters.includeForgotten}
+              onChange={(event) => toggleInvalidated("includeForgotten", event.target.checked)}
+              type="checkbox"
+            />
+            forgotten を表示
+          </label>
+          <FilterSection
+            label="Layer"
+            options={filterOptions.layers}
+            selected={filters.layers}
+            onToggle={(value) => toggleArrayFilter("layers", value)}
+          />
+          <FilterSection
+            label="Project Scope"
+            options={filterOptions.projectScopes}
+            selected={filters.projectScopes}
+            onToggle={(value) => toggleArrayFilter("projectScopes", value)}
+          />
+          <FilterSection
+            label="Tag"
+            options={filterOptions.tags}
+            selected={filters.tags}
+            onToggle={(value) => toggleArrayFilter("tags", value)}
+          />
           <h2>表示設定</h2>
           <label className="opt">
             <input
@@ -178,7 +269,7 @@ export function ObservatoryView({
               onChange={(event) => setShowSim(event.target.checked)}
               type="checkbox"
             />
-            類似エッジ
+            similarity edge
           </label>
           <label className="opt">
             <input
@@ -187,7 +278,7 @@ export function ObservatoryView({
               onChange={(event) => setShowHebb(event.target.checked)}
               type="checkbox"
             />
-            共起エッジ
+            hebbian edge
           </label>
           <label className="opt">
             <input
@@ -217,7 +308,7 @@ export function ObservatoryView({
             忘却の霧
           </label>
           <div className="hint">
-            奥行き(Z軸)はACT-R風の活性度です。よく想起される記憶ほど手前に浮上し、忘れられつつある記憶は霧の奥へ沈みます。Ctrl+ホバーで要約を表示します。
+            無効化済みメモリは既定では混ぜません。表示した場合も、active より弱く描画します。
           </div>
         </aside>
       </div>
@@ -251,6 +342,39 @@ export function ObservatoryView({
         </select>
       </footer>
       <div id="tooltip" />
+    </div>
+  );
+}
+
+function FilterSection({
+  label,
+  options,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  options: string[];
+  selected: string[];
+  onToggle: (value: string) => void;
+}) {
+  if (!options.length) {
+    return null;
+  }
+  return (
+    <div className="filter-section">
+      <p className="label">{label}</p>
+      <div className="filter-chip-list">
+        {options.map((option) => (
+          <button
+            className={`filter-chip ${selected.includes(option) ? "active" : ""}`}
+            key={option}
+            onClick={() => onToggle(option)}
+            type="button"
+          >
+            {option}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

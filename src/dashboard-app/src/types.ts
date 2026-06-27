@@ -191,6 +191,26 @@ export type MemoryDetail = {
   invalidationReason: string | null;
   lastAccessedAt: string | null;
   expiresAt: string | null;
+  known: string[];
+  unknown: string[];
+  verificationHints: string[];
+};
+
+export type ObservatoryGraphOptions = {
+  includeSuperseded: boolean;
+  includeForgotten: boolean;
+};
+
+export type ObservatoryFilters = ObservatoryGraphOptions & {
+  layers: string[];
+  projectScopes: string[];
+  tags: string[];
+};
+
+export type ObservatoryFilterOptions = {
+  layers: string[];
+  projectScopes: string[];
+  tags: string[];
 };
 
 export type MemoryGraph = {

@@ -9,6 +9,7 @@ import type {
   MemoryDetail,
   MemoryGraph,
   MemoryUpdateCandidate,
+  ObservatoryGraphOptions,
   RecentMemory,
   ViewId,
   WarningAction,
@@ -28,6 +29,10 @@ export function App() {
   const [activeView, setActiveView] = useState<ViewId>("observatory");
   const [status, setStatus] = useState<DashboardStatus | null>(null);
   const [graph, setGraph] = useState<MemoryGraph | null>(null);
+  const [graphOptions, setGraphOptions] = useState<ObservatoryGraphOptions>({
+    includeSuperseded: false,
+    includeForgotten: false,
+  });
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedMemoryId, setSelectedMemoryId] = useState<number | null>(null);
@@ -41,7 +46,7 @@ export function App() {
     try {
       const [nextStatus, nextGraph] = await Promise.all([
         fetchDashboardStatus(),
-        fetchMemoryGraph(),
+        fetchMemoryGraph(graphOptions),
       ]);
       setStatus(nextStatus);
       setGraph(nextGraph);
@@ -50,7 +55,7 @@ export function App() {
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [graphOptions]);
 
   useEffect(() => {
     void refresh();
@@ -115,6 +120,8 @@ export function App() {
           <ObservatoryView
             active={activeView === "observatory"}
             graph={graph}
+            graphOptions={graphOptions}
+            onGraphOptionsChange={setGraphOptions}
             onOpenMemory={openMemoryDetail}
           />
         </section>
@@ -649,6 +656,11 @@ function MemoryDetailPanel({
               <p className="tags">本文は明示的に開くまで表示しません。</p>
             )}
           </div>
+          <div className="detail-guidance">
+            <InfoListSection items={detail.known} title="分かること" />
+            <InfoListSection items={detail.unknown} title="分からないこと" />
+            <InfoListSection items={detail.verificationHints} title="追加で確認する場所" />
+          </div>
         </>
       ) : selectedMemoryId || isLoading || detailError ? null : (
         <div className="tags">
@@ -656,6 +668,19 @@ function MemoryDetailPanel({
         </div>
       )}
     </section>
+  );
+}
+
+function InfoListSection({ items, title }: { items: string[]; title: string }) {
+  return (
+    <div className="detail-section">
+      <p className="label">{title}</p>
+      <ul className="detail-list">
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

@@ -2,10 +2,18 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
-import Database from "better-sqlite3";
-
 import { cosineSimilarity } from "./embedding.js";
+import {
+  buildSearchSurfaceSignals,
+  hasTypoCandidateTerms,
+  hasTypoRecoverySignal,
+} from "./search-rerank.js";
 import { containsLikelySecret, isLikelySecretKey } from "./secret-detection.js";
+import {
+  BetterSqlite3AdapterFactory,
+  type SqliteAdapterFactory,
+  type SqliteDatabaseAdapter,
+} from "./sqlite-adapter.js";
 import type {
   CreateMemoryInput,
   CreateDirectiveInput,
@@ -35,6 +43,8 @@ import type {
   MemoryStoreCounts,
   SearchMemoryInput,
   SearchMemoryResult,
+  SupersedeMemoryInput,
+  SupersedeMemoryResult,
   UpdateMemoryInput,
   VerifyBackupInput,
 } from "./types.js";
@@ -141,13 +151,18 @@ const BI_TEMPORAL_MEMORY_COLUMNS = [
 ];
 
 export class MemoryStore {
-  private readonly db: Database.Database;
+  private readonly db: SqliteDatabaseAdapter;
   private readonly databasePath: string;
+  private readonly adapterFactory: SqliteAdapterFactory;
 
-  constructor(databasePath: string) {
+  constructor(
+    databasePath: string,
+    adapterFactory: SqliteAdapterFactory = new BetterSqlite3AdapterFactory(),
+  ) {
     this.databasePath = databasePath;
+    this.adapterFactory = adapterFactory;
     mkdirSync(path.dirname(databasePath), { recursive: true });
-    this.db = new Database(databasePath);
+    this.db = this.adapterFactory.open(databasePath);
     this.db.pragma("busy_timeout = 5000");
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("foreign_keys = ON");
@@ -164,7 +179,7 @@ export class MemoryStore {
     const now = new Date();
     const projectScope = resolveProjectScope(input);
     const result = this.db
-      .prepare(
+      .prepare<{ lastInsertRowid: number | bigint }>(
         `INSERT INTO memories (
           layer, content, summary, tags, project_scope, source_type, source_ref,
           importance, confidence, embedding, created_at, updated_at, valid_from, expires_at, status
@@ -238,6 +253,70 @@ export class MemoryStore {
       previousSummary: existing.summary,
     });
     return updated;
+  }
+
+  supersedeMemory(input: SupersedeMemoryInput): SupersedeMemoryResult {
+    this.assertStorable(input.newContent, input.allowSecret);
+    const existing = this.requireMemory(input.memoryId);
+    if (existing.status !== "active") {
+      throw new Error(`Memory ${input.memoryId} must be active to supersede.`);
+    }
+
+    const invalidatedAt = new Date();
+    let newMemoryId: number | null = null;
+    let supersedeRef: string | null = null;
+
+    this.db.transaction(() => {
+      const newMemory = this.createMemory({
+        content: input.newContent,
+        layer: existing.layer,
+        tags: input.tags ?? existing.tags,
+        sourceType: input.sourceType,
+        sourceRef: input.sourceRef,
+        importance: input.importance ?? existing.importance,
+        confidence: input.confidence ?? existing.confidence,
+        embedding: input.embedding,
+        summary: input.summary,
+        expiresAt: input.expiresAt ?? existing.expiresAt,
+        allowSecret: input.allowSecret,
+        projectScope: existing.projectScope,
+      });
+      newMemoryId = newMemory.id;
+      supersedeRef = input.invalidatedByRef ?? `memory:${newMemory.id}`;
+
+      this.db
+        .prepare(
+          `UPDATE memories
+           SET status = 'superseded',
+               updated_at = ?,
+               invalidated_at = ?,
+               invalidated_by_ref = ?,
+               invalidation_reason = ?
+           WHERE id = ?`,
+        )
+        .run(
+          invalidatedAt.toISOString(),
+          invalidatedAt.toISOString(),
+          supersedeRef,
+          input.reason,
+          input.memoryId,
+        );
+      this.recordEvent(input.memoryId, "superseded", {
+        oldMemoryId: input.memoryId,
+        newMemoryId,
+        invalidatedAt: invalidatedAt.toISOString(),
+        invalidatedByRef: supersedeRef,
+        invalidationReason: input.reason,
+        previousStatus: existing.status,
+      });
+    })();
+
+    return {
+      oldMemory: this.requireMemory(input.memoryId),
+      newMemory: this.requireMemory(
+        assertPresent(newMemoryId, "Failed to create superseding memory."),
+      ),
+    };
   }
 
   forgetMemory(input: ForgetMemoryInput): Memory {
@@ -321,22 +400,38 @@ export class MemoryStore {
     includeKeywordRank = false,
   ): (MemoryRow & { keyword_rank: number })[] | MemoryRow[] {
     const ftsRows = this.rrfKeywordRows(input, limit);
+    const mergedRows = [...ftsRows];
+    const excludedIds = new Set(ftsRows.map((row) => row.id));
 
-    if (ftsRows.length >= limit) {
-      return includeKeywordRank ? ftsRows : ftsRows.map(stripKeywordRank);
+    if (mergedRows.length < limit) {
+      const fallbackRows = this.likeFallbackRows(input, limit - mergedRows.length, excludedIds).map(
+        (row) => ({
+          ...row,
+          keyword_rank: fallbackKeywordRank(input.query, row, "like"),
+        }),
+      );
+      for (const row of fallbackRows) {
+        if (!excludedIds.has(row.id)) {
+          mergedRows.push(row);
+          excludedIds.add(row.id);
+        }
+      }
     }
 
-    const fallbackRows = this.likeFallbackRows(
-      input,
-      limit - ftsRows.length,
-      new Set(ftsRows.map((row) => row.id)),
-    );
-    const mergedRows = [
-      ...ftsRows,
-      ...fallbackRows.map((row) => ({ ...row, keyword_rank: 0.5 })),
-    ].slice(0, limit);
+    if (mergedRows.length < limit && hasTypoCandidateTerms(input.query)) {
+      const typoRows = this.typoFallbackRows(input, limit - mergedRows.length, excludedIds);
+      for (const row of typoRows) {
+        if (!excludedIds.has(row.id)) {
+          mergedRows.push(row);
+          excludedIds.add(row.id);
+        }
+      }
+    }
 
-    return includeKeywordRank ? mergedRows : mergedRows.map(stripKeywordRank);
+    mergedRows.sort(compareKeywordCandidateRows);
+
+    const limitedRows = mergedRows.slice(0, limit);
+    return includeKeywordRank ? limitedRows : limitedRows.map(stripKeywordRank);
   }
 
   private rrfKeywordRows(
@@ -364,7 +459,7 @@ export class MemoryStore {
     return [...rowById.values()]
       .map((row) => ({
         ...row,
-        keyword_rank: -(rrfScoreById.get(row.id) ?? 0),
+        keyword_rank: -((rrfScoreById.get(row.id) ?? 0) + keywordSurfaceBonus(input.query, row)),
         best_keyword_rank: bestRankById.get(row.id) ?? 0,
       }))
       .sort((left, right) => {
@@ -388,6 +483,51 @@ export class MemoryStore {
       })
       .slice(0, limit)
       .map(({ best_keyword_rank: _bestKeywordRank, ...row }) => row);
+  }
+
+  private typoFallbackRows(
+    input: SearchMemoryInput,
+    limit: number,
+    excludedIds: Set<number>,
+  ): (MemoryRow & { keyword_rank: number })[] {
+    if (limit <= 0) {
+      return [];
+    }
+
+    const candidateLimit = Math.max(50, Math.min(limit * 25, 250));
+    const clauses: string[] = [];
+    const params: Record<string, unknown> = { candidateLimit };
+    addMemorySearchFilters(clauses, params, input);
+
+    const rows = this.db
+      .prepare(
+        `SELECT *
+         FROM memories
+         WHERE ${clauses.join(" AND ")}
+         ORDER BY importance DESC, updated_at DESC, id DESC
+         LIMIT @candidateLimit`,
+      )
+      .all(params) as MemoryRow[];
+
+    return rows
+      .filter((row) => !excludedIds.has(row.id))
+      .map((row) => ({
+        row,
+        signals: buildSearchSurfaceSignals(input.query, buildSearchCorpus(row)),
+      }))
+      .filter(({ signals }) => hasTypoRecoverySignal(signals))
+      .sort((left, right) => {
+        const byTotal = right.signals.total - left.signals.total;
+        if (byTotal !== 0) {
+          return byTotal;
+        }
+        return compareMemoryRows(left.row, right.row);
+      })
+      .slice(0, limit)
+      .map(({ row }) => ({
+        ...row,
+        keyword_rank: fallbackKeywordRank(input.query, row, "typo"),
+      }));
   }
 
   private ftsRows(
@@ -484,7 +624,7 @@ export class MemoryStore {
     const projectScope =
       input.scope === "global" ? GLOBAL_PROJECT_SCOPE : resolveProjectScope(input);
     const result = this.db
-      .prepare(
+      .prepare<{ lastInsertRowid: number | bigint }>(
         `INSERT INTO directives (
           scope, project_scope, content, rationale, tags, source_type, source_ref,
           priority, created_at, updated_at, status
@@ -734,7 +874,10 @@ export class MemoryStore {
       throw new Error(`Backup file was not found: ${input.backupPath}`);
     }
 
-    const backupDb = new Database(input.backupPath, { readonly: true, fileMustExist: true });
+    const backupDb = this.adapterFactory.open(input.backupPath, {
+      readonly: true,
+      fileMustExist: true,
+    });
     try {
       const integrityCheck = runIntegrityCheck(backupDb, "quick_check");
       const missingTables = missingRequiredBackupTables(backupDb);
@@ -769,7 +912,10 @@ export class MemoryStore {
     }
 
     const limit = Math.max(1, Math.min(input.limit ?? 20, 100));
-    const backupDb = new Database(input.backupPath, { readonly: true, fileMustExist: true });
+    const backupDb = this.adapterFactory.open(input.backupPath, {
+      readonly: true,
+      fileMustExist: true,
+    });
     try {
       const integrityCheck = runIntegrityCheck(backupDb, "quick_check");
       const missingTables = missingRequiredBackupTables(backupDb);
@@ -1086,6 +1232,7 @@ export class MemoryStore {
       CREATE INDEX IF NOT EXISTS idx_memories_layer_status
         ON memories(layer, status);
     `);
+    this.ensureMemoryEventsTable();
     this.addColumnIfMissing("memories", "embedding", "TEXT");
     this.addColumnIfMissing("memories", "project_scope", "TEXT NOT NULL DEFAULT 'global'");
     this.addColumnIfMissing("memories", "valid_from", "TEXT");
@@ -1135,6 +1282,37 @@ export class MemoryStore {
          WHERE status != 'active' AND (invalidation_reason IS NULL OR invalidation_reason = '')`,
       )
       .run(BI_TEMPORAL_BACKFILL_REASON);
+  }
+
+  private ensureMemoryEventsTable(): void {
+    const row = this.db
+      .prepare("SELECT sql FROM sqlite_master WHERE name = 'memory_events'")
+      .get() as { sql: string | null } | undefined;
+    const sql = row?.sql ?? "";
+    if (sql && /'superseded'/i.test(sql)) {
+      return;
+    }
+
+    this.db.transaction(() => {
+      this.db.exec("ALTER TABLE memory_events RENAME TO memory_events_legacy");
+      this.db.exec(`
+        CREATE TABLE memory_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          memory_id INTEGER NOT NULL,
+          event_type TEXT NOT NULL CHECK (
+            event_type IN ('created', 'updated', 'forgotten', 'superseded', 'consolidated', 'retrieved')
+          ),
+          payload_json TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL
+        );
+      `);
+      this.db.exec(`
+        INSERT INTO memory_events (id, memory_id, event_type, payload_json, created_at)
+        SELECT id, memory_id, event_type, payload_json, created_at
+        FROM memory_events_legacy;
+      `);
+      this.db.exec("DROP TABLE memory_events_legacy");
+    })();
   }
 
   private ensureTrigramFtsTable(): void {
@@ -1231,6 +1409,7 @@ export class MemoryStore {
       .map((row) => scoreHybridRow(row, input.query, input.queryEmbedding ?? []))
       .filter((result) => result.score > 0)
       .sort((left, right) => right.score - left.score)
+      .filter(filterWeakHybridTail)
       .slice(0, limit);
 
     this.recordSearchRetrieval(input, results, { hybrid: true });
@@ -1497,19 +1676,19 @@ function clampScore(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-function countRows(db: Database.Database, table: string): number {
+function countRows(db: SqliteDatabaseAdapter, table: string): number {
   const row = db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number };
   return row.count;
 }
 
-function countRowsWhere(db: Database.Database, table: string, where: string): number {
+function countRowsWhere(db: SqliteDatabaseAdapter, table: string, where: string): number {
   const row = db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${where}`).get() as {
     count: number;
   };
   return row.count;
 }
 
-function tableExists(db: Database.Database, table: string): boolean {
+function tableExists(db: SqliteDatabaseAdapter, table: string): boolean {
   const row = db
     .prepare(
       "SELECT 1 AS found FROM sqlite_master WHERE type IN ('table', 'virtual table') AND name = ?",
@@ -1518,16 +1697,23 @@ function tableExists(db: Database.Database, table: string): boolean {
   return row?.found === 1;
 }
 
-function missingRequiredBackupTables(db: Database.Database): string[] {
+function assertPresent<T>(value: T | null | undefined, message: string): NonNullable<T> {
+  if (value === null || value === undefined) {
+    throw new Error(message);
+  }
+  return value as NonNullable<T>;
+}
+
+function missingRequiredBackupTables(db: SqliteDatabaseAdapter): string[] {
   return REQUIRED_BACKUP_TABLES.filter((table) => !tableExists(db, table));
 }
 
-function columnExists(db: Database.Database, table: string, column: string): boolean {
+function columnExists(db: SqliteDatabaseAdapter, table: string, column: string): boolean {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
   return columns.some((item) => item.name === column);
 }
 
-function missingBiTemporalMemoryColumns(db: Database.Database): string[] {
+function missingBiTemporalMemoryColumns(db: SqliteDatabaseAdapter): string[] {
   if (!tableExists(db, "memories")) {
     return [];
   }
@@ -1539,7 +1725,7 @@ function formatMissingBiTemporalColumnsWarning(columns: string[]): string {
 }
 
 function runIntegrityCheck(
-  db: Database.Database,
+  db: SqliteDatabaseAdapter,
   pragma: "quick_check" | "integrity_check",
 ): string {
   const rows = db.prepare(`PRAGMA ${pragma}`).all() as Record<string, string>[];
@@ -1547,7 +1733,7 @@ function runIntegrityCheck(
   return values.length === 1 && values[0] === "ok" ? "ok" : values.join("; ");
 }
 
-function checkpointWal(db: Database.Database): DatabaseHealth["walCheckpoint"] {
+function checkpointWal(db: SqliteDatabaseAdapter): DatabaseHealth["walCheckpoint"] {
   const row = db.prepare("PRAGMA wal_checkpoint(PASSIVE)").get() as {
     busy: number;
     log: number;
@@ -1597,6 +1783,45 @@ function escapeLikePattern(value: string): string {
 function stripKeywordRank(row: MemoryRow & { keyword_rank: number }): MemoryRow {
   const { keyword_rank: _keywordRank, ...memoryRow } = row;
   return memoryRow;
+}
+
+function keywordSurfaceBonus(query: string, row: MemoryRow): number {
+  const signals = buildSearchSurfaceSignals(query, buildSearchCorpus(row));
+  return signals.phrase * 0.012 + signals.proximity * 0.01 + signals.typo * 0.008;
+}
+
+function fallbackKeywordRank(query: string, row: MemoryRow, mode: "like" | "typo"): number {
+  const bonus = keywordSurfaceBonus(query, row);
+  const base = mode === "like" ? 0.001 : 0.0005;
+  return -(base + bonus);
+}
+
+function buildSearchCorpus(
+  row: Pick<MemoryRow, "content" | "summary" | "tags" | "source_ref">,
+): string {
+  return [row.summary, row.content, row.source_ref, row.tags].join(" ");
+}
+
+function compareKeywordCandidateRows(
+  left: MemoryRow & { keyword_rank: number },
+  right: MemoryRow & { keyword_rank: number },
+): number {
+  const byKeywordRank = left.keyword_rank - right.keyword_rank;
+  if (byKeywordRank !== 0) {
+    return byKeywordRank;
+  }
+
+  return compareMemoryRows(left, right);
+}
+
+function compareMemoryRows(left: MemoryRow, right: MemoryRow): number {
+  const byImportance = right.importance - left.importance;
+  if (byImportance !== 0) {
+    return byImportance;
+  }
+
+  const byUpdated = right.updated_at.localeCompare(left.updated_at);
+  return byUpdated || right.id - left.id;
 }
 
 function addMemorySearchFilters(
@@ -1706,9 +1931,9 @@ function scoreHybridRow(
   const vectorScore = memory.embedding
     ? Math.max(0, cosineSimilarity(queryEmbedding, memory.embedding))
     : 0;
-  const keywordScore = lexicalScore(
-    query,
-    [memory.content, memory.summary, memory.tags.join(" ")].join(" "),
+  const keywordScore = Math.max(
+    lexicalScore(query, [memory.content, memory.summary, memory.tags.join(" ")].join(" ")),
+    buildSearchSurfaceSignals(query, buildSearchCorpus(row)).total,
   );
   const freshnessScore = freshness(row.updated_at);
 
@@ -1735,6 +1960,23 @@ function weightedScore(parts: SearchMemoryResult["scoreBreakdown"]): number {
       parts.freshness * 0.1
     ).toFixed(4),
   );
+}
+
+function filterWeakHybridTail(
+  result: SearchMemoryResult,
+  index: number,
+  results: SearchMemoryResult[],
+): boolean {
+  if (index === 0) {
+    return true;
+  }
+
+  if (result.scoreBreakdown.keyword >= 0.75) {
+    return true;
+  }
+
+  const bestScore = results[0]?.score ?? 0;
+  return result.score >= bestScore * 0.75;
 }
 
 function freshness(updatedAt: string): number {

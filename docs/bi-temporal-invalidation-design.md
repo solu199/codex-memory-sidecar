@@ -2,6 +2,8 @@
 
 Issue: #99
 
+Status: supersede_memory was adopted as the formal replacement API in Issue #123. update_memory remains an in-place row update; use supersede_memory when the old memory must stay auditable as superseded.
+
 ## 目的
 
 古いメモリをすぐ削除せず、「いつから有効だったか」「いつ、何により無効になったか」を追えるようにします。狙いは、現在の回答では古い情報を混ぜない一方で、監査や復旧では過去の判断経緯をたどれる状態にすることです。

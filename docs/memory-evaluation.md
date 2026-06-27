@@ -14,7 +14,7 @@ npm run bench:recall
 
 ## 評価していること
 
-- `keyword`: Ollamaなし相当の検索です。SQLite FTS trigram / porter と RRF、LIKE fallback で、fixture内の期待メモリを拾えるかを見ます。
+- `keyword`: Ollamaなし相当の検索です。SQLite FTS trigram / porter と RRF、LIKE fallback に加えて、近接リランキングと短い英語 typo 補正の安全実装が fixture を壊していないかを見ます。
 - `semantic`: Ollamaあり相当の検索です。CIでは外部モデルを呼ばず、決定的な疑似embeddingを使って semantic search の経路を通します。
 - `recallAt3`: 期待したメモリが上位3件に入った割合です。
 - `precisionAt3`: 上位3件のうち期待メモリだった割合です。
@@ -23,7 +23,7 @@ npm run bench:recall
 
 ## CIでの読み方
 
-このベンチは「LongMemEval風の小さな固定fixture」です。実運用の品質を完全に証明するものではありませんが、検索改善、sourceRef判定、重複抑制の変更で明らかな退行が起きた時に検知する目的で使います。
+このベンチは「LongMemEval風の小さな固定fixture」です。実運用の品質を完全に証明するものではありませんが、検索改善、sourceRef判定、重複抑制の変更で明らかな退行が起きた時に検知する目的で使います。Issue #129 の段階では、近接語順と短い typo query を fixture に追加し、過剰な曖昧一致で precision を落とさずに改善できているかを重点的に見ます。
 
 閾値は現在次の通りです。
 

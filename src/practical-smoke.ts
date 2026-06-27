@@ -45,15 +45,15 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
     commits: [
       {
         hash: "92e5fcb1234567890",
-        subject: "Ollama表示と手動MCP例を改善",
-        committedAt: new Date("2026-06-20T03:00:20Z"),
+        subject: "Ollama practical MCP improvements",
+        committedAt: new Date("2026-07-20T03:00:20Z"),
       },
     ],
     pullRequests: [
       {
         number: 77,
-        title: "Ollama表示と手動MCP例を改善",
-        mergedAt: new Date("2026-06-20T03:00:20Z"),
+        title: "Ollama practical MCP improvements",
+        mergedAt: new Date("2026-07-20T03:00:20Z"),
         authorLogin: "solu199",
         externalAuthor: false,
       },
@@ -62,7 +62,7 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
   const tools = createToolHandlers(store, {
     embeddingProvider,
     workspaceActivity,
-    now: new Date("2026-06-20T03:20:00Z"),
+    now: new Date("2026-07-20T03:20:00Z"),
   });
   let backupPath = "";
 
@@ -169,6 +169,21 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       projectPath,
       maxCandidates: 10,
     });
+    const consolidateNearDuplicateCheck =
+      consolidation.structuredContent.proposedMerges.some(
+        (proposal) =>
+          proposal.reason === "near_duplicate_content" &&
+          proposal.memoryIds.includes(duplicateRule.structuredContent.memory.id) &&
+          proposal.memoryIds.includes(nearDuplicateRule.structuredContent.memory.id),
+      ) && store.getMemory(nearDuplicateRule.structuredContent.memory.id)?.status === "active";
+    const supersede = await tools.supersedeMemory({
+      memoryId: nearDuplicateRule.structuredContent.memory.id,
+      newContent: "Call start_memory_session before any multi-file implementation work.",
+      reason: "Canonical rule replaces the near-duplicate wording.",
+      invalidatedByRef: "issue:#123",
+      sourceType: "smoke",
+      sourceRef: "smoke:supersede",
+    });
     const invalidated = await tools.writeMemory({
       content: "Temporary practical memory that should keep invalidation metadata.",
       layer: "recall",
@@ -258,19 +273,20 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
         session.structuredContent.memoryUpdateCandidates.some(
           (candidate) => candidate.kind === "session",
         ),
-      consolidateNearDuplicate:
-        consolidation.structuredContent.proposedMerges.some(
-          (proposal) =>
-            proposal.reason === "near_duplicate_content" &&
-            proposal.memoryIds.includes(duplicateRule.structuredContent.memory.id) &&
-            proposal.memoryIds.includes(nearDuplicateRule.structuredContent.memory.id),
-        ) && store.getMemory(nearDuplicateRule.structuredContent.memory.id)?.status === "active",
+      consolidateNearDuplicate: consolidateNearDuplicateCheck,
       proposeNearDuplicate:
         nearDuplicateProposal.structuredContent.recommendation === "update" &&
         nearDuplicateProposal.structuredContent.duplicateCandidates.some(
           (candidate) => candidate.reason === "near_duplicate_content",
         ) &&
         nearDuplicateProposal.structuredContent.curation.shouldPromoteToCore === true,
+      supersedeMemory:
+        supersede.structuredContent.oldMemory.id ===
+          nearDuplicateRule.structuredContent.memory.id &&
+        supersede.structuredContent.oldMemory.status === "superseded" &&
+        supersede.structuredContent.oldMemory.invalidatedByRef === "issue:#123" &&
+        supersede.structuredContent.newMemory.status === "active" &&
+        supersede.structuredContent.newMemory.sourceRef === "smoke:supersede",
       digestUsesScopedMemory:
         digest.structuredContent.digest.includes("alpha project") &&
         !digest.structuredContent.digest.includes("beta project"),
@@ -305,6 +321,7 @@ export async function runPracticalSmoke(): Promise<PracticalSmokeResult> {
       ),
       dashboardShowsProjectScopes:
         dashboard.ok === true &&
+        dashboard.memoryStats.byStatus.superseded === 1 &&
         dashboardProjectScopes.includes(alpha.structuredContent.memory.projectScope) &&
         dashboardProjectScopes.includes("beta") &&
         dashboardRecentSources.includes("smoke:npm run smoke:practical"),
@@ -360,7 +377,7 @@ async function fetchDashboardSnapshot(
   const server = createDashboardServer(store, {
     embeddingProvider,
     workspaceActivity,
-    now: new Date("2026-06-20T03:20:00Z"),
+    now: new Date("2026-07-20T03:20:00Z"),
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   try {
@@ -396,6 +413,7 @@ async function fetchDashboardSnapshot(
     const status = (await response.json()) as {
       ok: boolean;
       memoryStats: {
+        byStatus: Record<string, number>;
         byProjectScope: Array<{ projectScope: string }>;
       };
       recentMemories: Array<{ sourceType: string; sourceRef: string }>;

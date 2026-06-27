@@ -294,6 +294,9 @@ export type DashboardMemoryDetail =
         invalidationReason: string | null;
         lastAccessedAt: string | null;
         expiresAt: string | null;
+        known: string[];
+        unknown: string[];
+        verificationHints: string[];
       };
     }
   | {
@@ -514,6 +517,7 @@ function serializeDashboardMemoryDetail(
   options: DashboardMemoryDetailOptions,
 ): Extract<DashboardMemoryDetail, { ok: true }>["memory"] {
   const includeContent = options.includeContent ?? false;
+  const guidance = buildMemoryDetailGuidance(memory);
   return {
     id: memory.id,
     layer: memory.layer,
@@ -537,7 +541,51 @@ function serializeDashboardMemoryDetail(
     invalidationReason: memory.invalidationReason,
     lastAccessedAt: memory.lastAccessedAt?.toISOString() ?? null,
     expiresAt: memory.expiresAt?.toISOString() ?? null,
+    known: guidance.known,
+    unknown: guidance.unknown,
+    verificationHints: guidance.verificationHints,
   };
+}
+
+function buildMemoryDetailGuidance(memory: Memory): {
+  known: string[];
+  unknown: string[];
+  verificationHints: string[];
+} {
+  const source = `${memory.sourceType}: ${memory.sourceRef}`;
+  const statusLabel =
+    memory.status === "active"
+      ? "active"
+      : memory.status === "superseded"
+        ? "superseded"
+        : "forgotten";
+  const known = [
+    `保存されている sourceRef は ${source} です。`,
+    `このメモリは ${statusLabel} として扱われます。`,
+    `保存先は layer=${memory.layer} / projectScope=${memory.projectScope} です。`,
+  ];
+  if (memory.invalidatedAt) {
+    known.push(
+      `無効化情報として ${memory.invalidatedAt.toISOString()} に ${memory.invalidatedByRef ?? "unknown"} が記録されています。`,
+    );
+  }
+
+  const unknown = [
+    "この要約が現在のコード、README、docs、最新指示と一致するかは、この画面だけでは確定できません。",
+    "保存時に見ていた周辺ファイルや会話全文は、この詳細だけでは再構成できません。",
+  ];
+  if (!sourceRefUrl(memory.sourceType, memory.sourceRef)) {
+    unknown.push("sourceRef から一次ソースへ直接移動できる保証はありません。");
+  }
+
+  const verificationHints = [
+    "sourceRef を起点に、README / docs / git history などの一次ソースを確認してください。",
+    memory.status === "active"
+      ? "重要な判断に使う前に、現在の実ファイルと矛盾しないか確認してください。"
+      : "無効化済みメモリなので、invalidatedByRef と invalidationReason を確認してから参照してください。",
+  ];
+
+  return { known, unknown, verificationHints };
 }
 
 function sourceRefUrl(sourceType: string, sourceRef: string): string | null {
@@ -586,7 +634,13 @@ export function createDashboardServer(
       }
 
       if (url.pathname === "/api/graph") {
-        sendJson(response, 200, buildMemoryGraph(store));
+        const includeSuperseded = ["1", "true", "yes"].includes(
+          (url.searchParams.get("includeSuperseded") ?? "").toLowerCase(),
+        );
+        const includeForgotten = ["1", "true", "yes"].includes(
+          (url.searchParams.get("includeForgotten") ?? "").toLowerCase(),
+        );
+        sendJson(response, 200, buildMemoryGraph(store, { includeSuperseded, includeForgotten }));
         return;
       }
 

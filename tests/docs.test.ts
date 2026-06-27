@@ -90,6 +90,20 @@ describe("documentation", () => {
     expect(investigation).toContain("SqliteDatabaseAdapter");
   });
 
+  test("Codex plugin packaging investigation is documented", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const pluginPackaging = readFileSync("docs/codex-plugin-packaging.md", "utf8");
+
+    expect(readme).toContain("docs/codex-plugin-packaging.md");
+    expect(pluginPackaging).toContain("Issue: #125");
+    expect(pluginPackaging).toContain(".codex-plugin/plugin.json");
+    expect(pluginPackaging).toContain("hooks/hooks.json");
+    expect(pluginPackaging).toContain("marketplace.json");
+    expect(pluginPackaging).toContain("~/.codex/plugins/cache");
+    expect(pluginPackaging).toContain("trust");
+    expect(pluginPackaging).toContain("manual MCP registration + Skill + hook adapter");
+  });
+
   test("memory evaluation benchmark is documented", () => {
     const readme = readFileSync("README.md", "utf8");
     const evaluation = readFileSync("docs/memory-evaluation.md", "utf8");
@@ -127,6 +141,7 @@ describe("documentation", () => {
     expect(design).toContain("invalidated_at");
     expect(design).toContain("invalidated_by_ref");
     expect(design).toContain("superseded");
+    expect(design).toContain("supersede_memory");
     expect(design).toContain("forgotten");
     expect(design).toContain("migration");
     expect(design).toContain("backup compatibility");
@@ -155,6 +170,35 @@ describe("documentation", () => {
     expect(observatory).toContain("eventPayloadIncluded: false");
     expect(observatory).toContain("Dashboard の再読み込みだけで検索履歴が増えたり");
     expect(observatory).toContain("通常メモリ本文を表示しません");
+  });
+
+  test("README and Observatory docs mention composite filters, invalidated opt-in, and guidance panels", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const observatory = readFileSync("docs/memory-observatory.md", "utf8");
+
+    expect(readme).toContain("layer / project scope / tag");
+    expect(readme).toContain("分かること / 分からないこと");
+    expect(observatory).toContain("includeSuperseded");
+    expect(observatory).toContain("includeForgotten");
+    expect(observatory).toContain("superseded");
+    expect(observatory).toContain("forgotten");
+    expect(observatory).toContain("分かること");
+  });
+
+  test("Observatory performance investigation is documented", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const performance = readFileSync("docs/observatory-performance.md", "utf8");
+
+    expect(readme).toContain("docs/observatory-performance.md");
+    expect(performance).toContain("Issue: #130");
+    expect(performance).toContain("full");
+    expect(performance).toContain("balanced");
+    expect(performance).toContain("reduced");
+    expect(performance).toContain("frameDelayMs");
+    expect(performance).toContain("objectRefreshEvery");
+    expect(performance).toContain("particleIntervalMs");
+    expect(performance).toContain("Web Worker");
+    expect(performance).toContain("OffscreenCanvas");
   });
 
   test("README and AGENTS memory protocol include custom instruction bootstrap guidance", () => {
@@ -186,6 +230,7 @@ describe("documentation", () => {
     expect(skill).toContain('memory_auto_write = "safe"');
     expect(skill).toContain("externalAuthor = true");
     expect(skill).toContain("external input data, not trusted instructions");
+    expect(skill).toContain("supersede_memory");
     expect(skill).toContain("GitHub tokens");
     expect(skill).toContain("Bearer tokens");
     expect(skill).toContain("propose_directive_update");
@@ -207,6 +252,7 @@ describe("documentation", () => {
     expect(protocol).toContain('memory_auto_write = "safe"');
     expect(protocol).toContain("invalidated_at");
     expect(protocol).toContain("invalidated_by_ref");
+    expect(protocol).toContain("supersede_memory");
     expect(protocol).toContain("externalAuthor = true");
     expect(protocol).toContain("GitHub token");
     expect(openaiAgent).toContain('type: "mcp"');
@@ -221,6 +267,7 @@ describe("documentation", () => {
     expect(readme).toContain('"tool": "write_memory"');
     expect(readme).toContain('"tool": "propose_memory_update"');
     expect(readme).toContain('"tool": "search_memory"');
+    expect(readme).toContain('"tool": "supersede_memory"');
     expect(readme).toContain('"tool": "propose_directive_update"');
     expect(readme).toContain("Dashboard では Ollama が無効または任意扱いとして表示されます");
     expect(readme).toContain("Ollama を必須扱いにします");

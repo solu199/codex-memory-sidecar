@@ -1,4 +1,4 @@
-import type { DashboardStatus, MemoryDetail, MemoryGraph } from "./types";
+import type { DashboardStatus, MemoryDetail, MemoryGraph, ObservatoryGraphOptions } from "./types";
 
 async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(path);
@@ -17,8 +17,18 @@ export async function fetchDashboardStatus(): Promise<DashboardStatus> {
   return fetchJson<DashboardStatus>("/api/status");
 }
 
-export async function fetchMemoryGraph(): Promise<MemoryGraph> {
-  return fetchJson<MemoryGraph>("/api/graph");
+export async function fetchMemoryGraph(
+  options: Partial<ObservatoryGraphOptions> = {},
+): Promise<MemoryGraph> {
+  const params = new URLSearchParams();
+  if (options.includeSuperseded) {
+    params.set("includeSuperseded", "true");
+  }
+  if (options.includeForgotten) {
+    params.set("includeForgotten", "true");
+  }
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return fetchJson<MemoryGraph>(`/api/graph${suffix}`);
 }
 
 export async function fetchMemoryDetail(

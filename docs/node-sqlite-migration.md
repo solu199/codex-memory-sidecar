@@ -58,3 +58,10 @@ Issue: #98
 ## 判断
 
 #98の範囲では「移行可能性はあるが、即移行はしない」と判断する。次の実装Issueを切るなら、内容は「SQLite adapter interfaceを導入し、better-sqlite3 backendのまま既存挙動を保つ」がよい。
+
+## 2026-06-27 update
+
+- Issue #124 の作業では、`MemoryStore` に `SqliteDatabaseAdapter` / `SqliteAdapterFactory` の境界を導入した。
+- 現時点の backend は引き続き `better-sqlite3` のみで、`node:sqlite` はまだ導入していない。
+- readonly backup の open 経路も adapter factory を通す形にそろえた。
+- 次に `node:sqlite` を試す場合は、別 Issue / 別 PR で PoC と専用検証を行う。既定 backend の切り替えはこの段階では行わない。
