@@ -232,7 +232,10 @@ describe("documentation", () => {
       "skills/codex-memory-sidecar/references/auto-curation.md",
       "utf8",
     );
-    const safety = readFileSync("skills/codex-memory-sidecar/references/safety-and-backup.md", "utf8");
+    const safety = readFileSync(
+      "skills/codex-memory-sidecar/references/safety-and-backup.md",
+      "utf8",
+    );
 
     expect(readme).toContain("skills/codex-memory-sidecar/SKILL.md");
     expect(readme).toContain("gateway skill");
