@@ -723,11 +723,14 @@ describe("MCP tool handlers", () => {
       memoryId: forgotten.structuredContent.memory.id,
       reason: "summary filter test",
     });
-    const db = new Database(path.join(tempDir, "memory.sqlite"));
-    db.prepare("UPDATE memories SET status = 'superseded' WHERE id = ?").run(
-      superseded.structuredContent.memory.id,
-    );
-    db.close();
+    await tools.supersedeMemory({
+      memoryId: superseded.structuredContent.memory.id,
+      newContent: "Superseded summaries need their own opt-in, updated.",
+      reason: "summary filter test",
+      invalidatedByRef: "issue:#123",
+      sourceType: "manual",
+      sourceRef: "test:summaries:supersede",
+    });
 
     const forgottenOnly = await tools.listMemorySummaries({
       includeForgotten: true,
@@ -738,12 +741,23 @@ describe("MCP tool handlers", () => {
       limit: 10,
     });
 
-    expect(forgottenOnly.structuredContent.memories.map((memory) => memory.status)).toEqual([
-      "forgotten",
-    ]);
-    expect(supersededOnly.structuredContent.memories.map((memory) => memory.status)).toEqual([
-      "superseded",
-    ]);
+    expect(
+      forgottenOnly.structuredContent.memories.some((memory) => memory.status === "forgotten"),
+    ).toBe(true);
+    expect(
+      forgottenOnly.structuredContent.memories.some((memory) => memory.status === "superseded"),
+    ).toBe(false);
+    expect(
+      supersededOnly.structuredContent.memories.some(
+        (memory) =>
+          memory.status === "superseded" &&
+          memory.invalidatedByRef === "issue:#123" &&
+          memory.invalidationReason === "summary filter test",
+      ),
+    ).toBe(true);
+    expect(
+      supersededOnly.structuredContent.memories.some((memory) => memory.status === "forgotten"),
+    ).toBe(false);
   });
 
   test("write_memory falls back when embedding generation fails", async () => {
@@ -983,20 +997,20 @@ describe("MCP tool handlers", () => {
   test("start_memory_session returns memory freshness and safe update candidates", async () => {
     const tools = createToolHandlers(store, {
       autoMemoryWrite: "review",
-      now: new Date("2026-06-20T03:20:00Z"),
+      now: new Date("2026-07-20T03:20:00Z"),
       workspaceActivity: {
         commits: [
           {
             hash: "92e5fcb1234567890",
             subject: "Ollama表示と手動MCP例を改善",
-            committedAt: new Date("2026-06-20T03:00:20Z"),
+            committedAt: new Date("2026-07-20T03:00:20Z"),
           },
         ],
         pullRequests: [
           {
             number: 77,
             title: "Ollama表示と手動MCP例を改善",
-            mergedAt: new Date("2026-06-20T03:00:20Z"),
+            mergedAt: new Date("2026-07-20T03:00:20Z"),
           },
         ],
       },
@@ -1018,7 +1032,7 @@ describe("MCP tool handlers", () => {
 
     expect(result.structuredContent.memoryFreshness).toMatchObject({
       status: "stale",
-      latestWorkspaceActivityAt: "2026-06-20T03:00:20.000Z",
+      latestWorkspaceActivityAt: "2026-07-20T03:00:20.000Z",
       candidateCount: 2,
     });
     expect(result.structuredContent.memoryUpdateCandidates).toEqual([
@@ -1034,7 +1048,7 @@ describe("MCP tool handlers", () => {
       }),
       expect.objectContaining({
         kind: "session",
-        sourceRef: "session:2026-06-20T03:20:00.000Z",
+        sourceRef: "session:2026-07-20T03:20:00.000Z",
         suggestedTool: "propose_memory_update",
       }),
     ]);
@@ -1043,13 +1057,13 @@ describe("MCP tool handlers", () => {
   test("start_memory_session safe auto-writes high confidence curation candidates with audit details", async () => {
     const tools = createToolHandlers(store, {
       autoMemoryWrite: "safe",
-      now: new Date("2026-06-20T03:20:00Z"),
+      now: new Date("2026-07-20T03:20:00Z"),
       workspaceActivity: {
         pullRequests: [
           {
             number: 79,
             title: "メモリ鮮度と保存候補を表示",
-            mergedAt: new Date("2026-06-20T03:00:20Z"),
+            mergedAt: new Date("2026-07-20T03:00:20Z"),
             authorLogin: "solu199",
             externalAuthor: false,
           },
@@ -1090,13 +1104,13 @@ describe("MCP tool handlers", () => {
   test("start_memory_session safe mode keeps duplicate candidates in review", async () => {
     const tools = createToolHandlers(store, {
       autoMemoryWrite: "safe",
-      now: new Date("2026-06-20T03:20:00Z"),
+      now: new Date("2026-07-20T03:20:00Z"),
       workspaceActivity: {
         pullRequests: [
           {
             number: 79,
             title: "メモリ鮮度と保存候補を表示",
-            mergedAt: new Date("2026-06-20T03:00:20Z"),
+            mergedAt: new Date("2026-07-20T03:00:20Z"),
             authorLogin: "solu199",
             externalAuthor: false,
           },
@@ -1128,13 +1142,13 @@ describe("MCP tool handlers", () => {
   test("start_memory_session safe mode does not auto-write external-author GitHub candidates", async () => {
     const tools = createToolHandlers(store, {
       autoMemoryWrite: "safe",
-      now: new Date("2026-06-20T03:20:00Z"),
+      now: new Date("2026-07-20T03:20:00Z"),
       workspaceActivity: {
         pullRequests: [
           {
             number: 86,
             title: "Memory governance dashboard release",
-            mergedAt: new Date("2026-06-20T03:00:20Z"),
+            mergedAt: new Date("2026-07-20T03:00:20Z"),
             authorLogin: "outside-reviewer",
             externalAuthor: true,
           },
@@ -1363,6 +1377,52 @@ describe("MCP tool handlers", () => {
     expect(audit.structuredContent.events[0]?.payload).toMatchObject({
       invalidatedByRef: "issue:#116",
       invalidationReason: "covered by a newer memory",
+    });
+  });
+
+  test("supersede_memory serializes old and new memories with audit metadata", async () => {
+    const tools = createToolHandlers(store);
+    const created = await tools.writeMemory({
+      content: "Use JavaScript for the memory sidecar.",
+      layer: "recall",
+      tags: ["decision"],
+      sourceType: "manual",
+      sourceRef: "test",
+    });
+
+    const result = await tools.supersedeMemory({
+      memoryId: created.structuredContent.memory.id,
+      newContent: "Use TypeScript for the memory sidecar.",
+      reason: "design decision changed",
+      invalidatedByRef: "issue:#123",
+      sourceType: "manual",
+      sourceRef: "test:supersede",
+    });
+
+    expect(result.structuredContent.event).toBe("superseded");
+    expect(result.structuredContent.oldMemory).toMatchObject({
+      id: created.structuredContent.memory.id,
+      status: "superseded",
+      invalidatedByRef: "issue:#123",
+      invalidationReason: "design decision changed",
+    });
+    expect(result.structuredContent.newMemory).toMatchObject({
+      status: "active",
+      content: "Use TypeScript for the memory sidecar.",
+      sourceRef: "test:supersede",
+    });
+    expect(result.structuredContent.newMemory.id).not.toBe(created.structuredContent.memory.id);
+
+    const audit = await tools.auditMemory({
+      memoryId: created.structuredContent.memory.id,
+      limit: 1,
+    });
+    expect(audit.structuredContent.events[0]?.eventType).toBe("superseded");
+    expect(audit.structuredContent.events[0]?.payload).toMatchObject({
+      oldMemoryId: created.structuredContent.memory.id,
+      newMemoryId: result.structuredContent.newMemory.id,
+      invalidatedByRef: "issue:#123",
+      invalidationReason: "design decision changed",
     });
   });
 

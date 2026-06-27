@@ -138,6 +138,17 @@ const updateMemorySchema = {
   allowSecret: z.boolean().default(false),
 };
 
+const supersedeMemorySchema = {
+  memoryId: z.number().int().positive(),
+  newContent: z.string().min(1),
+  reason: z.string().min(1),
+  invalidatedByRef: z.string().min(1).optional(),
+  sourceType: z.string().min(1),
+  sourceRef: z.string().min(1),
+  tags: z.array(z.string()).optional(),
+  allowSecret: z.boolean().default(false),
+};
+
 const forgetMemorySchema = {
   memoryId: z.number().int().positive(),
   reason: z.string().min(1),
@@ -311,6 +322,17 @@ interface UpdateMemoryToolInput {
   memoryId: number;
   newContent: string;
   updateNote: string;
+  tags?: string[];
+  allowSecret?: boolean;
+}
+
+interface SupersedeMemoryToolInput {
+  memoryId: number;
+  newContent: string;
+  reason: string;
+  invalidatedByRef?: string;
+  sourceType: string;
+  sourceRef: string;
   tags?: string[];
   allowSecret?: boolean;
 }
@@ -738,6 +760,28 @@ export function createToolHandlers(store: MemoryStore, options: ToolHandlerOptio
       return toolResult({
         memory: serializeMemory(memory),
         event: "updated",
+        warnings: embeddingWarnings(embedding.warning, embeddingRequired),
+      });
+    },
+
+    async supersedeMemory(input: SupersedeMemoryToolInput) {
+      const embedding = await tryEmbed(options.embeddingProvider, input.newContent);
+      const result = store.supersedeMemory({
+        memoryId: input.memoryId,
+        newContent: input.newContent,
+        reason: input.reason,
+        invalidatedByRef: input.invalidatedByRef,
+        sourceType: input.sourceType,
+        sourceRef: input.sourceRef,
+        tags: input.tags,
+        embedding: embedding.value,
+        allowSecret: input.allowSecret ?? false,
+      });
+
+      return toolResult({
+        oldMemory: serializeMemory(result.oldMemory),
+        newMemory: serializeMemory(result.newMemory),
+        event: "superseded",
         warnings: embeddingWarnings(embedding.warning, embeddingRequired),
       });
     },
@@ -1232,6 +1276,16 @@ export function registerMemoryTools(
       inputSchema: updateMemorySchema,
     },
     handlers.updateMemory,
+  );
+
+  server.registerTool(
+    "supersede_memory",
+    {
+      description:
+        "Replace an active memory with a new active memory while preserving the old row as superseded history.",
+      inputSchema: supersedeMemorySchema,
+    },
+    handlers.supersedeMemory,
   );
 
   server.registerTool(

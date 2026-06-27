@@ -1,6 +1,12 @@
 export type MemoryLayer = "core" | "recall" | "archival";
 export type MemoryStatus = "active" | "superseded" | "forgotten";
-export type MemoryEventType = "created" | "updated" | "forgotten" | "consolidated" | "retrieved";
+export type MemoryEventType =
+  | "created"
+  | "updated"
+  | "forgotten"
+  | "superseded"
+  | "consolidated"
+  | "retrieved";
 export type DirectiveScope = "global" | "project";
 export type DirectiveStatus = "active" | "disabled" | "superseded";
 export type DirectiveEventType = "created" | "updated" | "disabled" | "retrieved";
@@ -119,6 +125,27 @@ export interface ForgetMemoryInput {
   invalidatedByRef?: string;
   hardDelete?: boolean;
   confirmHardDelete?: boolean;
+}
+
+export interface SupersedeMemoryInput {
+  memoryId: number;
+  newContent: string;
+  reason: string;
+  invalidatedByRef?: string;
+  sourceType: string;
+  sourceRef: string;
+  tags?: string[];
+  summary?: string;
+  embedding?: number[] | null;
+  importance?: number;
+  confidence?: number;
+  expiresAt?: Date | null;
+  allowSecret?: boolean;
+}
+
+export interface SupersedeMemoryResult {
+  oldMemory: Memory;
+  newMemory: Memory;
 }
 
 export interface SearchMemoryInput {

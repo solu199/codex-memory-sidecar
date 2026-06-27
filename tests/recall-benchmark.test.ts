@@ -13,7 +13,7 @@ describe("recall benchmark", () => {
       expect(mode.precisionAt3).toBeGreaterThanOrEqual(result.thresholds.minPrecisionAt3);
       expect(mode.sourceRefQuality).toBe(1);
       expect(mode.duplicateSuppression).toBe(true);
-      expect(mode.cases).toHaveLength(4);
+      expect(mode.cases).toHaveLength(6);
     }
   });
 });

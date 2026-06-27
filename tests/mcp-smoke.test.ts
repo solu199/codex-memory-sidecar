@@ -35,6 +35,7 @@ describe("runMcpSmoke", () => {
     expect(result.toolNames).toContain("propose_memory_update");
     expect(result.toolNames).toContain("repair_memory_index");
     expect(result.toolNames).toContain("start_memory_session");
+    expect(result.toolNames).toContain("supersede_memory");
     expect(result.healthCheck.database.ok).toBe(true);
     expect(result.startMemorySession.ready).toBe(true);
     expect(result.startMemorySession.backupRetention).toMatchObject({

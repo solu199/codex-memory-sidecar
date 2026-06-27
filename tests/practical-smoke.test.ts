@@ -10,6 +10,7 @@ describe("runPracticalSmoke", () => {
     expect(result.checks).toMatchObject({
       writeMemory: true,
       proposeMemoryUpdate: true,
+      supersedeMemory: true,
       scopedSearchExcludesBeta: true,
       crossProjectSearchIncludesBeta: true,
       startMemorySession: true,
@@ -26,7 +27,7 @@ describe("runPracticalSmoke", () => {
       auditRecorded: true,
       dashboardShowsProjectScopes: true,
     });
-    expect(result.memoryCount).toBe(6);
+    expect(result.memoryCount).toBe(7);
     expect(result.eventCount).toBeGreaterThan(0);
     expect(result.warnings).toEqual([]);
   });

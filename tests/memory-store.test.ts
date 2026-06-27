@@ -2,10 +2,11 @@ import os from "node:os";
 import path from "node:path";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import Database from "better-sqlite3";
 
 import { MemoryStore } from "../src/memory-store.js";
+import { BetterSqlite3AdapterFactory, type SqliteDatabaseAdapter } from "../src/sqlite-adapter.js";
 
 describe("MemoryStore", () => {
   let tempDir: string;
@@ -63,6 +64,33 @@ describe("MemoryStore", () => {
     nestedStore.close();
   });
 
+  test("opens writable and readonly databases through the sqlite adapter factory", async () => {
+    const factory = new BetterSqlite3AdapterFactory();
+    const open = vi.spyOn(factory, "open");
+    const localStore = new MemoryStore(path.join(tempDir, "factory", "memory.sqlite"), factory);
+
+    const created = localStore.createMemory({
+      content: "Factory-backed memory.",
+      layer: "recall",
+      tags: ["adapter"],
+      sourceType: "manual",
+      sourceRef: "test",
+      importance: 0.5,
+      confidence: 0.8,
+    });
+    const backup = await localStore.createBackup({});
+    const verification = localStore.verifyBackup({ backupPath: backup.backupPath });
+
+    expect(created.status).toBe("active");
+    expect(verification.ok).toBe(true);
+    expect(open).toHaveBeenCalledWith(path.join(tempDir, "factory", "memory.sqlite"));
+    expect(open).toHaveBeenCalledWith(backup.backupPath, {
+      fileMustExist: true,
+      readonly: true,
+    });
+    localStore.close();
+  });
+
   test("creates indexes for common status layer and recency queries", () => {
     const db = new Database(path.join(tempDir, "memory.sqlite"), {
       readonly: true,
@@ -84,7 +112,7 @@ describe("MemoryStore", () => {
   });
 
   test("sets a SQLite busy timeout for local concurrent access", () => {
-    const db = (store as unknown as { db: Database.Database }).db;
+    const db = (store as unknown as { db: SqliteDatabaseAdapter }).db;
     const timeout = db.pragma("busy_timeout", { simple: true }) as number;
 
     expect(timeout).toBeGreaterThanOrEqual(5000);
@@ -325,6 +353,57 @@ describe("MemoryStore", () => {
     );
   });
 
+  test("reranks nearby ordered phrase matches above scattered keyword matches", () => {
+    const nearby = store.createMemory({
+      content: "Dashboard stale process troubleshooting is captured in one short operational note.",
+      layer: "recall",
+      tags: ["dashboard", "ops"],
+      sourceType: "manual",
+      sourceRef: "test:nearby",
+      importance: 0.5,
+      confidence: 0.8,
+    });
+    store.createMemory({
+      content:
+        "Dashboard guidance exists. Much later we mention stale output. Process checks are elsewhere.",
+      layer: "recall",
+      tags: ["dashboard", "ops"],
+      sourceType: "manual",
+      sourceRef: "test:scattered",
+      importance: 0.7,
+      confidence: 0.8,
+    });
+
+    expect(store.searchMemory({ query: "dashboard stale process", limit: 3 })[0]?.memory.id).toBe(
+      nearby.id,
+    );
+  });
+
+  test("recovers short typos without promoting unrelated memories", () => {
+    const target = store.createMemory({
+      content: "Dashboard stale process troubleshooting is captured in one short operational note.",
+      layer: "recall",
+      tags: ["dashboard", "ops"],
+      sourceType: "manual",
+      sourceRef: "test:typo-target",
+      importance: 0.5,
+      confidence: 0.8,
+    });
+    store.createMemory({
+      content: "Backup verification and repair steps are tracked separately.",
+      layer: "recall",
+      tags: ["backup", "repair"],
+      sourceType: "manual",
+      sourceRef: "test:typo-distractor",
+      importance: 0.8,
+      confidence: 0.8,
+    });
+
+    expect(store.searchMemory({ query: "dashbaord stale proces", limit: 3 })[0]?.memory.id).toBe(
+      target.id,
+    );
+  });
+
   test("checks active database integrity and FTS consistency", () => {
     store.createMemory({
       content: "Database health should include FTS consistency.",
@@ -478,6 +557,62 @@ describe("MemoryStore", () => {
 
     const events = store.listEvents(created.id);
     expect(events.map((event) => event.eventType)).toEqual(["created", "updated"]);
+  });
+
+  test("supersedes a memory by preserving the old row and creating a new active row", () => {
+    const created = store.createMemory({
+      content: "Use JavaScript for the memory sidecar.",
+      layer: "recall",
+      tags: ["decision"],
+      sourceType: "manual",
+      sourceRef: "test",
+      embedding: [1, 0],
+      importance: 0.5,
+      confidence: 0.6,
+    });
+
+    const result = store.supersedeMemory({
+      memoryId: created.id,
+      newContent: "Use TypeScript for the memory sidecar.",
+      reason: "Design default changed.",
+      invalidatedByRef: "issue:#123",
+      sourceType: "manual",
+      sourceRef: "test:supersede",
+      embedding: [0, 1],
+    });
+
+    expect(result.oldMemory.id).toBe(created.id);
+    expect(result.oldMemory.status).toBe("superseded");
+    expect(result.oldMemory.invalidatedAt).toBeInstanceOf(Date);
+    expect(result.oldMemory.invalidatedByRef).toBe("issue:#123");
+    expect(result.oldMemory.invalidationReason).toBe("Design default changed.");
+    expect(result.newMemory.id).not.toBe(created.id);
+    expect(result.newMemory.status).toBe("active");
+    expect(result.newMemory.content).toBe("Use TypeScript for the memory sidecar.");
+    expect(result.newMemory.embedding).toEqual([0, 1]);
+    expect(
+      store.searchMemory({ query: "TypeScript", limit: 5 }).map((item) => item.memory.id),
+    ).toEqual([result.newMemory.id]);
+    expect(
+      store
+        .searchMemory({
+          query: "memory sidecar",
+          limit: 5,
+          includeSuperseded: true,
+        })
+        .map((item) => item.memory.id),
+    ).toEqual(expect.arrayContaining([result.newMemory.id, created.id]));
+
+    const oldEvents = store.listEvents(created.id);
+    expect(oldEvents.map((event) => event.eventType)).toEqual(
+      expect.arrayContaining(["created", "superseded"]),
+    );
+    const supersededEvent = oldEvents.find((event) => event.eventType === "superseded");
+    expect(supersededEvent?.payload).toMatchObject({
+      newMemoryId: result.newMemory.id,
+      invalidatedByRef: "issue:#123",
+      invalidationReason: "Design default changed.",
+    });
   });
 
   test("forgets a memory with a logical delete by default", () => {

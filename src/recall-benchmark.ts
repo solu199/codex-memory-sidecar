@@ -105,6 +105,10 @@ const queryFixtures: BenchmarkQueryFixture[] = [
     expectedKeys: ["directive-dashboard"],
   },
   {
+    query: "dashbaord stale proces",
+    expectedKeys: ["directive-dashboard"],
+  },
+  {
     query: "safe auto memory write sourceRef duplicate secret",
     expectedKeys: ["auto-curation", "source-ref"],
   },
@@ -114,6 +118,10 @@ const queryFixtures: BenchmarkQueryFixture[] = [
   },
   {
     query: "Ollamaなし SQLite FTS fallback search",
+    expectedKeys: ["ollama-optional"],
+  },
+  {
+    query: "Ollamma SQLite fllback serch",
     expectedKeys: ["ollama-optional"],
   },
 ];
