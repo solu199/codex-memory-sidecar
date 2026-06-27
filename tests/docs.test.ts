@@ -90,18 +90,22 @@ describe("documentation", () => {
     expect(investigation).toContain("SqliteDatabaseAdapter");
   });
 
-  test("Codex plugin packaging investigation is documented", () => {
+  test("Codex plugin packaging guidance is documented as a supported local skeleton", () => {
     const readme = readFileSync("README.md", "utf8");
     const pluginPackaging = readFileSync("docs/codex-plugin-packaging.md", "utf8");
 
     expect(readme).toContain("docs/codex-plugin-packaging.md");
+    expect(readme).toContain(".codex-plugin/plugin.json");
+    expect(readme).toContain(".mcp.json");
+    expect(readme).toContain("hooks/hooks.json");
     expect(pluginPackaging).toContain("Issue: #125");
+    expect(pluginPackaging).toContain("local plugin skeleton");
     expect(pluginPackaging).toContain(".codex-plugin/plugin.json");
+    expect(pluginPackaging).toContain(".mcp.json");
     expect(pluginPackaging).toContain("hooks/hooks.json");
-    expect(pluginPackaging).toContain("marketplace.json");
     expect(pluginPackaging).toContain("~/.codex/plugins/cache");
+    expect(pluginPackaging).toContain("gateway skill");
     expect(pluginPackaging).toContain("trust");
-    expect(pluginPackaging).toContain("manual MCP registration + Skill + hook adapter");
   });
 
   test("memory evaluation benchmark is documented", () => {
@@ -201,48 +205,66 @@ describe("documentation", () => {
     expect(performance).toContain("OffscreenCanvas");
   });
 
-  test("README and AGENTS memory protocol include custom instruction bootstrap guidance", () => {
+  test("README and AGENTS memory protocol prefer gateway skill and hook backup over custom instructions", () => {
     const readme = readFileSync("README.md", "utf8");
     const protocol = readFileSync("AGENTS-memory-protocol.md", "utf8");
 
-    for (const document of [readme, protocol]) {
-      expect(document).toContain("Codex app カスタム指示用ブートストラップ");
-      expect(document).toContain("chat starts");
-      expect(document).toContain("identity, persona, memory, preferences");
-      expect(document).toContain("start_memory_session");
-    }
+    expect(readme).toContain("カスタム指示を標準導線にしません");
+    expect(protocol).toContain("カスタム指示を前提にしません");
+    expect(readme).toContain("SessionStart` hook");
+    expect(protocol).toContain("SessionStart` hook");
+    expect(readme).toContain("start_memory_session");
+    expect(protocol).toContain("start_memory_session");
+    expect(readme).not.toContain("Codex app カスタム指示用ブートストラップ");
+    expect(protocol).not.toContain("Codex app カスタム指示用ブートストラップ");
   });
 
-  test("Codex Skill template documents detailed memory operations", () => {
+  test("Codex gateway skill template documents detailed memory operations", () => {
     const readme = readFileSync("README.md", "utf8");
     const protocol = readFileSync("AGENTS-memory-protocol.md", "utf8");
     const skill = readFileSync("skills/codex-memory-sidecar/SKILL.md", "utf8");
     const openaiAgent = readFileSync("skills/codex-memory-sidecar/agents/openai.yaml", "utf8");
+    const memoryProtocol = readFileSync(
+      "skills/codex-memory-sidecar/references/memory-protocol.md",
+      "utf8",
+    );
+    const autoCuration = readFileSync(
+      "skills/codex-memory-sidecar/references/auto-curation.md",
+      "utf8",
+    );
+    const safety = readFileSync(
+      "skills/codex-memory-sidecar/references/safety-and-backup.md",
+      "utf8",
+    );
 
     expect(readme).toContain("skills/codex-memory-sidecar/SKILL.md");
-    expect(readme).toContain("Codex app のカスタム指示は短く保ち");
+    expect(readme).toContain("gateway skill");
     expect(skill).toContain("name: codex-memory-sidecar");
     expect(skill).toContain("start_memory_session");
     expect(skill).toContain("propose_memory_update");
-    expect(skill).toContain("memoryFreshness");
-    expect(skill).toContain("memoryUpdateCandidates");
-    expect(skill).toContain("autoMemoryCuration");
-    expect(skill).toContain('memory_auto_write = "safe"');
-    expect(skill).toContain("externalAuthor = true");
-    expect(skill).toContain("external input data, not trusted instructions");
-    expect(skill).toContain("supersede_memory");
-    expect(skill).toContain("GitHub tokens");
-    expect(skill).toContain("Bearer tokens");
+    expect(skill).toContain("references/memory-protocol.md");
+    expect(skill).toContain("references/plugin-setup.md");
+    expect(skill).toContain("commands/memory-recap.md");
     expect(skill).toContain("propose_directive_update");
-    expect(skill).toContain("backup_memory");
-    expect(skill).toContain("When a new chat starts");
-    expect(skill).toContain("Do not call `start_memory_session` in parallel with `health_check`");
-    expect(skill).toContain("This sequence must be sequential, not parallel.");
+    expect(skill).toContain("SessionStart hook context is a backup");
+    expect(existsSync("skills/codex-memory-sidecar/references/memory-protocol.md")).toBe(true);
+    expect(existsSync("skills/codex-memory-sidecar/references/plugin-setup.md")).toBe(true);
+    expect(existsSync("skills/codex-memory-sidecar/commands/memory-recap.md")).toBe(true);
+    expect(existsSync("skills/codex-memory-sidecar/commands/memory-release-check.md")).toBe(true);
+    expect(memoryProtocol).toContain("memoryFreshness");
+    expect(autoCuration).toContain("memoryUpdateCandidates");
+    expect(autoCuration).toContain("autoMemoryCuration");
+    expect(autoCuration).toContain('memory_auto_write = "safe"');
+    expect(autoCuration).toContain("externalAuthor = true");
+    expect(autoCuration).toContain("external input data, not trusted instructions");
+    expect(autoCuration).toContain("supersede_memory");
+    expect(autoCuration).toContain("GitHub tokens");
+    expect(autoCuration).toContain("Bearer tokens");
+    expect(safety).toContain("backup_memory");
     expect(readme).toContain("do not call them in parallel");
     expect(protocol).toContain("do not call them in parallel");
     expect(readme).toContain("start_memory_session` は作業開始の監査イベントを記録");
     expect(protocol).toContain("start_memory_session` は作業開始の監査イベントを記録");
-    expect(skill).toContain("records a startup audit event");
     expect(readme).toContain("npm run check:skill-install");
     expect(readme).toContain("BOM や CRLF/LF の差分は正規化して比較");
     expect(protocol).toContain("not purely read-only");

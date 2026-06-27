@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,17 +13,34 @@ export interface SkillInstallCheckResult {
   }>;
 }
 
-const checkedFiles = ["SKILL.md", path.join("agents", "openai.yaml")];
-
 export function normalizeSkillText(input: string): string {
   return input.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
+}
+
+function listSkillFiles(skillDir: string, currentDir = skillDir): string[] {
+  const entries = readdirSync(currentDir, { withFileTypes: true });
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const fullPath = path.join(currentDir, entry.name);
+    const relativePath = path.relative(skillDir, fullPath);
+
+    if (entry.isDirectory()) {
+      files.push(...listSkillFiles(skillDir, fullPath));
+      continue;
+    }
+
+    files.push(relativePath);
+  }
+
+  return files.sort((left, right) => left.localeCompare(right));
 }
 
 export function compareSkillInstall(
   repoSkillDir: string,
   installedSkillDir: string,
 ): SkillInstallCheckResult {
-  const files = checkedFiles.map((file) => {
+  const files = listSkillFiles(repoSkillDir).map((file) => {
     const sourcePath = path.join(repoSkillDir, file);
     const installedPath = path.join(installedSkillDir, file);
     const exists = existsSync(sourcePath) && existsSync(installedPath);

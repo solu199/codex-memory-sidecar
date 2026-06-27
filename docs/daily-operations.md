@@ -2,6 +2,8 @@
 
 Codex Memory Sidecar を毎日の開発で使うための短い手順です。個人利用、ローカル保存、安全優先を前提にします。
 
+Codex app では custom instructions を前提にせず、gateway skill と `AGENTS.md` を基本入口にします。`SessionStart` hook は startup / resume の補助であり、重要な作業判断の代わりにはしません。
+
 ## 開発開始時
 
 1. `start_memory_session` を `taskDescription` と `projectPath` 付きで呼びます。

@@ -43,7 +43,7 @@ npm run dashboard
 - Codex / AGENTS.md 用の短い導入文: [AGENTS-memory-protocol.md](AGENTS-memory-protocol.md)
 - Skill と詳細運用: [skills/codex-memory-sidecar/SKILL.md](skills/codex-memory-sidecar/SKILL.md)
 - Codex SessionStart hook: [docs/session-start-hook.md](docs/session-start-hook.md)
-- Codex plugin packaging 調査: [docs/codex-plugin-packaging.md](docs/codex-plugin-packaging.md)
+- Codex plugin packaging: [docs/codex-plugin-packaging.md](docs/codex-plugin-packaging.md)
 - bi-temporal invalidation 設計: [docs/bi-temporal-invalidation-design.md](docs/bi-temporal-invalidation-design.md)
 - Memory Observatory 設計: [docs/memory-observatory.md](docs/memory-observatory.md)
 - Memory Observatory 軽量化メモ: [docs/observatory-performance.md](docs/observatory-performance.md)
@@ -237,7 +237,7 @@ Dashboard の `/api/status` には `dashboard.schemaVersion` と `buildFingerpri
 
 Dashboard は `127.0.0.1` にだけ bind し、`Host` ヘッダも `127.0.0.1` / `localhost` / `::1` だけを許可します。DB 接続には `busy_timeout` を設定し、通常メモリ・directive memory・auto curation・MCP提案時の secret 検出では OpenAI key だけでなく GitHub token、npm token、AWS access key、Slack token、Bearer token、JWT、private key も拒否対象にします。
 
-Codex plugin packaging は [docs/codex-plugin-packaging.md](docs/codex-plugin-packaging.md) で調査済みですが、現時点では README の一次導線にしていません。継続検証しているのは manual MCP registration + Skill + SessionStart hook の経路です。
+Codex plugin packaging は [docs/codex-plugin-packaging.md](docs/codex-plugin-packaging.md) で継続運用向けの local plugin skeleton として整理しています。repo 直下には `.codex-plugin/plugin.json`、`.mcp.json`、`hooks/hooks.json` を同梱しており、Gateway Skill と MCP 設定を配布単位としてまとめられます。README の一次導線は引き続き repo 直下セットアップですが、Codex 側で plugin install / trust review を使う場合の土台はこの repo 自体に含めています。
 
 ## 設定
 
@@ -431,17 +431,18 @@ directive memory は強い運用ルールなので、`write_directive` の前に
 
 ## Codex app で使う場合
 
-現時点で継続的に検証している実運用対象は Codex app です。Codex app のパーソナライズのカスタム指示には、最小ブートストラップだけを置くと安定します。
+現時点で継続的に検証している実運用対象は Codex app です。このリポジトリでは、Codex app のカスタム指示を標準導線にしません。入口は `skills/codex-memory-sidecar/SKILL.md` の gateway skill、必要に応じた `AGENTS.md`、そして取りこぼしを補う `SessionStart` hook です。
 
-Codex app のパーソナライズに入れたカスタム指示は、その Codex 環境全体に効く可能性があります。全チャットで `start_memory_session` を呼ばせたくない場合は、まず対象プロジェクトの `AGENTS.md` だけに置くか、MCP 登録を無効にしてから試してください。`start_memory_session` は起動監査イベントを記録するため、完全な読み取り専用操作ではありません。
+推奨順は次の通りです。
 
-### Codex app カスタム指示用ブートストラップ
+1. MCP server を登録する
+2. gateway skill を入れるか、この repo の plugin skeleton を配布単位として扱う
+3. プロジェクト固有の強いルールだけを `AGENTS.md` に置く
+4. 軽い新規チャットや resume の取りこぼしが気になる場合だけ `SessionStart` hook を有効にする
 
-```md
-When a new chat starts, or when the user asks about your identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` from the `codex-memory-sidecar` MCP server before answering. Read returned directive memory first, then answer according to the documented priority order. Keep this bootstrap short; do not store secrets or unnecessary personal details.
-```
+`skills/codex-memory-sidecar/SKILL.md` は broad trigger を受ける gateway skill です。詳細運用は `references/` に分離し、再利用しやすい prompt asset は `commands/` に置いています。Codex の軽い会話で project file がまだ効かない場合は `SessionStart` hook が補助しますが、重要な作業判断は必ず明示的な `start_memory_session` から始めます。`start_memory_session` は起動監査イベントを記録するため、完全な読み取り専用操作ではありません。
 
-詳細な運用手順は、配布用Skill雛形 `skills/codex-memory-sidecar/SKILL.md` に切り出しています。Codex app のカスタム指示は短く保ち、`start_memory_session`、`search_memory`、`propose_memory_update`、directive memory、backup / repair の実務ルールはSkill側で読ませる構成を推奨します。Skill側では、`health_check` やメモリ状態確認だけを頼まれた場合でも、先に `start_memory_session` を単独で呼び、結果を読んでから次の tool を呼ぶ順序にしています。
+plugin でまとめる場合は `.codex-plugin/plugin.json`、`.mcp.json`、`hooks/hooks.json` を使います。`hooks/hooks.json` は trust review 前提の non-managed hook なので、install 後に `/hooks` や `smoke:hook` で動作を確認してください。詳細は [docs/codex-plugin-packaging.md](docs/codex-plugin-packaging.md) と [docs/session-start-hook.md](docs/session-start-hook.md) にまとめています。
 
 プロジェクト固有の `AGENTS.md` には、必要に応じて次の強化版を入れます。Skillを使う場合でも、プロジェクト固有の優先順位や強い制約は `AGENTS.md` に残すと安定します。
 
@@ -452,10 +453,10 @@ When a new chat starts, or when the user asks about your identity, persona, memo
 
 Use the `codex-memory-sidecar` MCP server as the durable local memory layer for nontrivial Codex work.
 
-- When a new chat starts, or when the user asks about identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` before answering so directive memory can be loaded.
+- When a new chat starts, or when the user asks about identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` before answering if the tool is available so directive memory can be loaded.
 - Before nontrivial work, call `start_memory_session` with the current task description and project path.
-- When asked to run `health_check` or inspect memory status, call `start_memory_session` first as a separate tool call, read it, then run `health_check`; do not call them in parallel.
-- Read the returned `directives`, `relevantMemories` / `memories`, `backupRetention`, `repairRecommended`, and `warnings` before making decisions.
+- When asked to run `health_check`, inspect memory status, or inspect Dashboard / backup / repair status, call `start_memory_session` first as a separate tool call, read it, then run the requested follow-up; do not call them in parallel.
+- Read the returned `directives`, `relevantMemories` / `memories`, `memoryFreshness`, `memoryUpdateCandidates`, `autoMemoryCuration`, `backupRetention`, `repairRecommended`, `warnings`, and `sessionGuidance.priorityOrder` before making decisions.
 - Note that `start_memory_session` records a startup audit event, so it is not purely read-only when comparing event counts.
 - Follow this priority order when context conflicts: system/developer instructions, latest user instruction, `AGENTS.md`, directive memory, normal memory, inference.
 - Treat MCP memory as supporting context, not the source of truth; prefer the user's latest instruction, README/docs, actual files, and git history when they disagree.
@@ -463,11 +464,13 @@ Use the `codex-memory-sidecar` MCP server as the durable local memory layer for 
 - When past decisions, design intent, or project history may matter, use `search_memory` before relying on memory.
 - Do not set `includeEmbedding: true` on `search_memory` unless embedding vectors are explicitly needed, because embedding arrays are large and noisy in normal work.
 - When preserving a new lesson, decision, or durable preference, call `propose_memory_update` first, then use `write_memory` or `update_memory` only when the proposed change is useful.
+- When a memory should remain auditable but be formally replaced by a newer memory, call `supersede_memory` instead of `update_memory`.
 - When preserving a strong operating rule, call `propose_directive_update` first. If the work is inside a project, ask the user whether to store it as `global` directive or `project` directive before calling `write_directive`.
+- SessionStart hook is a lightweight backup for startup and resume only; it does not replace explicit MCP usage for important work.
 - Cite memory-derived claims with enough context to audit them, such as memory IDs, directive IDs, summaries, or sourceRef.
 - Do not store secrets, credentials, private tokens, or unnecessary personal details.
 - If `repairRecommended`, backup warnings, or integrity warnings appear, pause risky work and surface the issue.
-- For detailed local policy, refer to the repository file `AGENTS-memory-protocol.md` in `codex-memory-sidecar`.
+- For detailed local policy, refer to `AGENTS-memory-protocol.md` and `skills/codex-memory-sidecar/SKILL.md`.
 ```
 
 ## 日常運用
