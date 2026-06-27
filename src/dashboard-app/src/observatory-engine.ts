@@ -1,4 +1,6 @@
-import type { GraphEdge, GraphEvent, GraphNode, MemoryGraph } from "./types";
+import { matchesObservatoryFilters } from "./observatory-filters";
+import { buildObservatoryPerformanceProfile } from "./observatory-performance";
+import type { GraphEdge, GraphEvent, GraphNode, MemoryGraph, ObservatoryFilters } from "./types";
 
 type RuntimeNode = GraphNode & {
   name: string;
@@ -54,6 +56,7 @@ type ObservatoryModel = {
 export type ObservatorySettings = {
   active: boolean;
   autoRotate: boolean;
+  filters: ObservatoryFilters;
   fogOn: boolean;
   lowPowerMode: boolean;
   mode: "live" | "replay" | "explore";
@@ -325,17 +328,16 @@ export function createObservatoryEngine(options: {
     scene.fog = state.settings.fogOn ? fog : null;
     controls.update();
     updateReplay(time, state, graph3d);
-    const particleInterval = state.settings.lowPowerMode ? 3600 : 1150;
+    const performanceProfile = buildPerformanceProfile(state);
     if (
       !state.settings.paused &&
       state.settings.mode === "live" &&
-      time - state.lastParticleT > particleInterval
+      time - state.lastParticleT > performanceProfile.particleIntervalMs
     ) {
       state.lastParticleT = time;
       emitRecentParticle(model, graph3d);
     }
-    const objectUpdateEvery = state.settings.lowPowerMode ? 16 : 5;
-    if (frame++ % objectUpdateEvery === 0) {
+    if (frame++ % performanceProfile.objectRefreshEvery === 0) {
       refreshNodeObjects(state, graph3d, false);
     }
     schedule(frameDelay(state));
@@ -398,6 +400,13 @@ function defaultSettings(): ObservatorySettings {
   return {
     active: true,
     autoRotate: false,
+    filters: {
+      layers: [],
+      projectScopes: [],
+      tags: [],
+      includeSuperseded: false,
+      includeForgotten: false,
+    },
     fogOn: true,
     lowPowerMode: true,
     mode: "live",
@@ -629,12 +638,14 @@ function updateNodeObject(node: RuntimeNode, state: any, graph3d: any) {
   const total = Math.min(1.3, score * 0.85 + pulse * 1.15);
   const searchMatch = matchesSearch(node, state.settings.search);
   let alpha = searchMatch ? 1 : 0.15;
+  const statusFactor = node.status === "active" ? 1 : node.status === "superseded" ? 0.48 : 0.28;
   if (state.focus && !linkedToFocus(node, state.focus, state.model) && node !== state.focus) {
     alpha *= 0.12;
   }
+  alpha *= statusFactor;
   if (node.__sphere?.material) {
     node.__sphere.material.opacity = (0.35 + 0.65 * total) * alpha;
-    const scale = 0.7 + score * 0.9 + pulse * 1.3;
+    const scale = (0.7 + score * 0.9 + pulse * 1.3) * (node.status === "active" ? 1 : 0.9);
     node.__sphere.scale.set(scale, scale, scale);
   }
   if (node.__glow?.material) {
@@ -668,6 +679,9 @@ function memVisible(node: RuntimeNode, state: any) {
     state.settings.mode === "replay" &&
     (node.createdH > state.settings.simH || node.forgottenH <= state.settings.simH)
   ) {
+    return false;
+  }
+  if (!matchesObservatoryFilters(node, state.settings.filters)) {
     return false;
   }
   if (state.clusterFilter && node.clusterKey !== state.clusterFilter) return false;
@@ -779,18 +793,28 @@ function refreshPanels(model: ObservatoryModel, state: any) {
     }
   }
   if (stats) {
+    const visibleNodeCount = model.nodes.filter((node) => memVisible(node, state)).length;
+    const invalidatedVisibleCount = model.nodes.filter(
+      (node) => node.status !== "active" && memVisible(node, state),
+    ).length;
     stats.innerHTML = [
-      `nodes: ${model.nodes.length}`,
+      `nodes: ${visibleNodeCount} / ${model.nodes.length}`,
       `links: ${model.links.length}`,
       `mode: ${state.settings.mode}`,
+      `invalidated: ${invalidatedVisibleCount}`,
       `search: ${escapeHtml(state.settings.search || "-")}`,
       `render: ${state.settings.lowPowerMode ? "low power" : "smooth"}`,
     ].join("<br>");
   }
   if (statusbar) {
+    const invalidatedState =
+      state.settings.filters.includeSuperseded || state.settings.filters.includeForgotten
+        ? "invalidated on"
+        : "invalidated off";
     statusbar.innerHTML = [
       `<span>${model.nodes.length} memories</span>`,
       `<span>${model.links.length} links</span>`,
+      `<span>${invalidatedState}</span>`,
       `<span>${state.settings.lowPowerMode ? "low power" : "smooth"}</span>`,
     ].join("");
   }
@@ -834,7 +858,7 @@ function showTooltip(node: RuntimeNode | null, event: MouseEvent | undefined, st
   const reveal = event?.ctrlKey
     ? `<div class="reveal">${escapeHtml(node.summary ?? "")}</div>`
     : "";
-  tooltip.innerHTML = `<strong>${escapeHtml(node.name)}</strong><div class="t">layer: ${escapeHtml(node.layer)} / activation: ${Number(node.activation ?? 0).toFixed(2)}</div>${reveal}`;
+  tooltip.innerHTML = `<strong>${escapeHtml(node.name)}</strong><div class="t">layer: ${escapeHtml(node.layer)} / status: ${escapeHtml(node.status)} / activation: ${Number(node.activation ?? 0).toFixed(2)}</div>${reveal}`;
   tooltip.style.display = "block";
   tooltip.style.left = `${(event?.clientX ?? 0) + 14}px`;
   tooltip.style.top = `${(event?.clientY ?? 0) + 14}px`;
@@ -904,16 +928,30 @@ function computeGraphView(model: ObservatoryModel, state: any) {
 }
 
 function frameDelay(state: any) {
-  if (!isRenderable(state)) return 900;
-  if (!state.settings.lowPowerMode) return 0;
-  if (state.settings.mode === "replay" && state.settings.replayPlaying) return 33;
-  const active = state.draggingNode || state.autoCentering || performance.now() < state.activeUntil;
-  if (active || state.hover || state.focus || state.settings.autoRotate) return 66;
-  return 320;
+  return buildPerformanceProfile(state).frameDelayMs;
 }
 
 function isRenderable(state: any) {
   return state.settings.active && !document.hidden;
+}
+
+function buildPerformanceProfile(state: any) {
+  return buildObservatoryPerformanceProfile({
+    active: state.settings.active,
+    activeInteraction:
+      state.draggingNode || state.autoCentering || performance.now() < state.activeUntil,
+    autoRotate: state.settings.autoRotate,
+    denseGraph: state.visualDensityDamping < 1,
+    focused: Boolean(state.focus),
+    hovered: Boolean(state.hover),
+    linkCount: state.model.links.length,
+    lowPowerMode: state.settings.lowPowerMode,
+    mode: state.settings.mode,
+    nodeCount: state.model.nodes.length,
+    paused: state.settings.paused,
+    replayPlaying: state.settings.replayPlaying,
+    visible: !document.hidden,
+  });
 }
 
 function markActive(state: any, graph3d: any, durationMs = 1200) {
@@ -969,6 +1007,7 @@ function eventTypeLabel(eventType: string) {
       created: "作成",
       forgotten: "忘却",
       retrieved: "参照",
+      superseded: "置換",
       updated: "更新",
     }[eventType] ?? "イベント"
   );

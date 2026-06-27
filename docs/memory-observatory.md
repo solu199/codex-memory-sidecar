@@ -34,7 +34,7 @@ Dashboard shell は React 側に分離しているため、状態、メモリ詳
 
 Dashboard server は読み取り専用の `/api/graph` と、選択メモリ確認用の `/api/memories/:id` を返します。
 
-- `nodes`: 通常メモリの安全な要約ビューです。`id`、`label`、`layer`、`status`、`summary`、`tags`、`projectScope`、`sourceType`、`sourceRef`、`importance`、`confidence`、`activation`、`retrievability7d`、座標、更新日時を含みます。
+- `nodes`: 通常メモリの安全な要約ビューです。`id`、`label`、`layer`、`status`、`summary`、`tags`、`projectScope`、`sourceType`、`sourceRef`、`importance`、`confidence`、`activation`、`retrievability7d`、座標、更新日時を含みます。`/api/graph` は既定では active だけを返し、`includeSuperseded=true` / `includeForgotten=true` を付けた時だけ無効化済みメモリを含めます。
 - `clusters`: layer、tag、project scope 由来のまとまりです。graph 表示と右ペインの把握に使います。
 - `events`: graph 用に安全化した最近のイベントです。`id`、`eventType`、`memoryIds`、`createdAt` だけを返し、payload は含めません。
 - `edges.similarity`: embedding があるメモリ同士の cosine similarity です。
@@ -43,7 +43,7 @@ Dashboard server は読み取り専用の `/api/graph` と、選択メモリ確�
 
 `/api/graph` は `MemoryStore` を読むだけで、メモリ、イベント、audit を書き込みません。Dashboard の再読み込みだけで検索履歴が増えたり、auto memory curation が発火したりしない設計です。
 
-`/api/memories/:id` は、選択した通常メモリの詳細を返します。既定では `summary`、`layer`、`status`、`tags`、`projectScope`、`sourceType`、`sourceRef`、`sourceUrl`、`importance`、`confidence`、作成/更新日時、bi-temporal invalidation の情報だけを返し、本文は含めません。本文を確認したい場合だけ、Dashboard の「本文を表示」操作に対応する `/api/memories/:id?includeContent=true` を使います。audit payload はこのAPIにも含めません。
+`/api/memories/:id` は、選択した通常メモリの詳細を返します。既定では `summary`、`layer`、`status`、`tags`、`projectScope`、`sourceType`、`sourceRef`、`sourceUrl`、`importance`、`confidence`、作成/更新日時、bi-temporal invalidation の情報に加え、「分かること」「分からないこと」「追加で確認する場所」の短いガイダンスを返し、本文は含めません。本文を確認したい場合だけ、Dashboard の「本文を表示」操作に対応する `/api/memories/:id?includeContent=true` を使います。audit payload はこのAPIにも含めません。
 
 ## 表示
 
@@ -62,6 +62,8 @@ Dashboard server は読み取り専用の `/api/graph` と、選択メモリ確�
 - ノード名はグラフを見やすく保つため、カーソルがノードに近づいた時だけ表示します。
 - Ctrl+ホバーで通常メモリの要約を確認できます。
 - `自動回転`、`省電力モード`、`忘却の霧` は右サイドバーから切り替えられます。既定では `省電力モード` が有効で、`自動回転` はオフです。
+- layer / project scope / tag の複合フィルタはクライアント側で安全に絞り込みます。タグは OR、カテゴリ間は AND で組み合わせます。
+- `superseded` / `forgotten` を表示した場合も、active より弱い opacity / glow で描画し、通常状態と混同しにくくします。
 
 ## 負荷対策
 
@@ -89,7 +91,6 @@ Directive memory は強い運用ルールを監査する目的で本文を表示
 
 ## 今後の改善候補
 
-- layer / project scope / tag の複合フィルタ。
-- 「このメモリで分かること / 分からないこと」の表示。
-- bi-temporal invalidation と連動した古い記憶の弱表示。
 - sourceRef / PR / commit / docs path をさらに文脈付きで開ける詳細リンク。
+- invalidated メモリの履歴線や replay 表現の改善。
+- フィルタ条件を URL に保持する仕組み。

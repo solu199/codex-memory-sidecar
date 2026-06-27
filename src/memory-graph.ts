@@ -7,6 +7,8 @@ export interface MemoryGraphOptions {
   similarityThreshold?: number;
   maxSimilarityEdges?: number;
   eventLimit?: number;
+  includeSuperseded?: boolean;
+  includeForgotten?: boolean;
 }
 
 export interface MemoryGraphNode {
@@ -89,6 +91,8 @@ export function buildMemoryGraph(
   const now = options.now ?? new Date();
   const memories = store.listMemories({
     limit: options.limit ?? DEFAULT_MEMORY_LIMIT,
+    includeSuperseded: options.includeSuperseded ?? false,
+    includeForgotten: options.includeForgotten ?? false,
   });
   const events = store.listRecentEvents({ limit: options.eventLimit ?? DEFAULT_EVENT_LIMIT });
   const nodes = memories.map((memory, index) =>

@@ -149,6 +149,67 @@ describe("dashboard", () => {
     });
   });
 
+  test("buildDashboardMemoryDetail shows superseded invalidation metadata", () => {
+    const created = store.createMemory({
+      content: "Old dashboard rule that should be superseded.",
+      summary: "Old dashboard rule",
+      layer: "recall",
+      tags: ["dashboard", "superseded"],
+      sourceType: "manual",
+      sourceRef: "test:dashboard-supersede",
+      projectScope: "alpha",
+    });
+    const superseded = store.supersedeMemory({
+      memoryId: created.id,
+      newContent: "New dashboard rule that replaces the old one.",
+      reason: "dashboard rule updated",
+      invalidatedByRef: "issue:#123",
+      sourceType: "manual",
+      sourceRef: "test:dashboard-supersede:new",
+    });
+
+    const detail = buildDashboardMemoryDetail(store, superseded.oldMemory.id);
+
+    expect(detail).toMatchObject({
+      ok: true,
+      memory: {
+        id: created.id,
+        status: "superseded",
+        contentIncluded: false,
+        invalidatedByRef: "issue:#123",
+        invalidationReason: "dashboard rule updated",
+      },
+    });
+    if (!detail.ok) {
+      throw new Error("Expected dashboard detail for superseded memory.");
+    }
+    expect(detail.memory.invalidatedAt).toEqual(expect.any(String));
+  });
+
+  test("buildDashboardMemoryDetail returns known and unknown guidance", () => {
+    const created = store.createMemory({
+      content: "Detail guidance content.",
+      summary: "Detail guidance summary",
+      layer: "recall",
+      tags: ["dashboard", "guidance"],
+      sourceType: "github-issue",
+      sourceRef: "issue:#127",
+      projectScope: "alpha",
+    });
+
+    const detail = buildDashboardMemoryDetail(store, created.id);
+
+    expect(detail).toMatchObject({
+      ok: true,
+      memory: {
+        id: created.id,
+        known: expect.arrayContaining([expect.stringContaining("issue:#127")]),
+        unknown: expect.arrayContaining([expect.stringContaining("一致するか")]),
+        verificationHints: expect.arrayContaining([expect.stringContaining("sourceRef")]),
+      },
+    });
+  });
+
   test("buildDashboardStatus reports maintenance guidance for repairable index warnings", async () => {
     const created = store.createMemory({
       content: "Dashboard should explain repairable index warnings.",
@@ -281,13 +342,13 @@ describe("dashboard", () => {
 
     const status = await buildDashboardStatus(store, {
       embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) },
-      now: new Date("2026-06-20T03:20:00Z"),
+      now: new Date("2026-07-20T03:20:00Z"),
       workspaceActivity: {
         commits: [
           {
             hash: "92e5fcb1234567890",
             subject: "Ollama表示と手動MCP例を改善",
-            committedAt: new Date("2026-06-20T03:00:20Z"),
+            committedAt: new Date("2026-07-20T03:00:20Z"),
           },
         ],
       },
@@ -296,7 +357,7 @@ describe("dashboard", () => {
     expect(status.memoryFreshness).toMatchObject({
       status: "stale",
       latestMemoryUpdatedAt: expect.any(String),
-      latestWorkspaceActivityAt: "2026-06-20T03:00:20.000Z",
+      latestWorkspaceActivityAt: "2026-07-20T03:00:20.000Z",
       candidateCount: 1,
     });
     expect(status.memoryUpdateCandidates).toEqual([
@@ -335,13 +396,13 @@ describe("dashboard", () => {
     const status = await buildDashboardStatus(store, {
       embeddingProvider: { embed: vi.fn(async () => [0.1, 0.2]) },
       autoMemoryWrite: "safe",
-      now: new Date("2026-06-20T03:20:00Z"),
+      now: new Date("2026-07-20T03:20:00Z"),
       workspaceActivity: {
         pullRequests: [
           {
             number: 79,
             title: "メモリ鮮度と保存候補を表示",
-            mergedAt: new Date("2026-06-20T03:00:20Z"),
+            mergedAt: new Date("2026-07-20T03:00:20Z"),
             authorLogin: "solu199",
             externalAuthor: false,
           },
@@ -573,6 +634,81 @@ describe("dashboard", () => {
         eventPayloadIncluded: false,
       });
       expect(JSON.stringify(graph)).not.toContain("Graph endpoint must not expose");
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  test("serves invalidated graph nodes only with explicit opt-in", async () => {
+    const active = store.createMemory({
+      content: "Active graph content.",
+      summary: "Active graph summary",
+      layer: "recall",
+      tags: ["graph", "active"],
+      sourceType: "manual",
+      sourceRef: "test:dashboard-graph-active",
+      embedding: [1, 0, 0],
+    });
+    const old = store.createMemory({
+      content: "Superseded graph content.",
+      summary: "Superseded graph summary",
+      layer: "recall",
+      tags: ["graph", "superseded"],
+      sourceType: "manual",
+      sourceRef: "test:dashboard-graph-old",
+      embedding: [0.95, 0.05, 0],
+    });
+    store.supersedeMemory({
+      memoryId: old.id,
+      newContent: "Replacement graph content.",
+      reason: "dashboard graph replacement",
+      invalidatedByRef: "issue:#128",
+      sourceType: "manual",
+      sourceRef: "test:dashboard-graph-new",
+    });
+    const forgotten = store.createMemory({
+      content: "Forgotten graph content.",
+      summary: "Forgotten graph summary",
+      layer: "archival",
+      tags: ["graph", "forgotten"],
+      sourceType: "manual",
+      sourceRef: "test:dashboard-graph-forgotten",
+    });
+    store.forgetMemory({
+      memoryId: forgotten.id,
+      reason: "dashboard graph hidden",
+      invalidatedByRef: "issue:#128",
+    });
+
+    const server = createDashboardServer(store);
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Expected TCP server address.");
+      }
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+
+      const activeOnly = await (await fetch(`${baseUrl}/api/graph`)).json();
+      const withInvalidated = await (
+        await fetch(`${baseUrl}/api/graph?includeSuperseded=true&includeForgotten=true`)
+      ).json();
+
+      expect(activeOnly.nodes.some((node: { status: string }) => node.status !== "active")).toBe(
+        false,
+      );
+      expect(
+        withInvalidated.nodes.some((node: { status: string }) => node.status === "superseded"),
+      ).toBe(true);
+      expect(
+        withInvalidated.nodes.some((node: { status: string }) => node.status === "forgotten"),
+      ).toBe(true);
+      expect(withInvalidated.nodes.some((node: { id: number }) => node.id === active.id)).toBe(
+        true,
+      );
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

@@ -189,4 +189,56 @@ describe("memory graph", () => {
       eventPayloadIncluded: false,
     });
   });
+
+  test("excludes invalidated memories by default and includes them only when requested", () => {
+    store.createMemory({
+      content: "Active graph memory.",
+      summary: "Active graph summary",
+      layer: "recall",
+      tags: ["graph", "active"],
+      sourceType: "manual",
+      sourceRef: "test:active",
+      embedding: [1, 0, 0],
+    });
+    const old = store.createMemory({
+      content: "Old graph memory.",
+      summary: "Old graph summary",
+      layer: "recall",
+      tags: ["graph", "superseded"],
+      sourceType: "manual",
+      sourceRef: "test:superseded",
+      embedding: [0.95, 0.05, 0],
+    });
+    store.supersedeMemory({
+      memoryId: old.id,
+      newContent: "Replacement graph memory.",
+      reason: "graph replacement",
+      invalidatedByRef: "issue:#128",
+      sourceType: "manual",
+      sourceRef: "test:superseded:new",
+    });
+    const forgotten = store.createMemory({
+      content: "Forgotten graph memory.",
+      summary: "Forgotten graph summary",
+      layer: "archival",
+      tags: ["graph", "forgotten"],
+      sourceType: "manual",
+      sourceRef: "test:forgotten",
+    });
+    store.forgetMemory({
+      memoryId: forgotten.id,
+      reason: "graph visibility test",
+      invalidatedByRef: "issue:#128",
+    });
+
+    const activeOnly = buildMemoryGraph(store);
+    const withInvalidated = buildMemoryGraph(store, {
+      includeSuperseded: true,
+      includeForgotten: true,
+    });
+
+    expect(activeOnly.nodes.some((node) => node.status !== "active")).toBe(false);
+    expect(withInvalidated.nodes.some((node) => node.status === "superseded")).toBe(true);
+    expect(withInvalidated.nodes.some((node) => node.status === "forgotten")).toBe(true);
+  });
 });

@@ -248,18 +248,113 @@ describe("dashboard companion", () => {
         config,
         port,
         opener,
+        fetch: vi.fn(async (url, init) => {
+          if (String(url).startsWith("http://127.0.0.1:")) {
+            return await fetch(url, init);
+          }
+          if (String(url).endsWith("/api/tags")) {
+            return new Response(
+              JSON.stringify({
+                models: [{ name: "embeddinggemma:latest" }, { name: "qwen3:latest" }],
+              }),
+            );
+          }
+          return new Response(JSON.stringify({ embeddings: [[0.1, 0.2]] }));
+        }),
       });
 
-      expect(result.started).toBe(false);
-      expect(result.url).toBeNull();
+      expect(result.started).toBe(true);
+      expect(result.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+      expect(new URL(result.url ?? "").port).not.toBe(String(port));
       expect(result.warnings[0]).toContain("stale");
-      expect(result.warnings[0]).toContain(`http://127.0.0.1:${port}`);
-      expect(opener).not.toHaveBeenCalled();
+      expect(result.warnings[0]).toContain("退避");
+      expect(opener).toHaveBeenCalledOnce();
       await result.close();
     } finally {
       await new Promise<void>((resolve, reject) => {
         staleServer.close((error) => (error ? reject(error) : resolve()));
       });
+    }
+  });
+
+  test("startDashboardCompanion reclaims the default port after stopping an owned stale dashboard process", async () => {
+    const staleServer = http.createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          ok: true,
+          dashboard: { schemaVersion: "old-version", buildFingerprint: "old-build" },
+          database: { ok: true },
+          embedding: { ok: true },
+        }),
+      );
+    });
+    await new Promise<void>((resolve) => staleServer.listen(0, "127.0.0.1", resolve));
+    const address = staleServer.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Expected stale dashboard TCP address.");
+    }
+    const port = address.port;
+    const markerPath = path.join(path.dirname(config.databasePath), ".dashboard-opened.json");
+    writeFileSync(
+      markerPath,
+      JSON.stringify({
+        url: `http://127.0.0.1:${port}`,
+        schemaVersion: "old-version",
+        buildFingerprint: "old-build",
+        pid: 4242,
+        repoRoot: process.cwd(),
+        databasePath: config.databasePath,
+      }),
+    );
+    const opener = vi.fn(() => ({ on: vi.fn(), unref: vi.fn() }));
+
+    try {
+      const result = await startDashboardCompanion({
+        store,
+        config,
+        port,
+        opener,
+        fetch: vi.fn(async (url, init) => {
+          if (String(url).startsWith("http://127.0.0.1:")) {
+            return await fetch(url, init);
+          }
+          if (String(url).endsWith("/api/tags")) {
+            return new Response(
+              JSON.stringify({
+                models: [{ name: "embeddinggemma:latest" }, { name: "qwen3:latest" }],
+              }),
+            );
+          }
+          return new Response(JSON.stringify({ embeddings: [[0.1, 0.2]] }));
+        }),
+        processControl: {
+          isAlive: (pid) => pid === 4242,
+          inspectCommandLine: (pid) =>
+            pid === 4242
+              ? `${process.cwd()}\\dist\\src\\index.js --db ${config.databasePath}`
+              : null,
+          terminate: async (pid) => {
+            if (pid !== 4242) {
+              return false;
+            }
+            await new Promise<void>((resolve, reject) => {
+              staleServer.close((error) => (error ? reject(error) : resolve()));
+            });
+            return true;
+          },
+        },
+      });
+
+      expect(result.started).toBe(true);
+      expect(result.url).toBe(`http://127.0.0.1:${port}`);
+      expect(result.warnings[0]).toContain("停止");
+      expect(result.warnings[0]).toContain("既定ポート");
+      expect(opener).toHaveBeenCalledOnce();
+      await result.close();
+    } catch (error) {
+      await new Promise<void>((resolve) => staleServer.close(() => resolve()));
+      throw error;
     }
   });
 
@@ -278,11 +373,26 @@ describe("dashboard companion", () => {
         store,
         config,
         port: address.port,
+        fetch: vi.fn(async (url, init) => {
+          if (String(url).startsWith("http://127.0.0.1:")) {
+            return await fetch(url, init);
+          }
+          if (String(url).endsWith("/api/tags")) {
+            return new Response(
+              JSON.stringify({
+                models: [{ name: "embeddinggemma:latest" }, { name: "qwen3:latest" }],
+              }),
+            );
+          }
+          return new Response(JSON.stringify({ embeddings: [[0.1, 0.2]] }));
+        }),
       });
 
-      expect(result.started).toBe(false);
-      expect(result.url).toBeNull();
-      expect(result.warnings[0]).toContain("Dashboard companion did not start");
+      expect(result.started).toBe(true);
+      expect(result.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+      expect(new URL(result.url ?? "").port).not.toBe(String(address.port));
+      expect(result.warnings[0]).toContain("応答しません");
+      expect(result.warnings[0]).toContain("退避");
       await result.close();
     } finally {
       await new Promise<void>((resolve, reject) => {

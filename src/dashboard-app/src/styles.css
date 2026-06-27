@@ -309,6 +309,32 @@ th {
   font-size: 14px;
 }
 
+.detail-guidance {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.detail-section {
+  border: 1px solid rgba(95, 127, 170, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+  background: rgba(7, 13, 22, 0.5);
+}
+
+.detail-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: #c7d4ea;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.detail-list li + li {
+  margin-top: 6px;
+}
+
 .detail-actions {
   display: flex;
   flex-wrap: wrap;
@@ -708,6 +734,38 @@ label.opt {
 
 label.opt input {
   accent-color: #ee9b24;
+}
+
+.filter-toolbar {
+  margin-bottom: 8px;
+}
+
+.filter-section {
+  margin: 10px 0 14px;
+}
+
+.filter-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-chip,
+.mini-button {
+  border: 1px solid rgba(95, 127, 170, 0.28);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(9, 15, 25, 0.7);
+  color: #b9c6dc;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.filter-chip.active,
+.filter-chip:hover,
+.mini-button:hover {
+  border-color: rgba(238, 160, 48, 0.42);
+  color: #ffd891;
 }
 
 #timeline {
