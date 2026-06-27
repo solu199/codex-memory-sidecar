@@ -1,100 +1,73 @@
-# Codex plugin packaging 調査
+# Codex plugin packaging
 
 Issue: #125
 
-## 結論
+## 現在の位置づけ
 
-現時点では、このリポジトリを直ちに Codex plugin 配布へ切り替えるより、今の手動セットアップ経路を一次導線として残すのが安全です。
+この repo には、Codex Memory Sidecar を Codex plugin 配布単位としてまとめるための local plugin skeleton を同梱しています。現時点の一次導線は repo 直下セットアップのままですが、plugin-first に切り替えるための最小構成はすでに揃っています。
 
-理由は次の通りです。
+含まれているもの:
 
-- 現在このリポジトリで継続検証しているのは、`dist/src/index.js` を使う MCP 登録、Skill 配置、カスタム指示、SessionStart hook です。
-- Codex plugin は配布体験をまとめられますが、plugin marketplace、plugin install cache、plugin-bundled hooks の trust review まで含めると、利用者にとって確認ポイントが増えます。
-- 特に hook は install されただけでは自動実行されず、現行仕様では non-managed hook として review / trust が必要です。
+- `.codex-plugin/plugin.json`
+- `.mcp.json`
+- `hooks/hooks.json`
+- `skills/codex-memory-sidecar/`
+- `assets/dashboard-overview.png`
 
-したがって、この issue の時点では「採用可能な構成案とリスクを文書化する」までを完了とし、plugin-first の README には切り替えません。
+方針としては「custom instructions で補う」のではなく、plugin に gateway skill、MCP 設定、SessionStart hook、表示 assets をまとめます。
 
-## 公式仕様で確認したこと
+## 同梱ファイルの役割
 
-OpenAI Developers の Codex docs では、plugin は `.codex-plugin/plugin.json` を必須 manifest とするフォルダ配布単位です。plugin root には `skills/`、`hooks/`、`.mcp.json`、`.app.json`、`assets/` を同梱できます。
+### `.codex-plugin/plugin.json`
 
-また、plugin を Codex に見せる導線として marketplace があり、repo-scoped なら `$REPO_ROOT/.agents/plugins/marketplace.json`、personal なら `~/.agents/plugins/marketplace.json` が使えます。local plugin も install 時には `~/.codex/plugins/cache/...` 配下へ展開され、そこから読み込まれます。
+plugin manifest です。Codex 側の install surface で使う表示名、説明、screenshots、skill / MCP の参照先をまとめます。
 
-hook については、plugin に `hooks/hooks.json` を同梱でき、manifest の `hooks` で上書きもできます。ただし plugin-bundled hook は managed hook ではなく、ユーザーが review / trust するまで実行されません。
+### `.mcp.json`
 
-## この repo で採るならこうなる構成案
+`codex-memory-sidecar` の stdio 起動設定です。repo 直下では `node` と `./dist/src/index.js` を参照し、`cwd: "."` を前提にします。
 
-最小構成は次です。
+### `hooks/hooks.json`
 
-```text
-codex-memory-sidecar-plugin/
-  .codex-plugin/
-    plugin.json
-  skills/
-    codex-memory-sidecar/
-      SKILL.md
-      agents/openai.yaml
-  hooks/
-    hooks.json
-  .mcp.json
-  assets/
-```
+`SessionStart` 向けの軽量 hook 設定です。startup / resume / clear / compact を契機に短い追加コンテキストを返します。
 
-### 1. plugin.json
+### `skills/codex-memory-sidecar/`
 
-- `name`, `version`, `description`
-- `skills: "./skills/"`
-- `mcpServers: "./.mcp.json"`
-- `hooks: "./hooks/hooks.json"` または default path 利用
-- install surface 用の `interface.displayName`, `shortDescription`, `defaultPrompt`
+入口の広い gateway skill と、`references/` / `commands/` に分けた運用知識を含みます。plugin 化しても behavior の中心はここです。
 
-### 2. .mcp.json
+## trust と path の注意点
 
-- `codex-memory-sidecar` の stdio 起動
-- `command: "node"`
-- `args: ["./dist/src/index.js"]` のような相対指定ではなく、plugin 配布形態に合わせた解決方法の確認が必要
-- DB path と Dashboard port をどこまで plugin 側の既定値に持たせるか要検討
+plugin-bundled hook は managed hook ではありません。install 後に review / trust が必要です。したがって、「plugin を入れたら即 hook が動く」とは README に書けません。
 
-### 3. hooks/hooks.json
+また、plugin install 後は通常 `~/.codex/plugins/cache/...` 配下へ展開されます。次の 3 点は install 後に確認します。
 
-- SessionStart hook を plugin に同梱すること自体は可能
-- ただし trust review が入るので、README には「install 後に `/hooks` で review / trust が必要」と明記する必要がある
+1. `.mcp.json` の `./dist/src/index.js` が cache 展開先から正しく解決されるか
+2. `hooks/hooks.json` の `./dist/src/hook-session-start.js` が `/hooks` 上で正しく見えるか
+3. plugin install 後の `health_check`、`start_memory_session`、Dashboard 起動が通るか
 
-### 4. marketplace
+この repo は local plugin skeleton を提供しますが、Codex 側の install / trust / cache path はユーザー環境依存です。そこは README ではなく運用確認として扱います。
 
-- repo 内で試すなら `.agents/plugins/marketplace.json`
-- 個人環境で配るだけなら `~/.agents/plugins/marketplace.json`
-- この repo では、plugin 本体 repo と marketplace repo を分ける必然性はまだ低い
+## marketplace と install cache
 
-## この repo で今すぐ採用しない理由
+plugin を Codex に見せる導線としては、repo-scoped の `.agents/plugins/marketplace.json` か、個人環境の `~/.agents/plugins/marketplace.json` が使えます。install 済み plugin は `~/.codex/plugins/cache/...` に展開されます。
 
-### 1. テスト導線がまだ plugin-first ではない
+この repo では marketplace repo を分ける前提にはしていません。まずは repo 自体を plugin source として扱える形に揃えています。
 
-現行の smoke / README / practical verification は、MCP server の直接起動と Skill 配置を前提にしています。plugin install cache 経由の実運用検証はまだありません。
+## README での扱い
 
-### 2. hook trust review が onboarding friction になる
+README には次のスタンスを残します。
 
-SessionStart hook を便利にまとめられる反面、「plugin を入れたらすぐ動く」と README に書けません。レビューと trust が必要なため、個人用ツールより一段説明が増えます。
+- 継続検証している主要対象は Codex app
+- custom instructions は標準導線にしない
+- gateway skill と `AGENTS.md` が基本入口
+- `SessionStart` hook は startup / resume の補助であり、明示的な `start_memory_session` の代替ではない
+- plugin skeleton は repo に同梱済みだが、trust review と install 後確認は別途必要
 
-### 3. Dashboard / DB path の責務分離が曖昧
+## 残るギャップ
 
-このツールは local DB path、Dashboard 自動起動、MCP env var を強く使います。plugin に閉じるのか、引き続き repo / user config 側で持つのかを先に整理しないと、plugin 化でかえって設定が見えにくくなります。
+まだ自動化していない確認があります。
 
-## README に残すべき扱い
+1. marketplace から install して cache 展開後に動くかの end-to-end smoke
+2. plugin install 後の hook command 解決先が環境差で崩れないか
+3. Codex UI 上での install / trust 手順をどこまで README に書くか
 
-- 「現在の継続検証対象は manual MCP registration + Skill + hook adapter」であること
-- plugin packaging は調査済みだが、現時点の一次導線ではないこと
-- 将来 plugin 配布へ進む場合は、marketplace、plugin cache、hook trust review を含めて別 issue / PR で扱うこと
-
-## 次に進めるなら
-
-1. 最小 plugin skeleton を別ディレクトリで作る
-2. `.mcp.json` から sidecar を起動する PoC を作る
-3. `hooks/hooks.json` を bundle し、trust review 後に SessionStart が走るかを smoke にする
-4. plugin install 後の `start_memory_session` / `health_check` / Dashboard 起動を通してから README の一次導線変更を検討する
-
-## 現時点の判断
-
-- plugin packaging は「採用可能だが未採用」
-- この issue では調査完了
-- 実装するなら別 issue / 別 PR で扱う
+したがって、現時点の判断は「local plugin skeleton は正式に repo に含めるが、plugin install 自体の最終導線は Codex 側確認込みで運用する」です。

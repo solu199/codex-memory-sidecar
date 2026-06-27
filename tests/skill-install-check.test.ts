@@ -25,7 +25,11 @@ describe("skill install check", () => {
     const repo = path.join(tempDir, "repo-skill");
     const installed = path.join(tempDir, "installed-skill");
     mkdirSync(path.join(repo, "agents"), { recursive: true });
+    mkdirSync(path.join(repo, "references"), { recursive: true });
+    mkdirSync(path.join(repo, "commands"), { recursive: true });
     mkdirSync(path.join(installed, "agents"), { recursive: true });
+    mkdirSync(path.join(installed, "references"), { recursive: true });
+    mkdirSync(path.join(installed, "commands"), { recursive: true });
 
     writeFileSync(path.join(repo, "SKILL.md"), "---\nname: codex-memory-sidecar\n---\nBody\n");
     writeFileSync(
@@ -40,10 +44,22 @@ describe("skill install check", () => {
       path.join(installed, "agents", "openai.yaml"),
       "\uFEFFinterface:\r\n  display_name: Codex Memory Sidecar\r\n",
     );
+    writeFileSync(
+      path.join(repo, "references", "memory-protocol.md"),
+      "# Memory Protocol\n- start_memory_session\n",
+    );
+    writeFileSync(
+      path.join(installed, "references", "memory-protocol.md"),
+      "\uFEFF# Memory Protocol\r\n- start_memory_session\r\n",
+    );
+    writeFileSync(path.join(repo, "commands", "memory-recap.md"), "# Memory Recap\n");
+    writeFileSync(path.join(installed, "commands", "memory-recap.md"), "\uFEFF# Memory Recap\r\n");
 
-    expect(compareSkillInstall(repo, installed)).toEqual({
-      ok: true,
-      files: [
+    const result = compareSkillInstall(repo, installed);
+
+    expect(result.ok).toBe(true);
+    expect(result.files).toEqual(
+      expect.arrayContaining([
         {
           file: "SKILL.md",
           exists: true,
@@ -54,26 +70,45 @@ describe("skill install check", () => {
           exists: true,
           matches: true,
         },
-      ],
-    });
+        {
+          file: path.join("references", "memory-protocol.md"),
+          exists: true,
+          matches: true,
+        },
+        {
+          file: path.join("commands", "memory-recap.md"),
+          exists: true,
+          matches: true,
+        },
+      ]),
+    );
   });
 
   test("reports mismatch after normalization when installed content is stale", () => {
     const repo = path.join(tempDir, "repo-skill");
     const installed = path.join(tempDir, "installed-skill");
     mkdirSync(path.join(repo, "agents"), { recursive: true });
+    mkdirSync(path.join(repo, "references"), { recursive: true });
     mkdirSync(path.join(installed, "agents"), { recursive: true });
+    mkdirSync(path.join(installed, "references"), { recursive: true });
 
     writeFileSync(path.join(repo, "SKILL.md"), "new skill\n");
     writeFileSync(path.join(installed, "SKILL.md"), "old skill\n");
     writeFileSync(path.join(repo, "agents", "openai.yaml"), "new metadata\n");
     writeFileSync(path.join(installed, "agents", "openai.yaml"), "new metadata\n");
+    writeFileSync(path.join(repo, "references", "memory-protocol.md"), "new reference\n");
+    writeFileSync(path.join(installed, "references", "memory-protocol.md"), "old reference\n");
 
     const result = compareSkillInstall(repo, installed);
 
     expect(result.ok).toBe(false);
     expect(result.files).toContainEqual({
       file: "SKILL.md",
+      exists: true,
+      matches: false,
+    });
+    expect(result.files).toContainEqual({
+      file: path.join("references", "memory-protocol.md"),
       exists: true,
       matches: false,
     });

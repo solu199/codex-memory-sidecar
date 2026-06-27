@@ -1,7 +1,7 @@
 interface:
   display_name: "Codex Memory Sidecar"
-  short_description: "Stable local MCP memory operations"
-  default_prompt: "Start a Codex Memory Sidecar MCP memory session before memory operations."
+  short_description: "Route memory-aware Codex work through local session context"
+  default_prompt: "Use Codex Memory Sidecar to load local session context, directives, and recent memory before continuing this task."
 dependencies:
   tools:
     - type: "mcp"

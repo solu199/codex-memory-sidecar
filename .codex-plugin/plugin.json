@@ -1,0 +1,44 @@
+{
+  "name": "codex-memory-sidecar",
+  "version": "0.1.0",
+  "description": "Local MCP memory sidecar plugin for Codex.",
+  "author": {
+    "name": "solu199",
+    "url": "https://github.com/solu199"
+  },
+  "homepage": "https://github.com/solu199/codex-memory-sidecar",
+  "repository": "https://github.com/solu199/codex-memory-sidecar",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "mcp",
+    "memory",
+    "sqlite",
+    "dashboard",
+    "directive-memory"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Codex Memory Sidecar",
+    "shortDescription": "Local session memory, directives, and recovery workflows",
+    "longDescription": "Bundle Codex Memory Sidecar as a local plugin with a gateway skill, MCP memory server, SessionStart hook backup, and Dashboard-oriented operational guidance.",
+    "developerName": "solu199",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/solu199/codex-memory-sidecar",
+    "defaultPrompt": [
+      "Load Codex Memory Sidecar context for this project before continuing.",
+      "Check local memory health, directives, and recent decisions for this task.",
+      "Audit whether the saved memory and current repo state still agree."
+    ],
+    "brandColor": "#1F6F8B",
+    "screenshots": [
+      "./assets/dashboard-overview.png"
+    ]
+  }
+}

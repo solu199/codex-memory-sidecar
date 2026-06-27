@@ -113,23 +113,17 @@ directive memory が現在のユーザー指示や `AGENTS.md` と矛盾する�
 
 ## 強化版テンプレート
 
-## Codex app カスタム指示用ブートストラップ
-
-Codex app のパーソナライズのカスタム指示には、少なくとも次の短い指示を入れてください。`AGENTS.md` だけでは、挨拶や自己紹介のような軽い会話で MCP が呼ばれず、global directive の persona や preferences が読まれない場合があります。
-
-```md
-When a new chat starts, or when the user asks about your identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` from the `codex-memory-sidecar` MCP server before answering. Read returned directive memory first, then answer according to the documented priority order. Keep this bootstrap short; do not store secrets or unnecessary personal details.
-```
+Codex app ではカスタム指示を前提にしません。入口は `skills/codex-memory-sidecar/SKILL.md` の gateway skill、必要に応じて置く `AGENTS.md`、そして軽い新規チャットや resume の取りこぼしを補う `SessionStart` hook です。重要な作業判断は常に明示的な `start_memory_session` から始めます。
 
 ```md
 ## Memory Protocol
 
 Use the `codex-memory-sidecar` MCP server as the durable local memory layer for nontrivial Codex work.
 
-- When a new chat starts, or when the user asks about identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` before answering so directive memory can be loaded.
+- When a new chat starts, or when the user asks about identity, persona, memory, preferences, usual policy, or what you remember, call `start_memory_session` before answering if the tool is available so directive memory can be loaded.
 - Before nontrivial work, call `start_memory_session` with the current task description and project path.
-- When asked to run `health_check` or inspect memory status, call `start_memory_session` first as a separate tool call, read it, then run `health_check`; do not call them in parallel.
-- Read the returned `directives`, `relevantMemories` / `memories`, `backupRetention`, `repairRecommended`, and `warnings` before making decisions.
+- When asked to run `health_check`, inspect memory status, or inspect Dashboard / backup / repair status, call `start_memory_session` first as a separate tool call, read it, then run the requested follow-up; do not call them in parallel.
+- Read the returned `directives`, `relevantMemories` / `memories`, `memoryFreshness`, `memoryUpdateCandidates`, `autoMemoryCuration`, `backupRetention`, `repairRecommended`, `warnings`, and `sessionGuidance.priorityOrder` before making decisions.
 - Note that `start_memory_session` records a startup audit event, so it is not purely read-only when comparing event counts.
 - Follow this priority order when context conflicts: system/developer instructions, latest user instruction, `AGENTS.md`, directive memory, normal memory, inference.
 - Treat MCP memory as supporting context, not the source of truth; prefer the user's latest instruction, README/docs, actual files, and git history when they disagree.
@@ -139,8 +133,9 @@ Use the `codex-memory-sidecar` MCP server as the durable local memory layer for 
 - When preserving a new lesson, decision, or durable preference, call `propose_memory_update` first, then use `write_memory` or `update_memory` only when the proposed change is useful.
 - When a memory should remain auditable but be formally replaced by a newer memory, call `supersede_memory` instead of `update_memory`. `supersede_memory` keeps the old row as `superseded` and creates a new `active` row with its own id and sourceRef.
 - When preserving a strong operating rule, call `propose_directive_update` first. If the work is inside a project, ask the user whether to store it as `global` directive or `project` directive before calling `write_directive`.
+- SessionStart hook is a lightweight backup for startup and resume only; it does not replace explicit MCP usage for important work.
 - Cite memory-derived claims with enough context to audit them, such as memory IDs, directive IDs, summaries, or sourceRef.
 - Do not store secrets, credentials, private tokens, or unnecessary personal details.
 - If `repairRecommended`, backup warnings, or integrity warnings appear, pause risky work and surface the issue.
-- For detailed local policy, refer to the repository file `AGENTS-memory-protocol.md` in `codex-memory-sidecar`.
+- For detailed local policy, refer to `AGENTS-memory-protocol.md` and `skills/codex-memory-sidecar/SKILL.md`.
 ```
